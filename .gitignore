@@ -1,0 +1,43 @@
+# Python (FastAPI, Response Server)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+*.env.local
+
+# 환경변수 / API 키
+.env
+.env.*
+*.secret
+secrets.yaml
+*-secret.yaml
+
+# Kubernetes 시크릿 매니페스트
+*secret*.yaml
+*secret*.yml
+
+# LLM API 키
+openai_key.txt
+anthropic_key.txt
+
+# Node.js (대시보드 프론트엔드)
+node_modules/
+.next/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 테스트 결과
+*.log
+coverage/
+.pytest_cache/
