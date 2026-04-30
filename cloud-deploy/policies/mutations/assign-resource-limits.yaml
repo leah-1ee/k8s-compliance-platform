@@ -1,0 +1,99 @@
+apiVersion: mutations.gatekeeper.sh/v1alpha1
+kind: Assign
+metadata:
+  name: assign-cpu-limit
+  annotations:
+    description: "resources.limits.cpu 가 없는 컨테이너에 500m 을 자동 주입합니다."
+spec:
+  applyTo:
+  - groups: [""]
+    versions: ["v1"]
+    kinds: ["Pod"]
+  match:
+    scope: Namespaced
+    excludedNamespaces:
+    - kube-system
+    - gatekeeper-system
+    - kube-flannel
+  location: "spec.containers[name:*].resources.limits.cpu"
+  parameters:
+    assign:
+      value: "500m"
+    pathTests:
+    - subPath: "spec.containers[name:*].resources.limits.cpu"
+      condition: MustNotExist
+---
+apiVersion: mutations.gatekeeper.sh/v1alpha1
+kind: Assign
+metadata:
+  name: assign-memory-limit
+  annotations:
+    description: "resources.limits.memory 가 없는 컨테이너에 256Mi 를 자동 주입합니다."
+spec:
+  applyTo:
+  - groups: [""]
+    versions: ["v1"]
+    kinds: ["Pod"]
+  match:
+    scope: Namespaced
+    excludedNamespaces:
+    - kube-system
+    - gatekeeper-system
+    - kube-flannel
+  location: "spec.containers[name:*].resources.limits.memory"
+  parameters:
+    assign:
+      value: "256Mi"
+    pathTests:
+    - subPath: "spec.containers[name:*].resources.limits.memory"
+      condition: MustNotExist
+---
+apiVersion: mutations.gatekeeper.sh/v1alpha1
+kind: Assign
+metadata:
+  name: assign-cpu-limit-init
+  annotations:
+    description: "initContainer의 resources.limits.cpu 가 없는 경우 500m 을 자동 주입합니다."
+spec:
+  applyTo:
+  - groups: [""]
+    versions: ["v1"]
+    kinds: ["Pod"]
+  match:
+    scope: Namespaced
+    excludedNamespaces:
+    - kube-system
+    - gatekeeper-system
+    - kube-flannel
+  location: "spec.initContainers[name:*].resources.limits.cpu"
+  parameters:
+    assign:
+      value: "500m"
+    pathTests:
+    - subPath: "spec.initContainers[name:*].resources.limits.cpu"
+      condition: MustNotExist
+---
+apiVersion: mutations.gatekeeper.sh/v1alpha1
+kind: Assign
+metadata:
+  name: assign-memory-limit-init
+  annotations:
+    description: "initContainer의 resources.limits.memory 가 없는 경우 256Mi 를 자동 주입합니다."
+spec:
+  applyTo:
+  - groups: [""]
+    versions: ["v1"]
+    kinds: ["Pod"]
+  match:
+    scope: Namespaced
+    excludedNamespaces:
+    - kube-system
+    - gatekeeper-system
+    - kube-flannel
+  location: "spec.initContainers[name:*].resources.limits.memory"
+  parameters:
+    assign:
+      value: "256Mi"
+    pathTests:
+    - subPath: "spec.initContainers[name:*].resources.limits.memory"
+      condition: MustNotExist
