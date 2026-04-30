@@ -1,0 +1,80 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: compliance-response-server
+  namespace: monitoring
+  labels:
+    release: monitoring
+    app.kubernetes.io/part-of: compliance-platform
+spec:
+  namespaceSelector:
+    matchNames:
+      - compliance-system
+  selector:
+    matchLabels:
+      app: response-server
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gatekeeper-audit-metrics
+  namespace: gatekeeper-system
+  labels:
+    app: gatekeeper-metrics
+    component: audit
+    app.kubernetes.io/part-of: compliance-platform
+spec:
+  type: ClusterIP
+  selector:
+    control-plane: audit-controller
+  ports:
+    - name: metrics
+      port: 8888
+      targetPort: 8888
+      protocol: TCP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gatekeeper-controller-metrics
+  namespace: gatekeeper-system
+  labels:
+    app: gatekeeper-metrics
+    component: controller
+    app.kubernetes.io/part-of: compliance-platform
+spec:
+  type: ClusterIP
+  selector:
+    control-plane: controller-manager
+  ports:
+    - name: metrics
+      port: 8888
+      targetPort: 8888
+      protocol: TCP
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: gatekeeper-metrics
+  namespace: monitoring
+  labels:
+    release: monitoring
+    app.kubernetes.io/part-of: compliance-platform
+spec:
+  namespaceSelector:
+    matchNames:
+      - gatekeeper-system
+  selector:
+    matchLabels:
+      app: gatekeeper-metrics
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
