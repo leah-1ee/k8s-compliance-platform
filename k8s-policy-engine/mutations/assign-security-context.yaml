@@ -1,0 +1,49 @@
+apiVersion: mutations.gatekeeper.sh/v1alpha1
+kind: Assign
+metadata:
+  name: assign-run-as-non-root
+  annotations:
+    description: "securityContext.runAsNonRoot 가 없는 컨테이너에 true 를 자동 주입합니다."
+spec:
+  applyTo:
+  - groups: [""]
+    versions: ["v1"]
+    kinds: ["Pod"]
+  match:
+    scope: Namespaced
+    excludedNamespaces:
+    - kube-system
+    - gatekeeper-system
+    - kube-flannel
+  location: "spec.containers[name:*].securityContext.runAsNonRoot"
+  parameters:
+    assign:
+      value: true
+    pathTests:
+    - subPath: "spec.containers[name:*].securityContext.runAsNonRoot"
+      condition: MustNotExist
+---
+apiVersion: mutations.gatekeeper.sh/v1alpha1
+kind: Assign
+metadata:
+  name: assign-read-only-root-filesystem
+  annotations:
+    description: "securityContext.readOnlyRootFilesystem 가 없는 컨테이너에 true 를 자동 주입합니다."
+spec:
+  applyTo:
+  - groups: [""]
+    versions: ["v1"]
+    kinds: ["Pod"]
+  match:
+    scope: Namespaced
+    excludedNamespaces:
+    - kube-system
+    - gatekeeper-system
+    - kube-flannel
+  location: "spec.containers[name:*].securityContext.readOnlyRootFilesystem"
+  parameters:
+    assign:
+      value: true
+    pathTests:
+    - subPath: "spec.containers[name:*].securityContext.readOnlyRootFilesystem"
+      condition: MustNotExist
