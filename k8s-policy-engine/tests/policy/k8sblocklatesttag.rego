@@ -14,6 +14,12 @@ violation contains {"msg": msg} if {
   msg := sprintf("initContainer 이미지 '%v': latest 태그 또는 태그 미지정은 허용되지 않습니다. 명시적인 버전 태그를 사용하세요.", [container.image])
 }
 
+violation contains {"msg": msg} if {
+  container := input.review.object.spec.ephemeralContainers[_]
+  image_has_latest_or_no_tag(container.image)
+  msg := sprintf("ephemeralContainer 이미지 '%v': latest 태그 또는 태그 미지정은 허용되지 않습니다. 명시적인 버전 태그를 사용하세요.", [container.image])
+}
+
 # ":latest" 로 끝나는 경우
 image_has_latest_or_no_tag(image) if {
   endswith(image, ":latest")

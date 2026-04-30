@@ -17,6 +17,16 @@ make_input_init(image) = {"review": {"object": {
   "spec": {
     "containers": [{"name": "app", "image": "nginx:1.25.0"}],
     "initContainers": [{"name": "init", "image": image}],
+    "ephemeralContainers": [],
+  },
+}}}
+
+make_input_ephemeral(image) = {"review": {"object": {
+  "metadata": {"name": "test-pod"},
+  "spec": {
+    "containers": [{"name": "app", "image": "nginx:1.25.0"}],
+    "initContainers": [],
+    "ephemeralContainers": [{"name": "debug", "image": image}],
   },
 }}}
 
@@ -43,6 +53,18 @@ test_deny_init_container_latest if {
 # initContainer에 태그 없음
 test_deny_init_container_no_tag if {
   result := data.k8sblocklatesttag.violation with input as make_input_init("alpine")
+  count(result) > 0
+}
+
+# ephemeralContainer에 latest 태그
+test_deny_ephemeral_container_latest if {
+  result := data.k8sblocklatesttag.violation with input as make_input_ephemeral("busybox:latest")
+  count(result) > 0
+}
+
+# ephemeralContainer에 태그 없음
+test_deny_ephemeral_container_no_tag if {
+  result := data.k8sblocklatesttag.violation with input as make_input_ephemeral("busybox")
   count(result) > 0
 }
 
