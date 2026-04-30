@@ -3,7 +3,8 @@
 Kubernetes 클러스터 보안 정책을 OPA Gatekeeper로 자동화하는 정책 엔진입니다.
 ConstraintTemplate(Rego 정책 정의), Constraint(정책 적용), Assign(자동 Mutation)으로 구성됩니다.
 
-- **OPA Gatekeeper** v3.22
+- **OPA Gatekeeper**: Helm chart 기준 `v3.14+` 지원, 본 저장소의 정책/예시는 `v3.22` 기준으로 검증
+- `assign-*` Mutation 정책은 Gatekeeper mutation CRD가 활성화된 환경을 전제로 합니다.
 - **Rego** (OPA v1.x 문법)
 - **Helm** (Gatekeeper 설치)
 
