@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -eo pipefail
 
 echo "============================================"
 echo " Kubernetes 1.32 Setup Script"
@@ -90,6 +90,7 @@ kubeadm init \
   --apiserver-advertise-address="$SERVER_IP" \
   --kubernetes-version=v1.32.0 \
   2>&1 | tee /var/log/kubeadm-init.log
+# set -o pipefail 적용으로 kubeadm 실패 시 자동 중단됨
 
 echo "[5/8] 완료 - kubeadm init 성공 (로그: /var/log/kubeadm-init.log)"
 
@@ -126,8 +127,8 @@ for i in $(seq 1 12); do
   sleep 5
 done
 
-kubectl apply --validate=false \
-  -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+kubectl apply \
+  -f https://raw.githubusercontent.com/flannel-io/flannel/v0.26.4/Documentation/kube-flannel.yml
 echo "[7/8] 완료 - Flannel 배포됨"
 
 # ─────────────────────────────────────────────

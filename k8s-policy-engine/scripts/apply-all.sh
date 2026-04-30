@@ -20,7 +20,7 @@ apply_dir() {
   echo "==> [${label}] 적용 시작: ${dir}"
 
   local files
-  files=$(find "$dir" -maxdepth 1 -name "*.yaml" -o -name "*.yml" | sort)
+  files=$(find "$dir" -maxdepth 1 -type f \( -name "*.yaml" -o -name "*.yml" \) | sort)
 
   if [ -z "$files" ]; then
     echo "    (적용할 yaml 파일 없음, 건너뜀)"
