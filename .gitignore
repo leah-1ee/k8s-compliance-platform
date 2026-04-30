@@ -15,8 +15,10 @@ secrets.yaml
 *-secret.yaml
 
 # Kubernetes 시크릿 매니페스트
-*secret*.yaml
-*secret*.yml
+*-secret.yaml
+*-secret.yml
+secret-*.yaml
+secret-*.yml
 
 # LLM API 키
 openai_key.txt
