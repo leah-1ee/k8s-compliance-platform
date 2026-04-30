@@ -1,0 +1,48 @@
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8sblocklatesttag
+  annotations:
+    description: "latest 태그이거나 태그가 없는 컨테이너 이미지를 차단합니다."
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sBlockLatestTag
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8sblocklatesttag
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.containers[_]
+          image_has_latest_or_no_tag(container.image)
+          msg := sprintf("컨테이너 이미지 '%v': latest 태그 또는 태그 미지정은 허용되지 않습니다. 명시적인 버전 태그를 사용하세요.", [container.image])
+        }
+
+        violation[{"msg": msg}] {
+          container := input.review.object.spec.initContainers[_]
+          image_has_latest_or_no_tag(container.image)
+          msg := sprintf("initContainer 이미지 '%v': latest 태그 또는 태그 미지정은 허용되지 않습니다. 명시적인 버전 태그를 사용하세요.", [container.image])
+        }
+
+        # ":latest" 로 끝나는 경우
+        image_has_latest_or_no_tag(image) {
+          endswith(image, ":latest")
+        }
+
+        # 태그가 전혀 없는 경우 — 마지막 path 세그먼트에 ":" 가 없으면 태그 없음
+        image_has_latest_or_no_tag(image) {
+          # digest 참조(@sha256:...)도 태그 없음으로 취급하지 않도록 digest 제외
+          not contains(image, "@")
+          # 이미지 이름에서 마지막 슬래시 이후 부분에 ":" 가 없으면 태그 없음
+          image_without_registry := regex.find_n("/[^/]+$", image, 1)[0]
+          not contains(image_without_registry, ":")
+        }
+
+        # 레지스트리 없이 단순 이름만 있는 경우 (슬래시 없음, 콜론 없음)
+        image_has_latest_or_no_tag(image) {
+          not contains(image, "@")
+          not contains(image, "/")
+          not contains(image, ":")
+        }

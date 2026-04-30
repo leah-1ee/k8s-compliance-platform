@@ -1,0 +1,16 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sPSPHostNamespace
+metadata:
+  name: block-host-namespaces
+  annotations:
+    description: "Pod의 hostPID 및 hostIPC 사용을 차단합니다."
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    excludedNamespaces:
+      - kube-system
+      - gatekeeper-system
+      - kube-flannel
