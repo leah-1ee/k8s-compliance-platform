@@ -67,6 +67,8 @@ kubectl get constrainttemplates
 kubectl get constraints
 ```
 
+`monitoring` namespace는 Prometheus/Grafana 설치를 위해 Validate 및 Mutation 정책 적용 대상에서 제외한다.
+
 ## AI 서버와 response-server 배포
 
 ```bash

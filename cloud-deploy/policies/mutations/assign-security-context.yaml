@@ -15,6 +15,9 @@ spec:
     - kube-system
     - gatekeeper-system
     - kube-flannel
+    # 관측성 네임스페이스 제외
+    # Grafana 스케줄링 보장
+    - monitoring
   location: "spec.containers[name:*].securityContext.runAsNonRoot"
   parameters:
     assign:
@@ -40,6 +43,9 @@ spec:
     - kube-system
     - gatekeeper-system
     - kube-flannel
+    # 관측성 네임스페이스 제외
+    # Grafana 스케줄링 보장
+    - monitoring
   location: "spec.containers[name:*].securityContext.readOnlyRootFilesystem"
   parameters:
     assign:
@@ -65,6 +71,9 @@ spec:
     - kube-system
     - gatekeeper-system
     - kube-flannel
+    # 관측성 네임스페이스 제외
+    # Grafana 스케줄링 보장
+    - monitoring
   location: "spec.initContainers[name:*].securityContext.runAsNonRoot"
   parameters:
     assign:
@@ -90,6 +99,9 @@ spec:
     - kube-system
     - gatekeeper-system
     - kube-flannel
+    # 관측성 네임스페이스 제외
+    # Grafana 스케줄링 보장
+    - monitoring
   location: "spec.initContainers[name:*].securityContext.readOnlyRootFilesystem"
   parameters:
     assign:
