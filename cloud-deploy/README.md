@@ -7,7 +7,9 @@
 - `ai-server.yaml`: AI 분류 서버 배포
 - `response-server.yaml`: response-server 배포 및 AI endpoint 연결
 - `gatekeeper-values.yaml`: Gatekeeper Helm 설치 값
+- `monitoring-values.yaml`: Prometheus/Grafana Helm 설치 값
 - `apply-policies.sh`: Gatekeeper 정책 적용 스크립트
+- `monitoring-servicemonitors.yaml`: Prometheus 메트릭 수집 연결
 - `policies/`: ConstraintTemplate, Constraint, Mutation YAML 모음
 
 ## VM에서 가져오기
@@ -74,4 +76,48 @@ kubectl apply -f response-server.yaml
 
 ```bash
 kubectl get deploy,svc,cm,pods -n compliance-system
+```
+
+## Prometheus/Grafana 설치
+
+학교 클라우드 서버에서 실행한다.
+
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
+  -n monitoring \
+  --create-namespace \
+  -f monitoring-values.yaml
+```
+
+```bash
+kubectl get pods -n monitoring
+```
+
+## 메트릭 수집 연결
+
+Prometheus Operator CRD가 설치된 뒤 실행한다.
+
+```bash
+kubectl apply -f monitoring-servicemonitors.yaml
+```
+
+```bash
+kubectl get servicemonitor -n monitoring
+kubectl get svc -n gatekeeper-system | grep metrics
+```
+
+## Grafana 접속
+
+```bash
+kubectl port-forward -n monitoring svc/monitoring-grafana 3000:80
+```
+
+비밀번호 확인:
+
+```bash
+kubectl get secret -n monitoring monitoring-grafana \
+  -o jsonpath="{.data.admin-password}" | base64 -d
 ```

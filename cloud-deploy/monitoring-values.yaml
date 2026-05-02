@@ -23,6 +23,14 @@ grafana:
     enabled: false
 
   sidecar:
+    # sidecar 공통 리소스
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
     dashboards:
       # dashboard sidecar 리소스
       resources:
