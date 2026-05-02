@@ -14,3 +14,6 @@ spec:
       - kube-system
       - gatekeeper-system
       - kube-flannel
+      # 관측성 네임스페이스 제외
+      # Prometheus/Grafana 설치 보장
+      - monitoring

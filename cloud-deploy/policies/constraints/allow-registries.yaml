@@ -14,6 +14,9 @@ spec:
       - kube-system
       - gatekeeper-system
       - kube-flannel
+      # 관측성 네임스페이스 제외
+      # Prometheus/Grafana 이미지 허용
+      - monitoring
   parameters:
     repos:
       - "docker.io/library/"
