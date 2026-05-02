@@ -1,0 +1,43 @@
+# kube-prometheus-stack values
+# 학교 클라우드의 제한된 worker CPU 환경에 맞춘 Grafana 설정
+
+grafana:
+  enabled: true
+  replicas: 1
+
+  # Grafana를 2코어 worker 노드에 배치
+  nodeSelector:
+    kubernetes.io/hostname: k8s-worker1
+
+  # Grafana 본 컨테이너 리소스
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # 임시 저장소 사용
+  persistence:
+    enabled: false
+
+  sidecar:
+    dashboards:
+      # dashboard sidecar 리소스
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+    datasources:
+      # datasource sidecar 리소스
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
