@@ -1,5 +1,51 @@
 # kube-prometheus-stack values
-# 학교 클라우드의 제한된 worker CPU 환경에 맞춘 Grafana 설정
+# 학교 클라우드의 제한된 worker CPU 환경에 맞춘 모니터링 설정
+
+alertmanager:
+  # 실험 환경 알림 컴포넌트 제외
+  enabled: false
+
+prometheusOperator:
+  # Operator 리소스 절감
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  prometheusConfigReloader:
+    # 설정 리로더 리소스 절감
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
+prometheus:
+  prometheusSpec:
+    replicas: 1
+    retention: 6h
+    # Prometheus 리소스 절감
+    resources:
+      requests:
+        cpu: 150m
+        memory: 512Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+
+kube-state-metrics:
+  # 상태 메트릭 리소스 절감
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
 
 grafana:
   enabled: true
