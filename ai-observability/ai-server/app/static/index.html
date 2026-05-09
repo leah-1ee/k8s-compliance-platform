@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Compliance AI Console</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1>Compliance AI Console</h1>
+          <p>Policy-as-Code 자동화 및 위반 분석</p>
+        </div>
+        <a class="grafana-link" href="#" id="grafanaLink">Grafana</a>
+      </header>
+
+      <section class="workspace" aria-label="AI console workspace">
+        <nav class="tabs" aria-label="console tabs">
+          <button class="tab is-active" data-tab="policy">Policy Generator</button>
+          <button class="tab" data-tab="analysis">Violation Analyzer</button>
+          <button class="tab" data-tab="queries">Dashboard Queries</button>
+        </nav>
+
+        <section class="panel is-active" id="policyPanel">
+          <div class="form-grid">
+            <label>
+              정책 요청
+              <textarea id="policyPrompt" rows="6">latest 태그를 사용하는 컨테이너 이미지를 금지하는 Gatekeeper 정책을 만들어줘</textarea>
+            </label>
+            <div class="compact-grid">
+              <label>
+                정책 유형
+                <select id="policyKind">
+                  <option value="">자동 판별</option>
+                  <option value="latest-tag">latest 태그 금지</option>
+                  <option value="non-root">non-root 강제</option>
+                  <option value="allowed-registries">레지스트리 제한</option>
+                  <option value="host-namespace">host namespace 금지</option>
+                  <option value="security-context-mutation">securityContext 자동 주입</option>
+                  <option value="resource-limits-mutation">resource limits 자동 주입</option>
+                </select>
+              </label>
+              <label>
+                enforcementAction
+                <select id="enforcementAction">
+                  <option value="deny">deny</option>
+                  <option value="warn">warn</option>
+                  <option value="dryrun">dryrun</option>
+                </select>
+              </label>
+              <label>
+                Constraint 이름
+                <input id="constraintName" value="disallow-latest-tag" />
+              </label>
+            </div>
+            <label>
+              허용 레지스트리
+              <input id="allowedRegistries" value="docker.io/library/, gcr.io/, ghcr.io/, registry.k8s.io/" />
+            </label>
+            <label>
+              제외 네임스페이스
+              <input id="excludedNamespaces" value="kube-system, gatekeeper-system, monitoring" />
+            </label>
+            <label class="checkbox-row">
+              <input id="useLlm" type="checkbox" />
+              LLM 검토 사용
+            </label>
+          </div>
+          <div class="actions">
+            <button class="primary" id="generatePolicy">정책 생성</button>
+            <button id="copyPolicy">결과 복사</button>
+          </div>
+          <div class="result-grid">
+            <article>
+              <h2>ConstraintTemplate</h2>
+              <pre id="templateOutput"></pre>
+            </article>
+            <article>
+              <h2>Constraint</h2>
+              <pre id="constraintOutput"></pre>
+            </article>
+            <article>
+              <h2>Rego</h2>
+              <pre id="regoOutput"></pre>
+            </article>
+            <article>
+              <h2>LLM Review</h2>
+              <pre id="llmOutput"></pre>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel" id="analysisPanel">
+          <div class="form-grid">
+            <label>
+              이벤트 JSON
+              <textarea id="eventPayload" rows="16">{
+  "cluster": "school-cloud",
+  "rule": "Compliance - Shell Spawned in Container",
+  "priority": "Warning",
+  "output": "Shell spawned in container by root user",
+  "time": "2026-05-09T00:00:00Z",
+  "output_fields": {
+    "k8s.ns.name": "default",
+    "k8s.pod.name": "test-pod",
+    "user.name": "root",
+    "user.uid": 0,
+    "proc.name": "sh",
+    "container.id": "abc123"
+  },
+  "tags": ["shell", "runtime"]
+}</textarea>
+            </label>
+          </div>
+          <div class="actions">
+            <button class="primary" id="analyzeViolation">위반 분석</button>
+            <button id="copyAnalysis">분석 복사</button>
+          </div>
+          <div class="analysis-card" id="analysisResult">
+            <span class="badge">ready</span>
+            <h2>분석 대기</h2>
+            <p>이벤트 JSON 입력 후 분석 실행</p>
+          </div>
+        </section>
+
+        <section class="panel" id="queriesPanel">
+          <div class="query-list">
+            <article>
+              <h2>AI Classification Requests</h2>
+              <code>sum(increase(compliance_ai_requests_total{service="response-server"}[$__range]))</code>
+            </article>
+            <article>
+              <h2>AI Classification Errors</h2>
+              <code>sum(increase(compliance_ai_errors_total{service="response-server"}[$__range]))</code>
+            </article>
+            <article>
+              <h2>Seconds Since Last Gatekeeper Audit</h2>
+              <code>time() - gatekeeper_audit_last_run_time</code>
+            </article>
+            <article>
+              <h2>Gatekeeper Violations by Enforcement</h2>
+              <code>sum by (enforcement_action) (gatekeeper_violations)</code>
+            </article>
+            <article>
+              <h2>Policy Violations by Policy</h2>
+              <code>sum by (name) (gatekeeper_violations)</code>
+            </article>
+            <article>
+              <h2>Gatekeeper Audit Duration</h2>
+              <code>rate(gatekeeper_audit_duration_seconds_sum[5m]) / rate(gatekeeper_audit_duration_seconds_count[5m])</code>
+            </article>
+          </div>
+        </section>
+      </section>
+    </main>
+    <div class="toast" id="toast" role="status"></div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

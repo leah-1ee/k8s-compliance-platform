@@ -44,3 +44,61 @@ class ClassificationResponse(BaseModel):
     severity: Severity
     reason: str = Field(min_length=1, max_length=1000)
     confidence: float = Field(ge=0.0, le=1.0)
+
+
+PolicyKind = Literal[
+    "latest-tag",
+    "non-root",
+    "allowed-registries",
+    "host-namespace",
+    "security-context-mutation",
+    "resource-limits-mutation",
+]
+
+
+class PolicyGenerationRequest(BaseModel):
+    prompt: str = Field(min_length=5, max_length=2000)
+    policy_kind: PolicyKind | None = None
+    constraint_name: str = Field(default="generated-policy", max_length=80)
+    enforcement_action: Literal["deny", "warn", "dryrun"] = "deny"
+    allowed_registries: list[str] = Field(default_factory=list, max_length=20)
+    excluded_namespaces: list[str] = Field(default_factory=list, max_length=20)
+    use_llm: bool = False
+
+    @field_validator("prompt", "constraint_name")
+    @classmethod
+    def strip_text_control_chars(cls, value: str) -> str:
+        # 입력 제어 문자 제거
+        return "".join(ch for ch in value.strip() if ch.isprintable())
+
+    @field_validator("allowed_registries", "excluded_namespaces")
+    @classmethod
+    def normalize_string_list(cls, values: list[str]) -> list[str]:
+        # 목록 값 정규화
+        normalized = []
+        for value in values[:20]:
+            if isinstance(value, str):
+                stripped = value.strip()
+                if stripped:
+                    normalized.append(stripped[:120])
+        return normalized
+
+
+class PolicyGenerationResponse(BaseModel):
+    policy_kind: PolicyKind
+    constraint_template: str
+    constraint: str
+    rego: str
+    review_notes: list[str]
+    prompt: str
+    llm_used: bool = False
+    llm_review: str = ""
+
+
+class ViolationAnalysisRequest(ClassificationRequest):
+    cluster: str = Field(default="", max_length=120)
+
+
+class ViolationAnalysisResponse(ClassificationResponse):
+    summary: str = Field(min_length=1, max_length=1000)
+    recommended_actions: list[str] = Field(default_factory=list, max_length=8)
