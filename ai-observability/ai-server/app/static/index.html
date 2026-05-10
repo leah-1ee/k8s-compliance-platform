@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Compliance AI Console</title>
-    <link rel="stylesheet" href="/static/styles.css?v=dual-key-1" />
+    <link rel="stylesheet" href="/static/styles.css?v=llm-feedback-1" />
   </head>
   <body>
     <main class="shell">
@@ -99,6 +99,10 @@
           <div class="actions">
             <button class="primary" id="generatePolicy">정책 생성</button>
             <button id="copyPolicy">전체 복사</button>
+          </div>
+          <div class="loading-row" id="policyLoading" hidden>
+            <span class="spinner" aria-hidden="true"></span>
+            <span>정책 생성 및 LLM 검토 처리 중...</span>
           </div>
           <div class="result-grid">
             <article class="result-card">
@@ -234,6 +238,6 @@
       </section>
     </main>
     <div class="toast" id="toast" role="status"></div>
-    <script src="/static/app.js?v=dual-key-1"></script>
+    <script src="/static/app.js?v=llm-feedback-1"></script>
   </body>
 </html>

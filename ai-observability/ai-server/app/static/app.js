@@ -128,8 +128,15 @@ function setOutput(selector, value) {
   element.removeAttribute("data-empty");
 }
 
+function setPolicyLoading(isLoading) {
+  $("#policyLoading").hidden = !isLoading;
+  $("#generatePolicy").disabled = isLoading;
+  $("#generatePolicy").textContent = isLoading ? "생성 중..." : "정책 생성";
+}
+
 async function generatePolicy() {
   clearInlineAlert();
+  setPolicyLoading(true);
   const payload = {
     prompt: $("#policyPrompt").value,
     policy_kind: $("#policyKind").value || null,
@@ -139,31 +146,39 @@ async function generatePolicy() {
     excluded_namespaces: splitList($("#excludedNamespaces").value),
     use_llm: $("#useLlm").checked,
   };
-  const result = await postJson("/generate-policy", payload);
-  setOutput(
-    "#templateOutput",
-    result.constraint_template || "Mutation 정책은 ConstraintTemplate을 사용하지 않습니다.",
-  );
-  setOutput("#constraintOutput", result.constraint);
-  setOutput("#regoOutput", result.rego || "Mutation 정책은 Rego를 사용하지 않습니다.");
-  setOutput("#llmOutput", result.llm_review || "LLM 검토 미사용 또는 설정 없음");
-  latestPolicyText = [
-    "# ConstraintTemplate",
-    result.constraint_template,
-    "",
-    "# Constraint",
-    result.constraint,
-    "",
-    "# Rego",
-    result.rego,
-    "",
-    "# Review notes",
-    ...result.review_notes.map((item) => `- ${item}`),
-    "",
-    "# LLM review",
-    result.llm_review || "N/A",
-  ].join("\n");
-  showToast("정책 생성 완료");
+  try {
+    const result = await postJson("/generate-policy", payload);
+    const llmText = result.llm_review || result.llm_error || "LLM 검토 미사용";
+    setOutput(
+      "#templateOutput",
+      result.constraint_template || "Mutation 정책은 ConstraintTemplate을 사용하지 않습니다.",
+    );
+    setOutput("#constraintOutput", result.constraint);
+    setOutput("#regoOutput", result.rego || "Mutation 정책은 Rego를 사용하지 않습니다.");
+    setOutput("#llmOutput", llmText);
+    if (result.llm_error) {
+      showInlineAlert(result.llm_error);
+    }
+    latestPolicyText = [
+      "# ConstraintTemplate",
+      result.constraint_template,
+      "",
+      "# Constraint",
+      result.constraint,
+      "",
+      "# Rego",
+      result.rego,
+      "",
+      "# Review notes",
+      ...result.review_notes.map((item) => `- ${item}`),
+      "",
+      "# LLM review",
+      llmText,
+    ].join("\n");
+    showToast("정책 생성 완료");
+  } finally {
+    setPolicyLoading(false);
+  }
 }
 
 async function analyzeViolation() {

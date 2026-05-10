@@ -1,6 +1,8 @@
 import re
 from textwrap import dedent
 
+import httpx
+
 from app.llm_client import LLMClient
 from app.prompts import build_policy_prompt
 from app.schemas import PolicyGenerationRequest, PolicyGenerationResponse, PolicyKind
@@ -63,9 +65,10 @@ def generate_policy(
 
     prompt = build_policy_prompt(request, policy_kind)
     llm_review = ""
+    llm_error = ""
     llm_used = False
     if request.use_llm:
-        llm_review = _safe_llm_review(prompt, llm_provider, llm_api_key)
+        llm_review, llm_error = _safe_llm_review(prompt, llm_provider, llm_api_key)
         llm_used = bool(llm_review)
 
     return PolicyGenerationResponse(
@@ -81,6 +84,7 @@ def generate_policy(
         prompt=prompt,
         llm_used=llm_used,
         llm_review=llm_review,
+        llm_error=llm_error,
     )
 
 
@@ -88,12 +92,28 @@ def _safe_llm_review(
     prompt: str,
     llm_provider: str | None,
     llm_api_key: str | None,
-) -> str:
+) -> tuple[str, str]:
     # LLM 장애 격리
+    client = LLMClient(provider=llm_provider, api_key=llm_api_key)
+    if not client.configured:
+        return (
+            "",
+            "LLM API key가 설정되어 있지 않습니다. 서버 GOOGLE_API_KEY 또는 세션 API key를 확인하세요.",
+        )
     try:
-        return LLMClient(provider=llm_provider, api_key=llm_api_key).review_policy(prompt)
+        review = client.review_policy(prompt)
+        if not review:
+            return "", "LLM 응답이 비어 있습니다. API key, provider, model 설정을 확인하세요."
+        return review, ""
+    except httpx.HTTPStatusError as error:
+        return (
+            "",
+            f"LLM 요청 실패: HTTP {error.response.status_code}. API key, provider, model 설정을 확인하세요.",
+        )
+    except httpx.RequestError:
+        return "", "LLM 연결 실패: 네트워크 또는 provider endpoint 설정을 확인하세요."
     except Exception:
-        return ""
+        return "", "LLM 처리 실패: provider와 model 설정을 확인하세요."
 
 
 def _detect_policy_kind(prompt: str) -> PolicyKind:

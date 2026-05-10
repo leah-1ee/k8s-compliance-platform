@@ -93,6 +93,7 @@ class PolicyGenerationResponse(BaseModel):
     prompt: str
     llm_used: bool = False
     llm_review: str = ""
+    llm_error: str = ""
 
 
 class ViolationAnalysisRequest(ClassificationRequest):

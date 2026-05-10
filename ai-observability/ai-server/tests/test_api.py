@@ -51,6 +51,7 @@ def test_ui_is_served():
     assert "xAI (Grok)" in response.text
     assert "Use my own API key" in response.text
     assert "Your API key is used only for requests in this session" in response.text
+    assert "정책 생성 및 LLM 검토 처리 중" in response.text
     assert "정책을 생성하면 여기에 결과가 표시됩니다" in response.text
     assert 'data-copy-target="templateOutput"' in response.text
     assert 'aria-label="ConstraintTemplate 복사"' in response.text
@@ -104,6 +105,7 @@ def test_generate_policy_contract():
     assert "endswith(container.image, \":latest\")" in body["rego"]
     assert body["llm_used"] is False
     assert body["llm_review"] == ""
+    assert "LLM API key" in body["llm_error"]
 
 
 def test_generate_policy_default_exclusions():
