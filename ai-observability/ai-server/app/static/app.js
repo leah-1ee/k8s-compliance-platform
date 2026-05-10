@@ -63,6 +63,12 @@ function setAnalysisState(status, title, detail = "") {
   `;
 }
 
+function setOutput(selector, value) {
+  const element = $(selector);
+  element.textContent = value;
+  element.removeAttribute("data-empty");
+}
+
 async function generatePolicy() {
   const payload = {
     prompt: $("#policyPrompt").value,
@@ -74,11 +80,13 @@ async function generatePolicy() {
     use_llm: $("#useLlm").checked,
   };
   const result = await postJson("/generate-policy", payload);
-  $("#templateOutput").textContent =
-    result.constraint_template || "Mutation 정책은 ConstraintTemplate을 사용하지 않습니다.";
-  $("#constraintOutput").textContent = result.constraint;
-  $("#regoOutput").textContent = result.rego || "Mutation 정책은 Rego를 사용하지 않습니다.";
-  $("#llmOutput").textContent = result.llm_review || "LLM 검토 미사용 또는 설정 없음";
+  setOutput(
+    "#templateOutput",
+    result.constraint_template || "Mutation 정책은 ConstraintTemplate을 사용하지 않습니다.",
+  );
+  setOutput("#constraintOutput", result.constraint);
+  setOutput("#regoOutput", result.rego || "Mutation 정책은 Rego를 사용하지 않습니다.");
+  setOutput("#llmOutput", result.llm_review || "LLM 검토 미사용 또는 설정 없음");
   latestPolicyText = [
     "# ConstraintTemplate",
     result.constraint_template,

@@ -208,8 +208,7 @@ pre {
   margin: 0;
 }
 
-pre:empty::before {
-  content: attr(data-placeholder);
+pre[data-empty="true"] {
   color: var(--muted);
 }
 
