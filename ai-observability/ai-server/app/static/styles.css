@@ -218,6 +218,10 @@ select:focus {
   font-weight: 650;
 }
 
+.loading-row[hidden] {
+  display: none;
+}
+
 .spinner {
   width: 16px;
   height: 16px;

@@ -130,12 +130,14 @@ function setOutput(selector, value) {
 
 function setPolicyLoading(isLoading) {
   $("#policyLoading").hidden = !isLoading;
+  $("#policyLoadingText").textContent = "정책 생성 중...";
   $("#generatePolicy").disabled = isLoading;
   $("#generatePolicy").textContent = isLoading ? "생성 중..." : "정책 생성";
 }
 
 async function generatePolicy() {
   clearInlineAlert();
+  const useLlm = $("#useLlm").checked;
   setPolicyLoading(true);
   const payload = {
     prompt: $("#policyPrompt").value,
@@ -144,7 +146,7 @@ async function generatePolicy() {
     enforcement_action: $("#enforcementAction").value,
     allowed_registries: splitList($("#allowedRegistries").value),
     excluded_namespaces: splitList($("#excludedNamespaces").value),
-    use_llm: $("#useLlm").checked,
+    use_llm: useLlm,
   };
   try {
     const result = await postJson("/generate-policy", payload);

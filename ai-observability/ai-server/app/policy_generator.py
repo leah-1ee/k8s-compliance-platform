@@ -110,8 +110,13 @@ def _safe_llm_review(
             "",
             f"LLM 요청 실패: HTTP {error.response.status_code}. API key, provider, model 설정을 확인하세요.",
         )
+    except httpx.TimeoutException:
+        return "", "LLM 연결 시간 초과: VM의 외부 HTTPS 연결 또는 provider endpoint 설정을 확인하세요."
     except httpx.RequestError:
-        return "", "LLM 연결 실패: 네트워크 또는 provider endpoint 설정을 확인하세요."
+        return (
+            "",
+            "LLM 연결 실패: VM에서 generativelanguage.googleapis.com 접속 가능 여부와 provider endpoint 설정을 확인하세요.",
+        )
     except Exception:
         return "", "LLM 처리 실패: provider와 model 설정을 확인하세요."
 
