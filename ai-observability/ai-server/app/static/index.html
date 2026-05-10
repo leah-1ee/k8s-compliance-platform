@@ -73,20 +73,32 @@
             <button id="copyPolicy">결과 복사</button>
           </div>
           <div class="result-grid">
-            <article>
-              <h2>ConstraintTemplate (정책 템플릿)</h2>
+            <article class="result-card">
+              <div class="card-heading">
+                <h2>ConstraintTemplate (정책 템플릿)</h2>
+                <button class="copy-section" data-copy-target="templateOutput">복사</button>
+              </div>
               <pre id="templateOutput" data-empty="true">정책을 생성하면 여기에 결과가 표시됩니다</pre>
             </article>
-            <article>
-              <h2>Constraint (정책 리소스)</h2>
+            <article class="result-card">
+              <div class="card-heading">
+                <h2>Constraint (정책 리소스)</h2>
+                <button class="copy-section" data-copy-target="constraintOutput">복사</button>
+              </div>
               <pre id="constraintOutput" data-empty="true">정책을 생성하면 여기에 결과가 표시됩니다</pre>
             </article>
-            <article>
-              <h2>Rego (정책 로직)</h2>
+            <article class="result-card">
+              <div class="card-heading">
+                <h2>Rego (정책 로직)</h2>
+                <button class="copy-section" data-copy-target="regoOutput">복사</button>
+              </div>
               <pre id="regoOutput" data-empty="true">정책을 생성하면 여기에 결과가 표시됩니다</pre>
             </article>
-            <article>
-              <h2>LLM Review (AI 검토)</h2>
+            <article class="result-card">
+              <div class="card-heading">
+                <h2>LLM Review (AI 검토)</h2>
+                <button class="copy-section" data-copy-target="llmOutput">복사</button>
+              </div>
               <pre id="llmOutput" data-empty="true">정책을 생성하면 여기에 결과가 표시됩니다</pre>
             </article>
           </div>

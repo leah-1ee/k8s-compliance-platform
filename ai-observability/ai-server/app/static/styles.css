@@ -193,6 +193,24 @@ h2 {
   font-size: 16px;
 }
 
+.card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.card-heading h2 {
+  margin: 0;
+}
+
+.copy-section {
+  min-height: 32px;
+  padding: 0 10px;
+  color: var(--muted);
+}
+
 pre,
 code {
   display: block;

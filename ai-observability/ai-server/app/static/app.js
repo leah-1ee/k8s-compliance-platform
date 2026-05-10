@@ -164,6 +164,18 @@ $("#copyAnalysis").addEventListener("click", () => {
   copyText(latestAnalysisText).catch((error) => showToast(error.message));
 });
 
+document.querySelectorAll(".copy-section").forEach((button) => {
+  button.addEventListener("click", () => {
+    const targetId = button.dataset.copyTarget;
+    const target = document.getElementById(targetId);
+    if (!target || target.dataset.empty === "true") {
+      showToast("복사할 결과 없음");
+      return;
+    }
+    copyText(target.textContent).catch((error) => showToast(error.message));
+  });
+});
+
 $("#grafanaLink").addEventListener("click", (event) => {
   if (!grafanaUrl) {
     event.preventDefault();
