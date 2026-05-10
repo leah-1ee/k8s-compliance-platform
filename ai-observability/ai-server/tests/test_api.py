@@ -25,6 +25,8 @@ def test_ui_is_served():
 
     assert response.status_code == 200
     assert "Compliance AI Console" in response.text
+    assert "Kubernetes Policy-as-Code 자동 생성 및 위반 분석 도구" in response.text
+    assert "정책을 생성하면 여기에 결과가 표시됩니다" in response.text
 
 
 def test_classify_contract():

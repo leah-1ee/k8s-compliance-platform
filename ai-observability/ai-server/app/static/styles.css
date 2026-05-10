@@ -55,7 +55,9 @@ textarea {
 
 .topbar p {
   margin: 6px 0 0;
-  color: var(--muted);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 650;
 }
 
 .grafana-link,
@@ -206,6 +208,11 @@ pre {
   margin: 0;
 }
 
+pre:empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+}
+
 .analysis-card {
   min-height: 220px;
 }
@@ -230,6 +237,21 @@ pre {
   font-weight: 750;
 }
 
+.badge.ready {
+  background: rgba(124, 195, 110, 0.16);
+  color: var(--ok);
+}
+
+.badge.loading {
+  background: rgba(88, 166, 255, 0.16);
+  color: var(--brand);
+}
+
+.badge.error {
+  background: rgba(255, 102, 117, 0.16);
+  color: var(--danger);
+}
+
 .badge.high {
   background: rgba(255, 102, 117, 0.16);
   color: var(--danger);
@@ -249,6 +271,26 @@ pre {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+
+.query-card p {
+  min-height: 44px;
+  margin: 0 0 12px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.query-card pre {
+  min-height: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0f141a;
+}
+
+.query-card code {
+  color: #d9e7ff;
 }
 
 .toast {

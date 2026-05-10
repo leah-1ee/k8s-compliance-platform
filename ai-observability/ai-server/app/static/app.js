@@ -41,6 +41,28 @@ function activateTab(tabName) {
   $(`#${tabName}Panel`).classList.add("is-active");
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function setAnalysisState(status, title, detail = "") {
+  const badgeByStatus = {
+    ready: "● 준비됨",
+    loading: "⟳ 처리 중",
+    error: "✕ 오류",
+  };
+  $("#analysisResult").innerHTML = `
+    <span class="badge ${status}">${badgeByStatus[status]}</span>
+    <h2>${escapeHtml(title)}</h2>
+    <p>${escapeHtml(detail)}</p>
+  `;
+}
+
 async function generatePolicy() {
   const payload = {
     prompt: $("#policyPrompt").value,
@@ -52,9 +74,10 @@ async function generatePolicy() {
     use_llm: $("#useLlm").checked,
   };
   const result = await postJson("/generate-policy", payload);
-  $("#templateOutput").textContent = result.constraint_template;
+  $("#templateOutput").textContent =
+    result.constraint_template || "Mutation 정책은 ConstraintTemplate을 사용하지 않습니다.";
   $("#constraintOutput").textContent = result.constraint;
-  $("#regoOutput").textContent = result.rego;
+  $("#regoOutput").textContent = result.rego || "Mutation 정책은 Rego를 사용하지 않습니다.";
   $("#llmOutput").textContent = result.llm_review || "LLM 검토 미사용 또는 설정 없음";
   latestPolicyText = [
     "# ConstraintTemplate",
@@ -76,14 +99,23 @@ async function generatePolicy() {
 }
 
 async function analyzeViolation() {
-  const payload = JSON.parse($("#eventPayload").value);
+  setAnalysisState("loading", "분석 처리 중", "이벤트 JSON을 분석하고 있습니다.");
+  let payload;
+  try {
+    payload = JSON.parse($("#eventPayload").value);
+  } catch (error) {
+    setAnalysisState("error", "JSON 형식 오류", error.message);
+    throw error;
+  }
   const result = await postJson("/analyze-violation", payload);
-  const actions = result.recommended_actions.map((item) => `<li>${item}</li>`).join("");
+  const actions = result.recommended_actions
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
   $("#analysisResult").innerHTML = `
-    <span class="badge ${result.severity}">${result.severity}</span>
-    <h2>${result.summary}</h2>
-    <p>confidence: ${result.confidence}</p>
-    <p>${result.reason}</p>
+    <span class="badge ${result.severity}">${escapeHtml(result.severity)}</span>
+    <h2>${escapeHtml(result.summary)}</h2>
+    <p>confidence: ${escapeHtml(result.confidence)}</p>
+    <p>${escapeHtml(result.reason)}</p>
     <ul>${actions}</ul>
   `;
   latestAnalysisText = JSON.stringify(result, null, 2);
@@ -108,7 +140,12 @@ $("#generatePolicy").addEventListener("click", () => {
 });
 
 $("#analyzeViolation").addEventListener("click", () => {
-  analyzeViolation().catch((error) => showToast(error.message));
+  analyzeViolation().catch((error) => {
+    if (!$("#analysisResult .badge.error")) {
+      setAnalysisState("error", "분석 실패", error.message);
+    }
+    showToast(error.message);
+  });
 });
 
 $("#copyPolicy").addEventListener("click", () => {

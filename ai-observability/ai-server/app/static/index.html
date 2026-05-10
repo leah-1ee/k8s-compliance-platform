@@ -11,7 +11,7 @@
       <header class="topbar">
         <div>
           <h1>Compliance AI Console</h1>
-          <p>Policy-as-Code 자동화 및 위반 분석</p>
+          <p>Kubernetes Policy-as-Code 자동 생성 및 위반 분석 도구</p>
         </div>
         <a class="grafana-link" href="#" id="grafanaLink">Grafana</a>
       </header>
@@ -43,7 +43,7 @@
                 </select>
               </label>
               <label>
-                enforcementAction
+                EnforcementAction (적용 방식)
                 <select id="enforcementAction">
                   <option value="deny">deny</option>
                   <option value="warn">warn</option>
@@ -51,7 +51,7 @@
                 </select>
               </label>
               <label>
-                Constraint 이름
+                Constraint Name (정책 이름)
                 <input id="constraintName" value="disallow-latest-tag" />
               </label>
             </div>
@@ -74,20 +74,20 @@
           </div>
           <div class="result-grid">
             <article>
-              <h2>ConstraintTemplate</h2>
-              <pre id="templateOutput"></pre>
+              <h2>ConstraintTemplate (정책 템플릿)</h2>
+              <pre id="templateOutput" data-placeholder="정책을 생성하면 여기에 결과가 표시됩니다"></pre>
             </article>
             <article>
               <h2>Constraint</h2>
-              <pre id="constraintOutput"></pre>
+              <pre id="constraintOutput" data-placeholder="정책을 생성하면 여기에 결과가 표시됩니다"></pre>
             </article>
             <article>
               <h2>Rego</h2>
-              <pre id="regoOutput"></pre>
+              <pre id="regoOutput" data-placeholder="정책을 생성하면 여기에 결과가 표시됩니다"></pre>
             </article>
             <article>
-              <h2>LLM Review</h2>
-              <pre id="llmOutput"></pre>
+              <h2>LLM Review (AI 검토)</h2>
+              <pre id="llmOutput" data-placeholder="정책을 생성하면 여기에 결과가 표시됩니다"></pre>
             </article>
           </div>
         </section>
@@ -119,7 +119,7 @@
             <button id="copyAnalysis">분석 복사</button>
           </div>
           <div class="analysis-card" id="analysisResult">
-            <span class="badge">ready</span>
+            <span class="badge ready">● 준비됨</span>
             <h2>분석 대기</h2>
             <p>이벤트 JSON 입력 후 분석 실행</p>
           </div>
@@ -127,29 +127,35 @@
 
         <section class="panel" id="queriesPanel">
           <div class="query-list">
-            <article>
+            <article class="query-card">
               <h2>AI Classification Requests</h2>
-              <code>sum(increase(compliance_ai_requests_total{service="response-server"}[$__range]))</code>
+              <p>선택한 시간 범위 동안 AI Classifier로 전달된 요청 수를 집계합니다.</p>
+              <pre><code>sum(increase(compliance_ai_requests_total{service="response-server"}[$__range]))</code></pre>
             </article>
-            <article>
+            <article class="query-card">
               <h2>AI Classification Errors</h2>
-              <code>sum(increase(compliance_ai_errors_total{service="response-server"}[$__range]))</code>
+              <p>선택한 시간 범위 동안 AI 분류 처리 중 발생한 오류 수를 표시합니다.</p>
+              <pre><code>sum(increase(compliance_ai_errors_total{service="response-server"}[$__range]))</code></pre>
             </article>
-            <article>
+            <article class="query-card">
               <h2>Seconds Since Last Gatekeeper Audit</h2>
-              <code>time() - gatekeeper_audit_last_run_time</code>
+              <p>Gatekeeper의 마지막 감사 실행 이후 경과 시간을 초 단위로 확인합니다.</p>
+              <pre><code>time() - gatekeeper_audit_last_run_time</code></pre>
             </article>
-            <article>
+            <article class="query-card">
               <h2>Gatekeeper Violations by Enforcement</h2>
-              <code>sum by (enforcement_action) (gatekeeper_violations)</code>
+              <p>정책 위반을 deny, warn, dryrun 같은 적용 방식 기준으로 집계합니다.</p>
+              <pre><code>sum by (enforcement_action) (gatekeeper_violations)</code></pre>
             </article>
-            <article>
+            <article class="query-card">
               <h2>Policy Violations by Policy</h2>
-              <code>sum by (name) (gatekeeper_violations)</code>
+              <p>어떤 Gatekeeper 정책에서 위반이 많이 발생하는지 정책 이름별로 비교합니다.</p>
+              <pre><code>sum by (name) (gatekeeper_violations)</code></pre>
             </article>
-            <article>
+            <article class="query-card">
               <h2>Gatekeeper Audit Duration</h2>
-              <code>rate(gatekeeper_audit_duration_seconds_sum[5m]) / rate(gatekeeper_audit_duration_seconds_count[5m])</code>
+              <p>최근 5분 동안 Gatekeeper 감사 작업의 평균 소요 시간을 계산합니다.</p>
+              <pre><code>rate(gatekeeper_audit_duration_seconds_sum[5m]) / rate(gatekeeper_audit_duration_seconds_count[5m])</code></pre>
             </article>
           </div>
         </section>
