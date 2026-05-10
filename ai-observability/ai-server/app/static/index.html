@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Compliance AI Console</title>
-    <link rel="stylesheet" href="/static/styles.css?v=copy-icon-2" />
+    <link rel="stylesheet" href="/static/styles.css?v=llm-key-1" />
   </head>
   <body>
     <main class="shell">
@@ -17,6 +17,28 @@
       </header>
 
       <section class="workspace" aria-label="AI console workspace">
+        <section class="llm-key-panel" aria-label="LLM API key settings">
+          <div class="llm-key-grid">
+            <label>
+              LLM Provider (모델 제공자)
+              <select id="llmProvider">
+                <option value="openai">OpenAI (GPT)</option>
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="google">Google (Gemini)</option>
+                <option value="xai">xAI (Grok)</option>
+              </select>
+            </label>
+            <label>
+              API Key (세션 키)
+              <input id="llmApiKey" type="password" autocomplete="off" placeholder="서버 기본 키 사용" />
+            </label>
+          </div>
+          <p class="key-notice">
+            Your API key is stored in this browser session only and never saved on the server.
+          </p>
+          <div class="inline-alert" id="inlineAlert" role="alert" hidden></div>
+        </section>
+
         <nav class="tabs" aria-label="console tabs">
           <button class="tab is-active" data-tab="policy">Policy Generator</button>
           <button class="tab" data-tab="analysis">Violation Analyzer</button>
@@ -206,6 +228,6 @@
       </section>
     </main>
     <div class="toast" id="toast" role="status"></div>
-    <script src="/static/app.js?v=copy-icon-2"></script>
+    <script src="/static/app.js?v=llm-key-1"></script>
   </body>
 </html>

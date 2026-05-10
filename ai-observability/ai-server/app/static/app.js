@@ -3,6 +3,8 @@ const $ = (selector) => document.querySelector(selector);
 let latestPolicyText = "";
 let latestAnalysisText = "";
 let grafanaUrl = "";
+const SESSION_KEY = "complianceAiLlmApiKey";
+const SESSION_PROVIDER = "complianceAiLlmProvider";
 
 function splitList(value) {
   return value
@@ -18,15 +20,49 @@ function showToast(message) {
   window.setTimeout(() => toast.classList.remove("show"), 1800);
 }
 
+function showInlineAlert(message) {
+  const alert = $("#inlineAlert");
+  alert.textContent = message;
+  alert.hidden = false;
+}
+
+function clearInlineAlert() {
+  const alert = $("#inlineAlert");
+  alert.textContent = "";
+  alert.hidden = true;
+}
+
+function llmHeaders() {
+  const provider = $("#llmProvider").value;
+  const apiKey = sessionStorage.getItem(SESSION_KEY) || "";
+  const headers = {
+    "Content-Type": "application/json",
+    "X-LLM-Provider": provider,
+  };
+  if (apiKey) {
+    headers["X-LLM-API-Key"] = apiKey;
+  }
+  return headers;
+}
+
 async function postJson(path, payload) {
   const response = await fetch(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: llmHeaders(),
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text || `HTTP ${response.status}`);
+    let message = text || `HTTP ${response.status}`;
+    try {
+      const body = JSON.parse(text);
+      message = body.error || body.detail || message;
+    } catch (error) {
+      // 오류 본문 원문 사용
+    }
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
   }
   return response.json();
 }
@@ -70,6 +106,7 @@ function setOutput(selector, value) {
 }
 
 async function generatePolicy() {
+  clearInlineAlert();
   const payload = {
     prompt: $("#policyPrompt").value,
     policy_kind: $("#policyKind").value || null,
@@ -107,6 +144,7 @@ async function generatePolicy() {
 }
 
 async function analyzeViolation() {
+  clearInlineAlert();
   setAnalysisState("loading", "분석 처리 중", "이벤트 JSON을 분석하고 있습니다.");
   let payload;
   try {
@@ -149,7 +187,10 @@ document.querySelectorAll(".tab").forEach((tab) => {
 });
 
 $("#generatePolicy").addEventListener("click", () => {
-  generatePolicy().catch((error) => showToast(error.message));
+  generatePolicy().catch((error) => {
+    showInlineAlert(error.message);
+    showToast(error.message);
+  });
 });
 
 $("#analyzeViolation").addEventListener("click", () => {
@@ -157,6 +198,7 @@ $("#analyzeViolation").addEventListener("click", () => {
     if (!$("#analysisResult .badge.error")) {
       setAnalysisState("error", "분석 실패", error.message);
     }
+    showInlineAlert(error.message);
     showToast(error.message);
   });
 });
@@ -186,6 +228,19 @@ document.querySelectorAll(".copy-section").forEach((button) => {
   });
 });
 
+$("#llmProvider").addEventListener("change", () => {
+  sessionStorage.setItem(SESSION_PROVIDER, $("#llmProvider").value);
+});
+
+$("#llmApiKey").addEventListener("input", () => {
+  const value = $("#llmApiKey").value.trim();
+  if (value) {
+    sessionStorage.setItem(SESSION_KEY, value);
+  } else {
+    sessionStorage.removeItem(SESSION_KEY);
+  }
+});
+
 $("#grafanaLink").addEventListener("click", (event) => {
   if (!grafanaUrl) {
     event.preventDefault();
@@ -204,4 +259,15 @@ async function loadConfig() {
   }
 }
 
+function initLlmKeyPanel() {
+  // 세션 키 초기화
+  sessionStorage.removeItem(SESSION_KEY);
+  const savedProvider = sessionStorage.getItem(SESSION_PROVIDER);
+  if (savedProvider) {
+    $("#llmProvider").value = savedProvider;
+  }
+  $("#llmApiKey").value = "";
+}
+
+initLlmKeyPanel();
 loadConfig().catch(() => showToast("설정 로드 실패"));

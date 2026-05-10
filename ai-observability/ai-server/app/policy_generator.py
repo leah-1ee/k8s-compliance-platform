@@ -20,7 +20,11 @@ DEFAULT_ALLOWED_REGISTRIES = [
 ]
 
 
-def generate_policy(request: PolicyGenerationRequest) -> PolicyGenerationResponse:
+def generate_policy(
+    request: PolicyGenerationRequest,
+    llm_provider: str | None = None,
+    llm_api_key: str | None = None,
+) -> PolicyGenerationResponse:
     # 정책 유형 판별
     policy_kind = request.policy_kind or _detect_policy_kind(request.prompt)
     constraint_name = _safe_name(request.constraint_name)
@@ -61,7 +65,7 @@ def generate_policy(request: PolicyGenerationRequest) -> PolicyGenerationRespons
     llm_review = ""
     llm_used = False
     if request.use_llm:
-        llm_review = _safe_llm_review(prompt)
+        llm_review = _safe_llm_review(prompt, llm_provider, llm_api_key)
         llm_used = bool(llm_review)
 
     return PolicyGenerationResponse(
@@ -80,10 +84,14 @@ def generate_policy(request: PolicyGenerationRequest) -> PolicyGenerationRespons
     )
 
 
-def _safe_llm_review(prompt: str) -> str:
+def _safe_llm_review(
+    prompt: str,
+    llm_provider: str | None,
+    llm_api_key: str | None,
+) -> str:
     # LLM 장애 격리
     try:
-        return LLMClient().review_policy(prompt)
+        return LLMClient(provider=llm_provider, api_key=llm_api_key).review_policy(prompt)
     except Exception:
         return ""
 

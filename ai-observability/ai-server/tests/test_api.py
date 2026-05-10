@@ -6,6 +6,25 @@ from app.main import app
 client = TestClient(app)
 
 
+def _analysis_payload() -> dict:
+    return {
+        "cluster": "school-cloud",
+        "rule": "Compliance - Shell Spawned in Container",
+        "priority": "Warning",
+        "output": "Shell spawned in container by root user",
+        "output_fields": {
+            "proc.name": "sh",
+            "user.name": "root",
+            "user.uid": 0,
+            "container.id": "abc123",
+            "k8s.ns.name": "default",
+            "k8s.pod.name": "test-pod",
+        },
+        "tags": ["shell", "runtime"],
+        "time": "2026-05-09T00:00:00Z",
+    }
+
+
 def test_healthz():
     response = client.get("/healthz")
 
@@ -26,6 +45,11 @@ def test_ui_is_served():
     assert response.status_code == 200
     assert "Compliance AI Console" in response.text
     assert "Kubernetes Policy-as-Code 자동 생성 및 위반 분석 도구" in response.text
+    assert "OpenAI (GPT)" in response.text
+    assert "Anthropic (Claude)" in response.text
+    assert "Google (Gemini)" in response.text
+    assert "xAI (Grok)" in response.text
+    assert "Your API key is stored in this browser session only" in response.text
     assert "정책을 생성하면 여기에 결과가 표시됩니다" in response.text
     assert 'data-copy-target="templateOutput"' in response.text
     assert 'aria-label="ConstraintTemplate 복사"' in response.text
@@ -118,25 +142,7 @@ def test_generate_mutation_policy_contract():
 
 
 def test_analyze_violation_contract():
-    response = client.post(
-        "/analyze-violation",
-        json={
-            "cluster": "school-cloud",
-            "rule": "Compliance - Shell Spawned in Container",
-            "priority": "Warning",
-            "output": "Shell spawned in container by root user",
-            "output_fields": {
-                "proc.name": "sh",
-                "user.name": "root",
-                "user.uid": 0,
-                "container.id": "abc123",
-                "k8s.ns.name": "default",
-                "k8s.pod.name": "test-pod",
-            },
-            "tags": ["shell", "runtime"],
-            "time": "2026-05-09T00:00:00Z",
-        },
-    )
+    response = client.post("/analyze-violation", json=_analysis_payload())
 
     body = response.json()
 
@@ -144,3 +150,33 @@ def test_analyze_violation_contract():
     assert body["severity"] in {"low", "medium", "high"}
     assert "school-cloud" in body["summary"]
     assert body["recommended_actions"]
+
+
+def test_default_key_rate_limit_returns_json_error():
+    limited_client = TestClient(app, client=("203.0.113.10", 50000))
+    response = None
+    for _ in range(6):
+        response = limited_client.post("/analyze-violation", json=_analysis_payload())
+
+    assert response is not None
+    assert response.status_code == 429
+    assert response.json() == {
+        "error": "Rate limit exceeded. Please provide your own API key to continue."
+    }
+
+
+def test_user_api_key_bypasses_rate_limit():
+    keyed_client = TestClient(app, client=("203.0.113.11", 50000))
+    response = None
+    for _ in range(6):
+        response = keyed_client.post(
+            "/analyze-violation",
+            headers={
+                "X-LLM-Provider": "openai",
+                "X-LLM-API-Key": "test-user-key",
+            },
+            json=_analysis_payload(),
+        )
+
+    assert response is not None
+    assert response.status_code == 200
