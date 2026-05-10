@@ -97,14 +97,21 @@ button.primary {
   background: #121820;
 }
 
+.byok-toggle {
+  width: max-content;
+  color: var(--text);
+}
+
 .llm-key-grid {
   display: grid;
   grid-template-columns: minmax(180px, 240px) minmax(280px, 1fr);
   gap: 14px;
+  margin-top: 14px;
 }
 
 .key-notice {
-  margin: 10px 0 0;
+  grid-column: 1 / -1;
+  margin: 0;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.45;

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Compliance AI Console</title>
-    <link rel="stylesheet" href="/static/styles.css?v=llm-key-1" />
+    <link rel="stylesheet" href="/static/styles.css?v=dual-key-1" />
   </head>
   <body>
     <main class="shell">
@@ -18,7 +18,11 @@
 
       <section class="workspace" aria-label="AI console workspace">
         <section class="llm-key-panel" aria-label="LLM API key settings">
-          <div class="llm-key-grid">
+          <label class="checkbox-row byok-toggle">
+            <input id="useOwnApiKey" type="checkbox" />
+            Use my own API key
+          </label>
+          <div class="llm-key-grid" id="byokFields" hidden>
             <label>
               LLM Provider (모델 제공자)
               <select id="llmProvider">
@@ -30,12 +34,14 @@
             </label>
             <label>
               API Key (세션 키)
-              <input id="llmApiKey" type="password" autocomplete="off" placeholder="서버 기본 키 사용" />
+              <input id="llmApiKey" type="password" autocomplete="off" placeholder="현재 세션에서만 사용" />
             </label>
+            <p class="key-notice">
+              Your API key is used only for requests in this session.<br />
+              It is never saved on the server.<br />
+              Do not use this on a shared or public computer.
+            </p>
           </div>
-          <p class="key-notice">
-            Your API key is stored in this browser session only and never saved on the server.
-          </p>
           <div class="inline-alert" id="inlineAlert" role="alert" hidden></div>
         </section>
 
@@ -228,6 +234,6 @@
       </section>
     </main>
     <div class="toast" id="toast" role="status"></div>
-    <script src="/static/app.js?v=llm-key-1"></script>
+    <script src="/static/app.js?v=dual-key-1"></script>
   </body>
 </html>

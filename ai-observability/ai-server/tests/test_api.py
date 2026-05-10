@@ -49,7 +49,8 @@ def test_ui_is_served():
     assert "Anthropic (Claude)" in response.text
     assert "Google (Gemini)" in response.text
     assert "xAI (Grok)" in response.text
-    assert "Your API key is stored in this browser session only" in response.text
+    assert "Use my own API key" in response.text
+    assert "Your API key is used only for requests in this session" in response.text
     assert "정책을 생성하면 여기에 결과가 표시됩니다" in response.text
     assert 'data-copy-target="templateOutput"' in response.text
     assert 'aria-label="ConstraintTemplate 복사"' in response.text
@@ -161,7 +162,7 @@ def test_default_key_rate_limit_returns_json_error():
     assert response is not None
     assert response.status_code == 429
     assert response.json() == {
-        "error": "Rate limit exceeded. Please provide your own API key to continue."
+        "error": "Rate limit exceeded. Add your own API key above to continue."
     }
 
 

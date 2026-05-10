@@ -4,7 +4,6 @@ let latestPolicyText = "";
 let latestAnalysisText = "";
 let grafanaUrl = "";
 const SESSION_KEY = "complianceAiLlmApiKey";
-const SESSION_PROVIDER = "complianceAiLlmProvider";
 
 function splitList(value) {
   return value
@@ -32,14 +31,38 @@ function clearInlineAlert() {
   alert.hidden = true;
 }
 
+function isSecureContextForKey() {
+  const host = window.location.hostname;
+  return (
+    window.location.protocol === "https:" ||
+    host === "localhost" ||
+    host === "127.0.0.1"
+  );
+}
+
+function sanitizeApiKey(value) {
+  return value
+    .trim()
+    .split("")
+    .filter((ch) => ch >= " " && ch !== "\u007f")
+    .join("")
+    .slice(0, 4096);
+}
+
 function llmHeaders() {
-  const provider = $("#llmProvider").value;
-  const apiKey = sessionStorage.getItem(SESSION_KEY) || "";
   const headers = {
     "Content-Type": "application/json",
-    "X-LLM-Provider": provider,
   };
-  if (apiKey) {
+  if (!$("#useOwnApiKey").checked) {
+    return headers;
+  }
+  if (!isSecureContextForKey()) {
+    showInlineAlert("HTTPS 연결에서만 사용자 API key를 전송할 수 있습니다.");
+    return headers;
+  }
+  const apiKey = sessionStorage.getItem(SESSION_KEY) || "";
+  if (apiKey.length >= 8) {
+    headers["X-LLM-Provider"] = $("#llmProvider").value;
     headers["X-LLM-API-Key"] = apiKey;
   }
   return headers;
@@ -228,12 +251,21 @@ document.querySelectorAll(".copy-section").forEach((button) => {
   });
 });
 
-$("#llmProvider").addEventListener("change", () => {
-  sessionStorage.setItem(SESSION_PROVIDER, $("#llmProvider").value);
+$("#useOwnApiKey").addEventListener("change", () => {
+  $("#byokFields").hidden = !$("#useOwnApiKey").checked;
+  sessionStorage.removeItem(SESSION_KEY);
+  $("#llmApiKey").value = "";
+  clearInlineAlert();
+  if ($("#useOwnApiKey").checked && !isSecureContextForKey()) {
+    showInlineAlert("HTTPS 연결에서만 사용자 API key를 전송할 수 있습니다.");
+  }
 });
 
 $("#llmApiKey").addEventListener("input", () => {
-  const value = $("#llmApiKey").value.trim();
+  const value = sanitizeApiKey($("#llmApiKey").value);
+  if ($("#llmApiKey").value !== value) {
+    $("#llmApiKey").value = value;
+  }
   if (value) {
     sessionStorage.setItem(SESSION_KEY, value);
   } else {
@@ -262,10 +294,9 @@ async function loadConfig() {
 function initLlmKeyPanel() {
   // 세션 키 초기화
   sessionStorage.removeItem(SESSION_KEY);
-  const savedProvider = sessionStorage.getItem(SESSION_PROVIDER);
-  if (savedProvider) {
-    $("#llmProvider").value = savedProvider;
-  }
+  $("#useOwnApiKey").checked = false;
+  $("#byokFields").hidden = true;
+  $("#llmProvider").value = "google";
   $("#llmApiKey").value = "";
 }
 

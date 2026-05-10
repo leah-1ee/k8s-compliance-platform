@@ -30,8 +30,28 @@ logging.basicConfig(
 logger = logging.getLogger("ai-server")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 DEFAULT_GRAFANA_URL = "https://compliance-grafana.shares.zrok.io"
-RATE_LIMIT_MESSAGE = "Rate limit exceeded. Please provide your own API key to continue."
+RATE_LIMIT_MESSAGE = "Rate limit exceeded. Add your own API key above to continue."
 current_request: ContextVar[Request | None] = ContextVar("current_request", default=None)
+
+
+def sanitize_llm_api_key(value: str | None) -> str:
+    # 사용자 키 정규화
+    if not value:
+        return ""
+    normalized = "".join(ch for ch in value.strip() if ch.isprintable())[:4096]
+    if any(ch.isspace() for ch in normalized):
+        return ""
+    if len(normalized) < 8:
+        return ""
+    return normalized
+
+
+def sanitize_llm_provider(value: str | None) -> str | None:
+    # 제공자 헤더 검증
+    normalized = (value or "").strip().lower()
+    if normalized in {"openai", "anthropic", "google", "xai"}:
+        return normalized
+    return None
 
 
 def has_user_llm_key() -> bool:
@@ -39,7 +59,7 @@ def has_user_llm_key() -> bool:
     request = current_request.get()
     if request is None:
         return False
-    return bool(request.headers.get("x-llm-api-key", "").strip())
+    return bool(sanitize_llm_api_key(request.headers.get("x-llm-api-key")))
 
 
 limiter = Limiter(key_func=get_remote_address)
@@ -104,7 +124,7 @@ def analyze(
     x_llm_api_key: str | None = Header(default=None),
 ) -> ViolationAnalysisResponse:
     # 위반 분석
-    _ = (request, x_llm_provider, x_llm_api_key)
+    _ = (request, sanitize_llm_provider(x_llm_provider), sanitize_llm_api_key(x_llm_api_key))
     return analyze_violation(payload)
 
 
@@ -120,8 +140,8 @@ def generate(
     _ = request
     return generate_policy(
         payload,
-        llm_provider=x_llm_provider,
-        llm_api_key=x_llm_api_key,
+        llm_provider=sanitize_llm_provider(x_llm_provider),
+        llm_api_key=sanitize_llm_api_key(x_llm_api_key),
     )
 
 

@@ -29,10 +29,10 @@ PROVIDER_DEFAULTS = {
 
 def normalize_provider(value: str | None) -> LLMProvider:
     # 제공자 정규화
-    normalized = (value or os.getenv("LLM_PROVIDER", "openai")).strip().lower()
+    normalized = (value or os.getenv("LLM_PROVIDER", "google")).strip().lower()
     if normalized in {"openai", "anthropic", "google", "xai"}:
         return normalized  # type: ignore[return-value]
-    return "openai"
+    return "google"
 
 
 class LLMClient:
