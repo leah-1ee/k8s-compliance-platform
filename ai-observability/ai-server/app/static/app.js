@@ -139,6 +139,11 @@ async function copyText(value) {
   showToast("복사 완료");
 }
 
+function markCopied(button) {
+  button.classList.add("is-copied");
+  window.setTimeout(() => button.classList.remove("is-copied"), 1500);
+}
+
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => activateTab(tab.dataset.tab));
 });
@@ -165,14 +170,19 @@ $("#copyAnalysis").addEventListener("click", () => {
 });
 
 document.querySelectorAll(".copy-section").forEach((button) => {
-  button.addEventListener("click", () => {
+  button.addEventListener("click", async () => {
     const targetId = button.dataset.copyTarget;
     const target = document.getElementById(targetId);
     if (!target || target.dataset.empty === "true") {
       showToast("복사할 결과 없음");
       return;
     }
-    copyText(target.textContent).catch((error) => showToast(error.message));
+    try {
+      await copyText(target.textContent);
+      markCopied(button);
+    } catch (error) {
+      showToast(error.message);
+    }
   });
 });
 

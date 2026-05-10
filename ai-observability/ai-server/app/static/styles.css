@@ -193,11 +193,14 @@ h2 {
   font-size: 16px;
 }
 
+.result-card {
+  position: relative;
+}
+
 .card-heading {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
+  position: relative;
+  min-height: 24px;
+  padding-left: 28px;
   margin-bottom: 12px;
 }
 
@@ -208,47 +211,66 @@ h2 {
 .copy-section {
   display: inline-grid;
   place-items: center;
-  width: 28px;
-  min-width: 28px;
-  min-height: 28px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 20px;
   padding: 0;
-  border-color: transparent;
+  border: 0;
+  border-radius: 4px;
   background: transparent;
   color: var(--muted);
 }
 
 .copy-section:hover,
 .copy-section:focus-visible {
-  border-color: var(--line);
-  background: var(--surface-2);
+  background: rgba(154, 167, 181, 0.14);
   color: var(--text);
 }
 
 .copy-glyph {
   position: relative;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 .copy-glyph::before,
 .copy-glyph::after {
   position: absolute;
   content: "";
-  width: 10px;
-  height: 10px;
-  border: 1.7px solid currentColor;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid currentColor;
   border-radius: 3px;
 }
 
 .copy-glyph::before {
   top: 1px;
-  left: 5px;
+  left: 4px;
 }
 
 .copy-glyph::after {
-  top: 5px;
+  top: 4px;
   left: 1px;
   background: #11171e;
+}
+
+.copy-section.is-copied .copy-glyph::before {
+  top: 2px;
+  left: 3px;
+  width: 8px;
+  height: 5px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0;
+  transform: rotate(-45deg);
+}
+
+.copy-section.is-copied .copy-glyph::after {
+  display: none;
 }
 
 pre,
