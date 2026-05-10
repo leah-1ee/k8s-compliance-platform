@@ -1,4 +1,5 @@
 import os
+import re
 from typing import Literal
 from urllib.parse import urlencode
 
@@ -18,7 +19,7 @@ PROVIDER_DEFAULTS = {
     },
     "google": {
         "api_url": "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-        "model": "gemini-1.5-flash",
+        "model": "gemini-2.0-flash",
     },
     "xai": {
         "api_url": "https://api.x.ai/v1/chat/completions",
@@ -79,6 +80,7 @@ class LLMClient:
         payload = {
             "model": self.model,
             "messages": self._messages(prompt),
+            "max_tokens": 420,
             "temperature": 0.1,
         }
         headers = {
@@ -90,18 +92,18 @@ class LLMClient:
             response.raise_for_status()
             body = response.json()
 
-        return (
+        return self._normalize_review(
             body.get("choices", [{}])[0]
             .get("message", {})
             .get("content", "")
             .strip()
-        )[:2000]
+        )
 
     def _review_policy_anthropic(self, prompt: str) -> str:
         # Anthropic 요청
         payload = {
             "model": self.model,
-            "max_tokens": 800,
+            "max_tokens": 420,
             "system": self._system_prompt(),
             "messages": [{"role": "user", "content": prompt}],
         }
@@ -117,7 +119,7 @@ class LLMClient:
 
         content = body.get("content", [])
         if content and isinstance(content[0], dict):
-            return content[0].get("text", "").strip()[:2000]
+            return self._normalize_review(content[0].get("text", "").strip())
         return ""
 
     def _review_policy_google(self, prompt: str) -> str:
@@ -132,7 +134,10 @@ class LLMClient:
                     "parts": [{"text": f"{self._system_prompt()}\n\n{prompt}"}],
                 }
             ],
-            "generationConfig": {"temperature": 0.1},
+            "generationConfig": {
+                "temperature": 0.1,
+                "maxOutputTokens": 420,
+            },
         }
         with httpx.Client(timeout=self.timeout) as client:
             response = client.post(url, headers={"Content-Type": "application/json"}, json=payload)
@@ -146,7 +151,7 @@ class LLMClient:
             else []
         )
         if parts and isinstance(parts[0], dict):
-            return parts[0].get("text", "").strip()[:2000]
+            return self._normalize_review(parts[0].get("text", "").strip())
         return ""
 
     def _messages(self, prompt: str) -> list[dict[str, str]]:
@@ -160,5 +165,26 @@ class LLMClient:
         # 시스템 프롬프트
         return (
             "You review Kubernetes Gatekeeper policies. "
-            "Return concise Korean review notes only."
+            "Return only concise Korean plain text. "
+            "Do not return Markdown, bullets, code blocks, YAML, or Rego."
         )
+
+    def _normalize_review(self, value: str) -> str:
+        # 검토 결과 정리
+        cleaned_lines = []
+        in_code_block = False
+        for raw_line in value.splitlines():
+            line = raw_line.strip()
+            if line.startswith("```"):
+                in_code_block = not in_code_block
+                continue
+            if in_code_block or not line:
+                continue
+            line = re.sub(r"^#{1,6}\s*", "", line)
+            line = re.sub(r"^[-*•]\s*", "", line)
+            line = re.sub(r"^\d+[.)]\s*", "", line)
+            line = line.replace("**", "").replace("`", "").replace("*", "")
+            cleaned_lines.append(line)
+            if len(cleaned_lines) >= 4:
+                break
+        return "\n".join(cleaned_lines).strip()[:900]

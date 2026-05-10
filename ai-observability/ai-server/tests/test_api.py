@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.llm_client import LLMClient
 from app.main import app
 
 
@@ -183,3 +184,25 @@ def test_user_api_key_bypasses_rate_limit():
 
     assert response is not None
     assert response.status_code == 200
+
+
+def test_llm_review_normalization_removes_markdown():
+    client = LLMClient(provider="google", api_key="test-api-key")
+    review = client._normalize_review(
+        """## Kubernetes Gatekeeper 정책 검토 노트
+
+* **정책 의도**: `latest` 태그 사용을 금지합니다.
+* **적용 범위**: Pod containers를 검사합니다.
+```yaml
+apiVersion: templates.gatekeeper.sh/v1
+```
+* **주의할 점**: 예외 네임스페이스 확인이 필요합니다.
+* **운영 권장사항**: warn 후 deny 전환을 권장합니다.
+* **추가 내용**: 이 줄은 잘립니다.
+"""
+    )
+
+    assert "**" not in review
+    assert "`" not in review
+    assert "apiVersion" not in review
+    assert len(review.splitlines()) == 4
