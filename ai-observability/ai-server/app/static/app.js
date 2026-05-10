@@ -122,7 +122,7 @@ $("#copyAnalysis").addEventListener("click", () => {
 $("#grafanaLink").addEventListener("click", (event) => {
   if (!grafanaUrl) {
     event.preventDefault();
-    showToast("Grafana URL 환경 변수 설정 필요");
+    showToast("Grafana URL 설정 필요");
   }
 });
 

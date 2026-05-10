@@ -25,6 +25,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("ai-server")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+DEFAULT_GRAFANA_URL = "https://compliance-grafana.shares.zrok.io"
 
 app = FastAPI(
     title="Compliance AI Server",
@@ -43,7 +44,7 @@ def healthz() -> dict[str, str]:
 @app.get("/config")
 def config() -> dict[str, str]:
     # UI 설정
-    return {"grafana_url": os.getenv("GRAFANA_URL", "").strip()}
+    return {"grafana_url": os.getenv("GRAFANA_URL", DEFAULT_GRAFANA_URL).strip()}
 
 
 @app.post("/classify", response_model=ClassificationResponse)

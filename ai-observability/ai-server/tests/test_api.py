@@ -17,7 +17,7 @@ def test_config_contract():
     response = client.get("/config")
 
     assert response.status_code == 200
-    assert "grafana_url" in response.json()
+    assert response.json()["grafana_url"] == "https://compliance-grafana.shares.zrok.io"
 
 
 def test_ui_is_served():
