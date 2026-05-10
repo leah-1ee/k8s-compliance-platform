@@ -196,8 +196,8 @@ h2 {
 .card-heading {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: flex-start;
+  gap: 8px;
   margin-bottom: 12px;
 }
 
@@ -206,9 +206,49 @@ h2 {
 }
 
 .copy-section {
-  min-height: 32px;
-  padding: 0 10px;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
   color: var(--muted);
+}
+
+.copy-section:hover,
+.copy-section:focus-visible {
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.copy-glyph {
+  position: relative;
+  width: 16px;
+  height: 16px;
+}
+
+.copy-glyph::before,
+.copy-glyph::after {
+  position: absolute;
+  content: "";
+  width: 10px;
+  height: 10px;
+  border: 1.7px solid currentColor;
+  border-radius: 3px;
+}
+
+.copy-glyph::before {
+  top: 1px;
+  left: 5px;
+}
+
+.copy-glyph::after {
+  top: 5px;
+  left: 1px;
+  background: #11171e;
 }
 
 pre,
