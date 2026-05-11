@@ -8,7 +8,8 @@ def build_policy_prompt(request: PolicyGenerationRequest, policy_kind: PolicyKin
     output_type = "Assign mutation YAML" if "mutation" in policy_kind else "Rego, ConstraintTemplate YAML, and Constraint YAML"
     return f"""You are reviewing an already generated Kubernetes Gatekeeper policy.
 Return only plain Korean text. No YAML, Rego, Markdown, or code blocks.
-Write exactly 4 lines. Each line must be a complete sentence of 1-2 sentences.
+Write exactly 4 lines. Each line must be one complete sentence under 90 Korean characters.
+Do not include extra explanations after line 4.
 Use this exact format:
 1. 정책 의도: (이 정책이 무엇을 막거나 강제하는지)
 2. 적용 범위: (어떤 리소스, 네임스페이스에 적용되는지)

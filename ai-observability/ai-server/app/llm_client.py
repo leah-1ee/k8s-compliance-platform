@@ -103,7 +103,7 @@ class LLMClient:
         # Anthropic 요청
         payload = {
             "model": self.model,
-            "max_tokens": 420,
+            "max_tokens": 700,
             "system": self._system_prompt(),
             "messages": [{"role": "user", "content": prompt}],
         }
@@ -135,8 +135,8 @@ class LLMClient:
                 }
             ],
             "generationConfig": {
-                "temperature": 0.1,
-                "maxOutputTokens": 420,
+                "temperature": 0,
+                "maxOutputTokens": 700,
             },
         }
         with httpx.Client(timeout=self.timeout) as client:
@@ -184,7 +184,12 @@ class LLMClient:
             line = re.sub(r"^[-*•]\s*", "", line)
             line = re.sub(r"^\d+[.)]\s*", "", line)
             line = line.replace("**", "").replace("`", "").replace("*", "")
-            cleaned_lines.append(line)
+            cleaned_lines.extend(self._split_review_sentences(line))
             if len(cleaned_lines) >= 4:
                 break
-        return "\n".join(cleaned_lines).strip()[:900]
+        return "\n".join(cleaned_lines[:4]).strip()
+
+    def _split_review_sentences(self, value: str) -> list[str]:
+        # 긴 문장 분할
+        sentences = re.split(r"(?<=[.!?。！？])\s+", value)
+        return [sentence.strip() for sentence in sentences if sentence.strip()]

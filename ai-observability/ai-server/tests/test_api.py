@@ -205,4 +205,21 @@ apiVersion: templates.gatekeeper.sh/v1
     assert "**" not in review
     assert "`" not in review
     assert "apiVersion" not in review
-    assert len(review.splitlines()) == 6
+    assert len(review.splitlines()) == 4
+
+
+def test_llm_review_normalization_does_not_cut_mid_sentence():
+    client = LLMClient(provider="google", api_key="test-api-key")
+    review = client._normalize_review(
+        "정책 의도: latest 태그 사용을 금지합니다. "
+        "적용 범위: Pod 컨테이너 이미지에 적용됩니다. "
+        "주의할 점: 예외 네임스페이스를 확인해야 합니다. "
+        "운영 권장사항: warn으로 검증 후 deny 전환을 권장합니다."
+    )
+
+    assert review.splitlines() == [
+        "정책 의도: latest 태그 사용을 금지합니다.",
+        "적용 범위: Pod 컨테이너 이미지에 적용됩니다.",
+        "주의할 점: 예외 네임스페이스를 확인해야 합니다.",
+        "운영 권장사항: warn으로 검증 후 deny 전환을 권장합니다.",
+    ]
