@@ -20,6 +20,3 @@ build/
 .idea/
 .DS_Store
 Thumbs.db
-
-# Claude Code 내부
-.claude/
