@@ -4,6 +4,15 @@ let latestPolicyText = "";
 let latestAnalysisText = "";
 let grafanaUrl = "";
 const SESSION_KEY = "complianceAiLlmApiKey";
+const POLICY_PROMPTS = {
+  "latest-tag": "latest 태그를 사용하는 컨테이너 이미지를 금지하는 Gatekeeper 정책을 만들어줘",
+  "non-root": "non-root 실행을 강제하는 Gatekeeper 정책을 만들어줘",
+  "allowed-registries": "허용된 이미지 레지스트리만 사용하게 하는 Gatekeeper 정책을 만들어줘",
+  "host-namespace": "host namespace 사용을 금지하는 Gatekeeper 정책을 만들어줘",
+  "security-context-mutation": "securityContext를 자동 주입하는 mutation 정책을 만들어줘",
+  "resource-limits-mutation": "resource limits를 자동 주입하는 mutation 정책을 만들어줘",
+  "network-policy": "ingress 네트워크 정책 만들어줘",
+};
 
 function splitList(value) {
   return value
@@ -163,10 +172,16 @@ function setPolicyLoading(isLoading) {
 async function generatePolicy() {
   clearInlineAlert();
   const useLlm = $("#useLlm").checked;
+  const selectedPolicyKind = $("#policyKind").value;
+  if (!useLlm && !selectedPolicyKind) {
+    showInlineAlert("LLM 검토를 사용하지 않을 때는 정책 유형을 선택해 주세요.");
+    showToast("정책 유형 선택 필요");
+    return;
+  }
   setPolicyLoading(true);
   const payload = {
-    prompt: $("#policyPrompt").value,
-    policy_kind: $("#policyKind").value || null,
+    prompt: selectedPolicyKind ? POLICY_PROMPTS[selectedPolicyKind] : $("#policyPrompt").value,
+    policy_kind: selectedPolicyKind || null,
     constraint_name: $("#constraintName").value,
     enforcement_action: $("#enforcementAction").value,
     allowed_registries: splitList($("#allowedRegistries").value),
@@ -205,6 +220,20 @@ async function generatePolicy() {
     showToast("정책 생성 완료");
   } finally {
     setPolicyLoading(false);
+  }
+}
+
+function syncPolicyPromptMode() {
+  const useLlm = $("#useLlm").checked;
+  const selectedPolicyKind = $("#policyKind").value;
+  $("#policyPrompt").disabled = !useLlm;
+  $("#policyKind").querySelector('option[value=""]').disabled = !useLlm;
+  if (!useLlm && !selectedPolicyKind) {
+    $("#policyKind").value = "latest-tag";
+  }
+  const effectivePolicyKind = $("#policyKind").value;
+  if (!useLlm && effectivePolicyKind) {
+    $("#policyPrompt").value = POLICY_PROMPTS[effectivePolicyKind];
   }
 }
 
@@ -315,6 +344,14 @@ $("#llmApiKey").addEventListener("input", () => {
   }
 });
 
+$("#useLlm").addEventListener("change", () => {
+  syncPolicyPromptMode();
+});
+
+$("#policyKind").addEventListener("change", () => {
+  syncPolicyPromptMode();
+});
+
 $("#grafanaLink").addEventListener("click", (event) => {
   if (!grafanaUrl) {
     event.preventDefault();
@@ -343,4 +380,5 @@ function initLlmKeyPanel() {
 }
 
 initLlmKeyPanel();
+syncPolicyPromptMode();
 loadConfig().catch(() => showToast("설정 로드 실패"));

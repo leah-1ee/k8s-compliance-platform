@@ -235,7 +235,8 @@ def _complete_review(
         normalized = line.strip()
         for label in ordered_labels:
             if normalized.startswith(f"{label}:"):
-                lines_by_label[label] = normalized
+                if _is_complete_review_line(normalized):
+                    lines_by_label[label] = normalized
                 break
     for line in review.splitlines():
         if len(lines_by_label) >= 4:
@@ -243,9 +244,16 @@ def _complete_review(
         normalized = line.strip()
         if normalized and not any(normalized.startswith(f"{label}:") for label in ordered_labels):
             missing = next(label for label in ordered_labels if label not in lines_by_label)
-            lines_by_label[missing] = f"{missing}: {normalized}"
+            candidate = f"{missing}: {normalized}"
+            if _is_complete_review_line(candidate):
+                lines_by_label[missing] = candidate
 
     return "\n".join(lines_by_label.get(label, defaults[label]) for label in ordered_labels)
+
+
+def _is_complete_review_line(value: str) -> bool:
+    # LLM이 max token 등으로 중간 절단한 줄은 기본 검토문으로 대체
+    return bool(re.search(r"[.!?。！？다요음함됨됨니다습니다십시오세요]$", value.strip()))
 
 
 def _default_review_lines(

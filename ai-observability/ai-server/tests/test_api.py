@@ -3,7 +3,7 @@ import httpx
 
 from app.llm_client import LLMClient
 from app.main import app
-from app.policy_generator import _format_llm_http_error
+from app.policy_generator import _complete_review, _format_llm_http_error
 
 
 client = TestClient(app)
@@ -215,6 +215,18 @@ def test_llm_partial_review_is_completed(monkeypatch):
         "주의할 점: podSelector가 비어 있으면 namespace 내 모든 Pod에 적용될 수 있습니다.",
         "운영 권장사항: 테스트 네임스페이스에서 통신 영향도를 먼저 확인하세요.",
     ]
+
+
+def test_llm_truncated_review_line_is_replaced():
+    review = _complete_review(
+        "정책 의도: 이 정책은 컨테이너 이미지에 latest 태그 사용을 금지하고, 태",
+        "latest-tag",
+        "deny",
+        ["kube-system", "gatekeeper-system", "monitoring"],
+    )
+
+    assert review.splitlines()[0] == "정책 의도: 컨테이너 이미지의 latest 태그와 태그 누락을 차단합니다."
+    assert "태\n" not in review
 
 
 def test_llm_http_error_includes_provider_detail():
