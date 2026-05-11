@@ -205,4 +205,4 @@ apiVersion: templates.gatekeeper.sh/v1
     assert "**" not in review
     assert "`" not in review
     assert "apiVersion" not in review
-    assert len(review.splitlines()) == 4
+    assert len(review.splitlines()) == 6

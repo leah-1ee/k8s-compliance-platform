@@ -7,13 +7,13 @@ def build_policy_prompt(request: PolicyGenerationRequest, policy_kind: PolicyKin
     excluded = ", ".join(request.excluded_namespaces) or "kube-system, gatekeeper-system, kube-flannel, monitoring"
     output_type = "Assign mutation YAML" if "mutation" in policy_kind else "Rego, ConstraintTemplate YAML, and Constraint YAML"
     return f"""You are reviewing an already generated Kubernetes Gatekeeper policy.
-Do not generate YAML, Rego, Markdown, or code blocks.
-Return only concise Korean plain text.
-Use exactly 4 short lines:
-1. 정책 의도
-2. 적용 범위
-3. 주의할 점
-4. 운영 권장사항
+Return only plain Korean text. No YAML, Rego, Markdown, or code blocks.
+Write exactly 4 lines. Each line must be a complete sentence of 1-2 sentences.
+Use this exact format:
+1. 정책 의도: (이 정책이 무엇을 막거나 강제하는지)
+2. 적용 범위: (어떤 리소스, 네임스페이스에 적용되는지)
+3. 주의할 점: (운영 중 발생할 수 있는 사이드이펙트나 예외)
+4. 운영 권장사항: (실제 적용 전 확인해야 할 사항)
 
 Requirement:
 {request.prompt}

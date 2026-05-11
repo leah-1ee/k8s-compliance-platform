@@ -80,8 +80,8 @@ class LLMClient:
         payload = {
             "model": self.model,
             "messages": self._messages(prompt),
-            "max_tokens": 420,
-            "temperature": 0.1,
+            "max_tokens": 700,
+            "temperature": 0,
         }
         headers = {
             "Authorization": f"Bearer {self.api_key}",
