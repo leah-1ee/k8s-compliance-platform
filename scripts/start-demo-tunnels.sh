@@ -15,6 +15,8 @@ RESPONSE_TARGET_PORT="${RESPONSE_TARGET_PORT:-5000}"
 
 AI_SHARE_NAME="${AI_SHARE_NAME:-public:compliance-ai-console}"
 GRAFANA_SHARE_NAME="${GRAFANA_SHARE_NAME:-public:compliance-grafana}"
+AI_PUBLIC_URL="${AI_PUBLIC_URL:-https://compliance-ai-console.shares.zrok.io/ui}"
+GRAFANA_PUBLIC_URL="${GRAFANA_PUBLIC_URL:-https://compliance-grafana.shares.zrok.io}"
 
 mkdir -p "${PID_DIR}" "${LOG_DIR}"
 
@@ -132,6 +134,24 @@ start_bg() {
   echo "[ok] ${name} running pid=$(cat "${pid_file}") log=${log_file}"
 }
 
+start_zrok_share() {
+  local name="$1"
+  local public_url="$2"
+  shift 2
+
+  if check_http "${name} existing public endpoint" "${public_url}" 2 1; then
+    echo "[skip] ${name} public endpoint is already reachable"
+    return
+  fi
+
+  if "${ZROK_BIN}" list shares 2>/dev/null | grep -q "${public_url#https://}"; then
+    echo "[warn] ${name} is registered in zrok but is not reachable yet."
+    echo "       Starting another share may fail with shareConflict if the old session is stale."
+  fi
+
+  start_bg "${name}" "$@"
+}
+
 require_command kubectl
 require_command curl
 require_command grep
@@ -152,11 +172,11 @@ start_bg ai-console-port-forward \
   kubectl port-forward -n compliance-system deploy/ai-classifier \
   "${AI_LOCAL_PORT}:${AI_TARGET_PORT}"
 
-start_bg grafana-zrok \
+start_zrok_share grafana-zrok "${GRAFANA_PUBLIC_URL}" \
   "${ZROK_BIN}" share public "http://localhost:${GRAFANA_LOCAL_PORT}" \
   -n "${GRAFANA_SHARE_NAME}"
 
-start_bg ai-console-zrok \
+start_zrok_share ai-console-zrok "${AI_PUBLIC_URL}" \
   "${ZROK_BIN}" share public "http://localhost:${AI_LOCAL_PORT}" \
   -n "${AI_SHARE_NAME}"
 
@@ -168,20 +188,20 @@ check_http "Response server local" "http://127.0.0.1:${RESPONSE_LOCAL_PORT}/api/
 
 echo
 echo "Checking public zrok endpoints..."
-if ! check_http "AI Console zrok" "https://compliance-ai-console.shares.zrok.io/ui" 10 2; then
+if ! check_http "AI Console zrok" "${AI_PUBLIC_URL}" 10 2; then
   print_log_tail "ai-console-zrok"
   exit 1
 fi
 
-if ! check_http "Grafana zrok" "https://compliance-grafana.shares.zrok.io" 10 2; then
+if ! check_http "Grafana zrok" "${GRAFANA_PUBLIC_URL}" 10 2; then
   print_log_tail "grafana-zrok"
   exit 1
 fi
 
 echo
 echo "Demo tunnels started."
-echo "- AI Console: https://compliance-ai-console.shares.zrok.io/ui"
-echo "- Grafana:    https://compliance-grafana.shares.zrok.io"
+echo "- AI Console: ${AI_PUBLIC_URL}"
+echo "- Grafana:    ${GRAFANA_PUBLIC_URL}"
 echo "- Webhook:    http://127.0.0.1:${RESPONSE_LOCAL_PORT}/webhook"
 echo
 echo "Logs: ${LOG_DIR}"
