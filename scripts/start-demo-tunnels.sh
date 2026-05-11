@@ -67,6 +67,40 @@ print_log_tail() {
   fi
 }
 
+share_namespace() {
+  echo "${1%%:*}"
+}
+
+share_name() {
+  echo "${1#*:}"
+}
+
+ensure_zrok_name() {
+  local full_name="$1"
+  local namespace
+  local name
+  local log_file
+
+  namespace="$(share_namespace "${full_name}")"
+  name="$(share_name "${full_name}")"
+  log_file="${LOG_DIR}/zrok-create-name-${name}.log"
+
+  echo "[check] zrok reserved name ${namespace}:${name}"
+  if "${ZROK_BIN}" create name -n "${namespace}" "${name}" >"${log_file}" 2>&1; then
+    echo "[ok] created zrok reserved name ${namespace}:${name}"
+    return
+  fi
+
+  if "${ZROK_BIN}" list names 2>/dev/null | grep -q "${name}"; then
+    echo "[ok] zrok reserved name already exists ${namespace}:${name}"
+    return
+  fi
+
+  echo "ERROR: failed to create or find zrok reserved name ${namespace}:${name}. Log follows:" >&2
+  sed -n '1,120p' "${log_file}" >&2 || true
+  exit 1
+}
+
 pid_is_running() {
   local pid_file="$1"
   [ -f "${pid_file}" ] && kill -0 "$(cat "${pid_file}")" 2>/dev/null
@@ -100,7 +134,11 @@ start_bg() {
 
 require_command kubectl
 require_command curl
+require_command grep
 require_file "${ZROK_BIN}"
+
+ensure_zrok_name "${GRAFANA_SHARE_NAME}"
+ensure_zrok_name "${AI_SHARE_NAME}"
 
 start_bg grafana-port-forward \
   kubectl port-forward -n monitoring svc/monitoring-grafana \
