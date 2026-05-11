@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Compliance AI Console</title>
-    <link rel="stylesheet" href="/static/styles.css?v=llm-feedback-2" />
+    <link rel="stylesheet" href="/static/styles.css?v=violation-ux-2" />
   </head>
   <body>
     <main class="shell">
@@ -214,6 +214,10 @@ spec:
             <button class="primary" id="analyzeViolation">상세 분석</button>
             <button id="copyAnalysis">분석 복사</button>
           </div>
+          <div class="loading-row" id="analysisLoading" hidden>
+            <span class="spinner" aria-hidden="true"></span>
+            <span id="analysisLoadingText">위반 상세 분석 중...</span>
+          </div>
           <div class="analysis-card" id="analysisResult">
             <span class="badge ready">● 준비됨</span>
             <h2>위반 상세 대기</h2>
@@ -258,6 +262,6 @@ spec:
       </section>
     </main>
     <div class="toast" id="toast" role="status"></div>
-    <script src="/static/app.js?v=violation-detail-1"></script>
+    <script src="/static/app.js?v=violation-ux-2"></script>
   </body>
 </html>

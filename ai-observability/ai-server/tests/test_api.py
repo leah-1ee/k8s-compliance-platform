@@ -56,8 +56,10 @@ def test_ui_is_served():
     assert "Use my own API key" in response.text
     assert "Your API key is used only for requests in this session" in response.text
     assert "Policy Generation Request" in response.text
+    assert '<label id="policyPromptField" hidden>' in response.text
     assert "생성 결과 LLM 검토" in response.text
     assert "policyLoadingText" in response.text
+    assert "analysisLoadingText" in response.text
     assert "정책을 생성하면 여기에 결과가 표시됩니다" in response.text
     assert "LLM 검토를 선택하면 여기에 결과가 표시됩니다" in response.text
     assert "Violation Detail" in response.text
@@ -277,6 +279,7 @@ spec:
     assert body["root_cause"]
     assert body["remediation"]
     assert body["yaml_snippet"]
+    assert body["llm_used"] is False
 
 
 def test_analyze_violation_uses_llm_when_enabled(monkeypatch):

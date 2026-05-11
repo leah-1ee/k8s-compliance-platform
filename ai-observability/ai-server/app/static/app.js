@@ -2,6 +2,7 @@ const $ = (selector) => document.querySelector(selector);
 
 let latestPolicyText = "";
 let latestAnalysisText = "";
+let latestYamlSnippet = "";
 let grafanaUrl = "";
 const SESSION_KEY = "complianceAiLlmApiKey";
 const POLICY_PROMPTS = {
@@ -169,6 +170,15 @@ function setPolicyLoading(isLoading) {
   $("#generatePolicy").textContent = isLoading ? "생성 중..." : "정책 생성";
 }
 
+function setAnalysisLoading(isLoading) {
+  $("#analysisLoading").hidden = !isLoading;
+  $("#analysisLoadingText").textContent = $("#useViolationLlm").checked
+    ? "LLM으로 원인과 수정 YAML을 생성 중..."
+    : "규칙 기반 위반 상세 분석 중...";
+  $("#analyzeViolation").disabled = isLoading;
+  $("#analyzeViolation").textContent = isLoading ? "분석 중..." : "상세 분석";
+}
+
 async function generatePolicy() {
   clearInlineAlert();
   const useLlm = $("#useLlm").checked;
@@ -240,7 +250,14 @@ function syncPolicyPromptMode() {
 
 async function analyzeViolation() {
   clearInlineAlert();
-  setAnalysisState("loading", "분석 처리 중", "이벤트 JSON을 분석하고 있습니다.");
+  setAnalysisLoading(true);
+  setAnalysisState(
+    "loading",
+    "위반 상세 분석 중",
+    $("#useViolationLlm").checked
+      ? "이벤트 JSON과 리소스 매니페스트를 LLM에 함께 전달하고 있습니다."
+      : "이벤트 JSON과 리소스 매니페스트를 규칙 기반으로 분석하고 있습니다.",
+  );
   let payload;
   try {
     payload = JSON.parse($("#eventPayload").value);
@@ -248,28 +265,49 @@ async function analyzeViolation() {
     setAnalysisState("error", "JSON 형식 오류", error.message);
     throw error;
   }
-  payload.resource_manifest = $("#resourceManifest").value;
-  payload.use_llm = $("#useViolationLlm").checked;
-  const result = await postJson("/analyze-violation", payload);
-  const actions = result.recommended_actions
-    .map((item) => `<li>${escapeHtml(item)}</li>`)
-    .join("");
-  $("#analysisResult").innerHTML = `
-    <span class="badge ${result.severity}">${escapeHtml(result.severity)}</span>
-    <h2>${escapeHtml(result.summary)}</h2>
-    <p>confidence: ${escapeHtml(result.confidence)}</p>
-    <p>${escapeHtml(result.reason)}</p>
-    <h3>원인 설명</h3>
-    <p>${escapeHtml(result.root_cause)}</p>
-    <h3>수정 방법</h3>
-    <p>${escapeHtml(result.remediation)}</p>
-    <h3>수정 YAML 스니펫</h3>
-    <pre>${escapeHtml(result.yaml_snippet)}</pre>
-    ${result.llm_error ? `<p>${escapeHtml(result.llm_error)}</p>` : ""}
-    <ul>${actions}</ul>
-  `;
-  latestAnalysisText = JSON.stringify(result, null, 2);
-  showToast("분석 완료");
+  try {
+    payload.resource_manifest = $("#resourceManifest").value;
+    payload.use_llm = $("#useViolationLlm").checked;
+    const result = await postJson("/analyze-violation", payload);
+    const actions = result.recommended_actions
+      .map((item) => `<li>${escapeHtml(item)}</li>`)
+      .join("");
+    latestYamlSnippet = result.yaml_snippet || "";
+    $("#analysisResult").innerHTML = `
+      <div class="analysis-meta">
+        <span class="badge ${result.severity}">${escapeHtml(result.severity)}</span>
+        <span class="badge ${result.llm_used ? "ready" : "loading"}">${result.llm_used ? "LLM 분석" : "기본 분석"}</span>
+      </div>
+      <h2>${escapeHtml(result.summary)}</h2>
+      <p>confidence: ${escapeHtml(result.confidence)}</p>
+      <p>${escapeHtml(result.reason)}</p>
+      <h3>원인 설명</h3>
+      <p>${escapeHtml(result.root_cause)}</p>
+      <h3>수정 방법</h3>
+      <p>${escapeHtml(result.remediation)}</p>
+      <div class="analysis-code-block">
+        <div class="card-heading">
+          <button class="copy-section copy-yaml-snippet" aria-label="수정 YAML 스니펫 복사" title="복사">
+            <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+              <path d="M5 15V6a2 2 0 0 1 2-2h9"></path>
+            </svg>
+            <svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 6 9 17l-5-5"></path>
+            </svg>
+          </button>
+          <h3>수정 YAML 스니펫</h3>
+        </div>
+        <pre><code id="analysisYamlOutput">${escapeHtml(latestYamlSnippet)}</code></pre>
+      </div>
+      ${result.llm_error ? `<p>${escapeHtml(result.llm_error)}</p>` : ""}
+      <ul>${actions}</ul>
+    `;
+    latestAnalysisText = JSON.stringify(result, null, 2);
+    showToast("분석 완료");
+  } finally {
+    setAnalysisLoading(false);
+  }
 }
 
 async function copyText(value) {
@@ -313,6 +351,16 @@ $("#copyPolicy").addEventListener("click", () => {
 
 $("#copyAnalysis").addEventListener("click", () => {
   copyText(latestAnalysisText).catch((error) => showToast(error.message));
+});
+
+$("#analysisResult").addEventListener("click", (event) => {
+  const button = event.target.closest(".copy-yaml-snippet");
+  if (!button) {
+    return;
+  }
+  copyText(latestYamlSnippet)
+    .then(() => markCopied(button))
+    .catch((error) => showToast(error.message));
 });
 
 document.querySelectorAll(".copy-section").forEach((button) => {
@@ -387,6 +435,8 @@ function initLlmKeyPanel() {
   $("#byokFields").hidden = true;
   $("#llmProvider").value = "google";
   $("#llmApiKey").value = "";
+  $("#useLlm").checked = false;
+  $("#useViolationLlm").checked = false;
 }
 
 initLlmKeyPanel();
