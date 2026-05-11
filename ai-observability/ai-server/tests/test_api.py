@@ -71,6 +71,14 @@ def test_ui_is_served():
     assert 'aria-label="ConstraintTemplate 복사"' in response.text
 
 
+def test_admin_is_served():
+    response = client.get("/admin")
+
+    assert response.status_code == 200
+    assert "Compliance Admin" in response.text
+    assert "클러스터 등록" in response.text
+
+
 def test_classify_contract():
     response = client.post(
         "/classify",
@@ -352,10 +360,18 @@ def test_gatekeeper_event_is_collected_and_reported():
 
 
 def test_ingested_falco_event_is_listed_with_manifest_snapshot():
+    cluster_response = client.post(
+        "/admin/api/clusters",
+        headers={"X-Admin-Token": "test-admin-token"},
+        json={"name": "customer-a"},
+    )
+    cluster_body = cluster_response.json()
+    token = cluster_body["cluster"]["token"]
+
     response = client.post(
         "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {token}"},
         json={
-            "cluster": "customer-a",
             "resource_manifest": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: suspicious-pod",
             "event": {
                 "time": "2026-05-11T12:34:56Z",
@@ -390,10 +406,71 @@ def test_ingested_falco_event_is_listed_with_manifest_snapshot():
     detail_body = detail_response.json()
 
     assert detail_response.status_code == 200
-    assert detail_body["source"] == "falco-agent"
+    assert detail_body["source"] == "sidekick"
     assert detail_body["cluster"] == "customer-a"
     assert detail_body["namespace"] == "prod"
     assert detail_body["resource_manifest"].startswith("apiVersion: v1")
+
+
+def test_ingest_rejects_missing_cluster_token():
+    response = client.post(
+        "/ingest/falco-events",
+        json={
+            "rule": "Compliance - Shell Spawned in Container",
+            "priority": "Warning",
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["error"] == "valid cluster token required"
+
+
+def test_admin_cluster_lifecycle():
+    unauthorized = client.get("/admin/api/clusters")
+    assert unauthorized.status_code == 401
+
+    create_response = client.post(
+        "/admin/api/clusters",
+        headers={"X-Admin-Token": "test-admin-token"},
+        json={"name": "lifecycle-cluster"},
+    )
+    create_body = create_response.json()
+
+    assert create_response.status_code == 200
+    assert create_body["cluster"]["name"] == "lifecycle-cluster"
+    assert create_body["cluster"]["token"]
+    assert "falcosidekick.enabled=true" in create_body["cluster"]["install_command"]
+    assert "https://console.example.test/ingest/falco-events" in create_body["cluster"]["install_command"]
+
+    cluster_id = create_body["cluster"]["id"]
+    old_token = create_body["cluster"]["token"]
+
+    list_response = client.get(
+        "/admin/api/clusters",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    list_body = list_response.json()
+
+    assert list_response.status_code == 200
+    assert any(cluster["id"] == cluster_id for cluster in list_body["clusters"])
+    assert all("token" not in cluster for cluster in list_body["clusters"])
+
+    rotate_response = client.post(
+        f"/admin/api/clusters/{cluster_id}/rotate-token",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    rotate_body = rotate_response.json()
+
+    assert rotate_response.status_code == 200
+    assert rotate_body["cluster"]["token"] != old_token
+
+    disable_response = client.post(
+        f"/admin/api/clusters/{cluster_id}/disable",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+
+    assert disable_response.status_code == 200
+    assert disable_response.json()["cluster"]["status"] == "disabled"
 
 
 def test_resource_manifest_without_kube_env_is_clear(monkeypatch):

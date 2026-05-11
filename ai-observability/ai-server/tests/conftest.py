@@ -11,3 +11,5 @@ os.environ.setdefault(
     "SQLITE_PATH",
     str(Path(tempfile.gettempdir()) / f"compliance-ai-server-test-{os.getpid()}.sqlite3"),
 )
+os.environ.setdefault("ADMIN_TOKEN", "test-admin-token")
+os.environ.setdefault("PUBLIC_BASE_URL", "https://console.example.test")

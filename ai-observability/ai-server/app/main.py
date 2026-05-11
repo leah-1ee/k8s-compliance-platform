@@ -1,5 +1,6 @@
 import logging
 import os
+import secrets
 from contextvars import ContextVar
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from app.analyzer import analyze_violation
 from app.classifier import classify_event
 from app.policy_generator import generate_policy
 from app.policy_generator import SUPPORTED_POLICY_EXAMPLES, UnsupportedPolicyError
+from app import storage
 from app.runtime_client import (
     build_report,
     fetch_resource_manifest,
@@ -69,6 +71,27 @@ def has_user_llm_key() -> bool:
     if request is None:
         return False
     return bool(sanitize_llm_api_key(request.headers.get("x-llm-api-key")))
+
+
+def is_admin_token(value: str | None) -> bool:
+    expected = os.getenv("ADMIN_TOKEN", "").strip()
+    if not expected:
+        return False
+    provided = _bearer_or_raw_token(value)
+    return secrets.compare_digest(provided, expected)
+
+
+def require_admin(value: str | None):
+    if not is_admin_token(value):
+        return JSONResponse(status_code=401, content={"error": "admin token required"})
+    return None
+
+
+def _bearer_or_raw_token(value: str | None) -> str:
+    normalized = (value or "").strip()
+    if normalized.lower().startswith("bearer "):
+        return normalized.split(" ", 1)[1].strip()
+    return normalized
 
 
 limiter = Limiter(key_func=get_remote_address)
@@ -160,10 +183,77 @@ def runtime_event(event_id: str):
 
 
 @app.post("/ingest/falco-events")
-def ingest_falco_events(payload: dict) -> dict:
-    # 사용자 클러스터 compliance-agent가 전송한 Falco 이벤트 수집
-    event = record_falco_event(payload)
+def ingest_falco_events(payload: dict, authorization: str | None = Header(default=None)) -> dict:
+    # Falco Sidekick이 전송한 이벤트를 클러스터 토큰으로 인증 후 수집
+    cluster_token = _bearer_or_raw_token(authorization)
+    cluster = storage.find_cluster_by_token(cluster_token)
+    if cluster is None:
+        return JSONResponse(status_code=401, content={"error": "valid cluster token required"})
+    event = record_falco_event(payload, cluster_name=cluster["name"], source="sidekick")
+    storage.mark_cluster_seen(cluster["id"], event.get("timestamp", ""))
     return {"status": "recorded", "event": event}
+
+
+@app.get("/admin", response_class=FileResponse)
+def admin() -> FileResponse:
+    # 관리자 콘솔
+    return FileResponse(STATIC_DIR / "admin.html")
+
+
+@app.get("/admin/api/clusters")
+def admin_list_clusters(x_admin_token: str | None = Header(default=None)):
+    auth_error = require_admin(x_admin_token)
+    if auth_error:
+        return auth_error
+    return {"clusters": storage.list_clusters()}
+
+
+@app.post("/admin/api/clusters")
+def admin_create_cluster(
+    request: Request,
+    payload: dict,
+    x_admin_token: str | None = Header(default=None),
+):
+    auth_error = require_admin(x_admin_token)
+    if auth_error:
+        return auth_error
+    try:
+        cluster = storage.create_cluster(str(payload.get("name", "")))
+    except ValueError as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+    except Exception as error:
+        if "UNIQUE" in str(error).upper():
+            return JSONResponse(status_code=409, content={"error": "cluster name already exists"})
+        raise
+    cluster["install_command"] = _sidekick_install_command(request, cluster["token"])
+    return {"cluster": cluster}
+
+
+@app.post("/admin/api/clusters/{cluster_id}/rotate-token")
+def admin_rotate_cluster_token(
+    request: Request,
+    cluster_id: str,
+    x_admin_token: str | None = Header(default=None),
+):
+    auth_error = require_admin(x_admin_token)
+    if auth_error:
+        return auth_error
+    cluster = storage.rotate_cluster_token(cluster_id)
+    if cluster is None:
+        return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    cluster["install_command"] = _sidekick_install_command(request, cluster["token"])
+    return {"cluster": cluster}
+
+
+@app.post("/admin/api/clusters/{cluster_id}/disable")
+def admin_disable_cluster(cluster_id: str, x_admin_token: str | None = Header(default=None)):
+    auth_error = require_admin(x_admin_token)
+    if auth_error:
+        return auth_error
+    cluster = storage.disable_cluster(cluster_id)
+    if cluster is None:
+        return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    return {"cluster": cluster}
 
 
 @app.get("/resource-manifest")
@@ -228,6 +318,24 @@ def gatekeeper_events(payload: dict) -> dict:
 def compliance_report() -> dict:
     # AI 리포트 탭용 JSON 리포트
     return build_report()
+
+
+def _sidekick_install_command(request: Request, token: str) -> str:
+    public_base_url = os.getenv("PUBLIC_BASE_URL", str(request.base_url).rstrip("/")).rstrip("/")
+    ingest_url = f"{public_base_url}/ingest/falco-events"
+    return "\n".join(
+        [
+            "helm repo add falcosecurity https://falcosecurity.github.io/charts",
+            "helm repo update",
+            "helm upgrade --install falco falcosecurity/falco \\",
+            "  -n falco \\",
+            "  --create-namespace \\",
+            "  --set falcosidekick.enabled=true \\",
+            f'  --set falcosidekick.config.webhook.address="{ingest_url}" \\',
+            f'  --set falcosidekick.config.webhook.customHeaders="Authorization:Bearer {token}" \\',
+            '  --set falcosidekick.config.webhook.minimumpriority="warning"',
+        ]
+    )
 
 
 @app.post("/generate-policy", response_model=PolicyGenerationResponse)

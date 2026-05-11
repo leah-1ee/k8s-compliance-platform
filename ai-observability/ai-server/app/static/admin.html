@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Compliance Admin</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #111820;
+        --panel: #151f29;
+        --line: #304050;
+        --text: #e5edf6;
+        --muted: #9aa8b8;
+        --accent: #58a6ff;
+        --danger: #ff6b6b;
+      }
+      body {
+        margin: 0;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      header {
+        padding: 24px 32px;
+        border-bottom: 1px solid var(--line);
+      }
+      main {
+        display: grid;
+        gap: 20px;
+        padding: 28px 32px 48px;
+      }
+      section {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        padding: 20px;
+      }
+      h1, h2 {
+        margin: 0;
+      }
+      h1 {
+        font-size: 28px;
+      }
+      h2 {
+        margin-bottom: 16px;
+        font-size: 20px;
+      }
+      label {
+        display: grid;
+        gap: 8px;
+        color: var(--muted);
+        font-weight: 700;
+      }
+      input, textarea {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #0c1218;
+        color: var(--text);
+        padding: 12px;
+        font: inherit;
+      }
+      textarea {
+        min-height: 180px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        resize: vertical;
+      }
+      button {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #1d2a37;
+        color: var(--text);
+        padding: 10px 14px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--accent);
+        color: #07111c;
+        border-color: var(--accent);
+      }
+      button.danger {
+        border-color: rgba(255, 107, 107, 0.6);
+        color: #ffdada;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: end;
+      }
+      .row label {
+        flex: 1 1 280px;
+      }
+      .cluster {
+        display: grid;
+        gap: 12px;
+        border-top: 1px solid var(--line);
+        padding: 16px 0;
+      }
+      .cluster:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+      .meta {
+        color: var(--muted);
+      }
+      .status-active {
+        color: #7ee787;
+      }
+      .status-disabled {
+        color: var(--danger);
+      }
+      #message {
+        min-height: 24px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Compliance Admin</h1>
+    </header>
+    <main>
+      <section>
+        <h2>Admin Token</h2>
+        <div class="row">
+          <label>
+            X-Admin-Token
+            <input id="adminToken" type="password" autocomplete="off" />
+          </label>
+          <button class="primary" id="saveToken">저장</button>
+          <button id="refreshClusters">새로고침</button>
+        </div>
+        <p id="message"></p>
+      </section>
+
+      <section>
+        <h2>클러스터 등록</h2>
+        <div class="row">
+          <label>
+            클러스터 이름
+            <input id="clusterName" placeholder="school-cloud" />
+          </label>
+          <button class="primary" id="createCluster">등록</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>설치 명령어</h2>
+        <textarea id="installCommand" readonly placeholder="클러스터를 등록하거나 토큰을 재발급하면 여기에 Falco Sidekick 설치 명령어가 표시됩니다."></textarea>
+        <div class="row">
+          <button id="copyInstall">복사</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>클러스터 목록</h2>
+        <div id="clusters"></div>
+      </section>
+    </main>
+    <script>
+      const tokenInput = document.querySelector("#adminToken");
+      const message = document.querySelector("#message");
+      const clustersEl = document.querySelector("#clusters");
+      const installCommand = document.querySelector("#installCommand");
+      const clusterName = document.querySelector("#clusterName");
+
+      tokenInput.value = localStorage.getItem("adminToken") || "";
+
+      function adminHeaders() {
+        return {
+          "Content-Type": "application/json",
+          "X-Admin-Token": tokenInput.value.trim(),
+        };
+      }
+
+      function setMessage(text) {
+        message.textContent = text;
+      }
+
+      async function requestJson(url, options = {}) {
+        const response = await fetch(url, {
+          ...options,
+          headers: {
+            ...adminHeaders(),
+            ...(options.headers || {}),
+          },
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(body.error || `HTTP ${response.status}`);
+        }
+        return body;
+      }
+
+      function renderClusters(clusters) {
+        if (!clusters.length) {
+          clustersEl.innerHTML = '<p class="meta">등록된 클러스터가 없습니다.</p>';
+          return;
+        }
+        clustersEl.innerHTML = clusters.map((cluster) => `
+          <div class="cluster">
+            <strong>${cluster.name}</strong>
+            <span class="meta">
+              id=${cluster.id} ·
+              status=<span class="status-${cluster.status}">${cluster.status}</span> ·
+              last_seen=${cluster.last_seen_at || "-"}
+            </span>
+            <div class="row">
+              <button data-rotate="${cluster.id}">토큰 재발급</button>
+              <button class="danger" data-disable="${cluster.id}">비활성화</button>
+            </div>
+          </div>
+        `).join("");
+      }
+
+      async function loadClusters() {
+        const body = await requestJson("/admin/api/clusters");
+        renderClusters(body.clusters || []);
+        setMessage("클러스터 목록을 불러왔습니다.");
+      }
+
+      document.querySelector("#saveToken").addEventListener("click", () => {
+        localStorage.setItem("adminToken", tokenInput.value.trim());
+        setMessage("관리자 토큰을 저장했습니다.");
+      });
+
+      document.querySelector("#refreshClusters").addEventListener("click", () => {
+        loadClusters().catch((error) => setMessage(error.message));
+      });
+
+      document.querySelector("#createCluster").addEventListener("click", async () => {
+        try {
+          const body = await requestJson("/admin/api/clusters", {
+            method: "POST",
+            body: JSON.stringify({ name: clusterName.value }),
+          });
+          installCommand.value = body.cluster.install_command || "";
+          clusterName.value = "";
+          await loadClusters();
+          setMessage("클러스터를 등록했습니다. 설치 명령어는 지금만 표시됩니다.");
+        } catch (error) {
+          setMessage(error.message);
+        }
+      });
+
+      clustersEl.addEventListener("click", async (event) => {
+        const rotateId = event.target.dataset.rotate;
+        const disableId = event.target.dataset.disable;
+        try {
+          if (rotateId) {
+            const body = await requestJson(`/admin/api/clusters/${rotateId}/rotate-token`, { method: "POST" });
+            installCommand.value = body.cluster.install_command || "";
+            await loadClusters();
+            setMessage("토큰을 재발급했습니다. 설치 명령어는 지금만 표시됩니다.");
+          }
+          if (disableId) {
+            await requestJson(`/admin/api/clusters/${disableId}/disable`, { method: "POST" });
+            await loadClusters();
+            setMessage("클러스터를 비활성화했습니다.");
+          }
+        } catch (error) {
+          setMessage(error.message);
+        }
+      });
+
+      document.querySelector("#copyInstall").addEventListener("click", async () => {
+        await navigator.clipboard.writeText(installCommand.value);
+        setMessage("설치 명령어를 복사했습니다.");
+      });
+    </script>
+  </body>
+</html>

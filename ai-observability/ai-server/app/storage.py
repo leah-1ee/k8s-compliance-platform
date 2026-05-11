@@ -1,5 +1,6 @@
 import json
 import os
+import secrets
 import sqlite3
 import threading
 import uuid
@@ -106,6 +107,112 @@ def save_event(event: dict[str, Any]) -> dict[str, Any]:
     return stored
 
 
+def create_cluster(name: str) -> dict[str, Any]:
+    init_db()
+    normalized = _normalize_cluster_name(name)
+    token = secrets.token_urlsafe(32)
+    cluster_id = f"cluster-{uuid.uuid4().hex[:12]}"
+    with _LOCK, _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO clusters (id, name, token_hash, status)
+            VALUES (?, ?, ?, 'active')
+            """,
+            (cluster_id, normalized, _token_hash(token)),
+        )
+    cluster = get_cluster(cluster_id)
+    assert cluster is not None
+    cluster["token"] = token
+    return cluster
+
+
+def list_clusters() -> list[dict[str, Any]]:
+    init_db()
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, name, status, last_seen_at, created_at
+            FROM clusters
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_cluster(cluster_id: str) -> dict[str, Any] | None:
+    init_db()
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT id, name, status, last_seen_at, created_at
+            FROM clusters
+            WHERE id = ?
+            """,
+            (cluster_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return dict(row)
+
+
+def rotate_cluster_token(cluster_id: str) -> dict[str, Any] | None:
+    init_db()
+    token = secrets.token_urlsafe(32)
+    with _LOCK, _connect() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE clusters
+            SET token_hash = ?, status = 'active'
+            WHERE id = ?
+            """,
+            (_token_hash(token), cluster_id),
+        )
+    if cursor.rowcount == 0:
+        return None
+    cluster = get_cluster(cluster_id)
+    if cluster is not None:
+        cluster["token"] = token
+    return cluster
+
+
+def disable_cluster(cluster_id: str) -> dict[str, Any] | None:
+    init_db()
+    with _LOCK, _connect() as conn:
+        cursor = conn.execute(
+            "UPDATE clusters SET status = 'disabled' WHERE id = ?",
+            (cluster_id,),
+        )
+    if cursor.rowcount == 0:
+        return None
+    return get_cluster(cluster_id)
+
+
+def find_cluster_by_token(token: str) -> dict[str, Any] | None:
+    init_db()
+    token_hash = _token_hash(token)
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT id, name, status, last_seen_at, created_at
+            FROM clusters
+            WHERE token_hash = ? AND status = 'active'
+            """,
+            (token_hash,),
+        ).fetchone()
+    if row is None:
+        return None
+    return dict(row)
+
+
+def mark_cluster_seen(cluster_id: str, timestamp: str) -> None:
+    init_db()
+    with _LOCK, _connect() as conn:
+        conn.execute(
+            "UPDATE clusters SET last_seen_at = ? WHERE id = ?",
+            (timestamp, cluster_id),
+        )
+
+
 def list_events(limit: int = 50, cluster: str = "") -> list[dict[str, Any]]:
     init_db()
     limit = max(1, min(int(limit or 50), 500))
@@ -210,3 +317,18 @@ def _new_event_id(source: str) -> str:
     elif source in {"falco-agent", "sidekick"}:
         prefix = "agent"
     return f"{prefix}-{uuid.uuid4().hex[:12]}"
+
+
+def _normalize_cluster_name(name: str) -> str:
+    normalized = " ".join(str(name or "").strip().split())
+    if not normalized:
+        raise ValueError("cluster name is required")
+    if len(normalized) > 80:
+        raise ValueError("cluster name must be 80 characters or fewer")
+    return normalized
+
+
+def _token_hash(token: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()

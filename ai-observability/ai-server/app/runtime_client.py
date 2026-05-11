@@ -94,8 +94,12 @@ def record_gatekeeper_event(payload: dict[str, Any]) -> dict[str, Any]:
     return storage.save_event(event)
 
 
-def record_falco_event(payload: dict[str, Any]) -> dict[str, Any]:
-    # 사용자 클러스터 agent가 전송한 Falco 이벤트와 매니페스트 스냅샷을 저장
+def record_falco_event(
+    payload: dict[str, Any],
+    cluster_name: str = "",
+    source: str = "sidekick",
+) -> dict[str, Any]:
+    # Falco Sidekick/agent가 전송한 이벤트를 저장
     now = datetime.now(timezone.utc).isoformat()
     raw_event = payload.get("event", payload)
     if not isinstance(raw_event, dict):
@@ -124,8 +128,8 @@ def record_falco_event(payload: dict[str, Any]) -> dict[str, Any]:
 
     event = {
         "timestamp": payload.get("timestamp") or raw_event.get("time") or now,
-        "source": "falco-agent",
-        "cluster": payload.get("cluster") or raw_event.get("cluster") or "unknown-cluster",
+        "source": source,
+        "cluster": cluster_name or payload.get("cluster") or raw_event.get("cluster") or "unknown-cluster",
         "rule": raw_event.get("rule", "Falco runtime event"),
         "priority": raw_event.get("priority", ""),
         "severity": payload.get("severity") or _priority_to_severity(raw_event.get("priority", "")),
