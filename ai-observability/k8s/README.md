@@ -9,6 +9,8 @@
 `ai-server.yaml`로 생성되는 리소스:
 
 - `Namespace/compliance-system`
+- `Secret/ai-classifier-admin`
+- `PersistentVolumeClaim/ai-classifier-data`
 - `Deployment/ai-classifier`
 - `Service/ai-classifier`
 
@@ -32,7 +34,7 @@ Apple Silicon 노트북에서 amd64 클라우드 클러스터로 배포할 때�
 
 ```bash
 docker buildx build --platform linux/amd64 \
-  -t leeon3345/compliance-ai-server:0.1.0 \
+  -t leeon3345/compliance-ai-server:0.1.2 \
   ai-observability/ai-server \
   --push
 ```
@@ -50,9 +52,29 @@ docker buildx build --platform linux/amd64 \
 
 ### 1. AI 서버 배포
 
+관리자 페이지를 쓰려면 먼저 `ADMIN_TOKEN` Secret을 실제 값으로 생성한다.
+
+```bash
+kubectl create namespace compliance-system --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl create secret generic ai-classifier-admin \
+  -n compliance-system \
+  --from-literal=ADMIN_TOKEN="$(openssl rand -hex 32)" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+AI 서버는 SQLite 파일을 `/data/compliance-ai-server.sqlite3`에 저장한다. `ai-server.yaml`의
+`PersistentVolumeClaim/ai-classifier-data`가 이 경로를 보존한다.
+
 ```bash
 kubectl apply -f ai-observability/k8s/ai-server.yaml
 kubectl rollout status deployment/ai-classifier -n compliance-system
+```
+
+관리자 콘솔은 AI Console과 같은 외부 URL의 `/admin` 경로에서 접근한다.
+
+```text
+https://compliance-ai-console.shares.zrok.io/admin
 ```
 
 ### 2. response-server 배포

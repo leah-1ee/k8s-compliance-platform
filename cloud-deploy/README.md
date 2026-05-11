@@ -71,6 +71,17 @@ kubectl get constraints
 
 ## AI 서버와 response-server 배포
 
+관리자 토큰 Secret을 먼저 생성한다.
+
+```bash
+kubectl create namespace compliance-system --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl create secret generic ai-classifier-admin \
+  -n compliance-system \
+  --from-literal=ADMIN_TOKEN="$(openssl rand -hex 32)" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
 ```bash
 kubectl apply -f ai-server.yaml
 kubectl apply -f response-server.yaml
