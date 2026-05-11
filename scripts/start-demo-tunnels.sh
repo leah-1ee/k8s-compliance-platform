@@ -35,6 +35,38 @@ require_file() {
   fi
 }
 
+check_http() {
+  local name="$1"
+  local url="$2"
+  local attempts="${3:-10}"
+  local wait_seconds="${4:-1}"
+  local attempt=1
+
+  while [ "${attempt}" -le "${attempts}" ]; do
+    if curl -fsS -L --max-time 5 -o /dev/null "${url}" >/dev/null 2>&1; then
+      echo "[ok] ${name} reachable: ${url}"
+      return 0
+    fi
+
+    sleep "${wait_seconds}"
+    attempt=$((attempt + 1))
+  done
+
+  echo "[warn] ${name} not reachable yet: ${url}" >&2
+  return 1
+}
+
+print_log_tail() {
+  local name="$1"
+  local log_file="${LOG_DIR}/${name}.log"
+
+  if [ -f "${log_file}" ]; then
+    echo
+    echo "Last log lines for ${name}:"
+    sed -n '1,120p' "${log_file}" >&2 || true
+  fi
+}
+
 pid_is_running() {
   local pid_file="$1"
   [ -f "${pid_file}" ] && kill -0 "$(cat "${pid_file}")" 2>/dev/null
@@ -47,7 +79,7 @@ start_bg() {
   local log_file="${LOG_DIR}/${name}.log"
 
   if pid_is_running "${pid_file}"; then
-    echo "[skip] ${name} already running pid=$(cat "${pid_file}")"
+    echo "[skip] ${name} already running pid=$(cat "${pid_file}") log=${log_file}"
     return
   fi
 
@@ -62,9 +94,12 @@ start_bg() {
     sed -n '1,120p' "${log_file}" >&2 || true
     exit 1
   fi
+
+  echo "[ok] ${name} running pid=$(cat "${pid_file}") log=${log_file}"
 }
 
 require_command kubectl
+require_command curl
 require_file "${ZROK_BIN}"
 
 start_bg grafana-port-forward \
@@ -88,6 +123,24 @@ start_bg ai-console-zrok \
   -n "${AI_SHARE_NAME}"
 
 echo
+echo "Checking local endpoints..."
+check_http "AI Console local" "http://127.0.0.1:${AI_LOCAL_PORT}/ui"
+check_http "Grafana local" "http://127.0.0.1:${GRAFANA_LOCAL_PORT}"
+check_http "Response server local" "http://127.0.0.1:${RESPONSE_LOCAL_PORT}/api/v1/events"
+
+echo
+echo "Checking public zrok endpoints..."
+if ! check_http "AI Console zrok" "https://compliance-ai-console.shares.zrok.io/ui" 10 2; then
+  print_log_tail "ai-console-zrok"
+  exit 1
+fi
+
+if ! check_http "Grafana zrok" "https://compliance-grafana.shares.zrok.io" 10 2; then
+  print_log_tail "grafana-zrok"
+  exit 1
+fi
+
+echo
 echo "Demo tunnels started."
 echo "- AI Console: https://compliance-ai-console.shares.zrok.io/ui"
 echo "- Grafana:    https://compliance-grafana.shares.zrok.io"
@@ -95,3 +148,4 @@ echo "- Webhook:    http://127.0.0.1:${RESPONSE_LOCAL_PORT}/webhook"
 echo
 echo "Logs: ${LOG_DIR}"
 echo "Stop: scripts/stop-demo-tunnels.sh"
+echo "All tunnel processes are running in the background; this command should return to your shell prompt."
