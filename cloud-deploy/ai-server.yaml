@@ -6,6 +6,46 @@ metadata:
     app.kubernetes.io/part-of: compliance-platform
 
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-classifier
+  namespace: compliance-system
+  labels:
+    app: ai-classifier
+    app.kubernetes.io/part-of: compliance-platform
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: compliance-ai-classifier
+  labels:
+    app: ai-classifier
+    app.kubernetes.io/part-of: compliance-platform
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: compliance-ai-classifier
+  labels:
+    app: ai-classifier
+    app.kubernetes.io/part-of: compliance-platform
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: compliance-ai-classifier
+subjects:
+  - kind: ServiceAccount
+    name: ai-classifier
+    namespace: compliance-system
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -25,6 +65,7 @@ spec:
         app: ai-classifier
         app.kubernetes.io/part-of: compliance-platform
     spec:
+      serviceAccountName: ai-classifier
       containers:
         - name: ai-classifier
           image: leeon3345/compliance-ai-server:0.1.0
@@ -33,6 +74,11 @@ spec:
             - name: http
               containerPort: 8000
               protocol: TCP
+          env:
+            - name: RESPONSE_SERVER_URL
+              value: "http://response-server.compliance-system.svc.cluster.local:5000"
+            - name: CLUSTER_NAME
+              value: "school-cloud"
           livenessProbe:
             httpGet:
               path: /healthz

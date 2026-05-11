@@ -378,6 +378,42 @@ pre[data-empty="true"] {
   background: #0f141a;
 }
 
+.runtime-events {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.event-row {
+  display: grid;
+  width: 100%;
+  min-height: 0;
+  gap: 6px;
+  padding: 14px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #11171e;
+}
+
+button.event-row {
+  cursor: pointer;
+}
+
+button.event-row:hover,
+button.event-row:focus-visible {
+  border-color: var(--brand);
+}
+
+.event-row h2 {
+  margin: 0;
+}
+
+.event-row p {
+  margin: 0;
+  color: var(--muted);
+}
+
 .badge {
   display: inline-flex;
   align-items: center;

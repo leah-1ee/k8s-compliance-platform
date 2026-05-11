@@ -3,6 +3,8 @@ const $ = (selector) => document.querySelector(selector);
 let latestPolicyText = "";
 let latestAnalysisText = "";
 let latestYamlSnippet = "";
+let latestReportText = "";
+let selectedRuntimeEvent = null;
 let grafanaUrl = "";
 const SESSION_KEY = "complianceAiLlmApiKey";
 const POLICY_PROMPTS = {
@@ -163,6 +165,25 @@ function setOutput(selector, value) {
   element.removeAttribute("data-empty");
 }
 
+function eventToAnalysisPayload(event) {
+  return {
+    cluster: "current-cluster",
+    rule: event.rule || "",
+    priority: event.priority || "",
+    output: event.classification_reason || event.output || "",
+    time: event.timestamp || event.time || "",
+    output_fields: {
+      "k8s.ns.name": event.namespace || "",
+      "k8s.pod.name": event.pod_name || "",
+      "container.name": event.container_name || "",
+      "container.image.repository": event.image || "",
+      "user.name": event.user || "",
+      "proc.cmdline": event.command || "",
+    },
+    tags: [event.source || "runtime"],
+  };
+}
+
 function setPolicyLoading(isLoading) {
   $("#policyLoading").hidden = !isLoading;
   $("#policyLoadingText").textContent = "정책 생성 중...";
@@ -310,6 +331,99 @@ async function analyzeViolation() {
   }
 }
 
+async function refreshRuntimeEvents() {
+  const container = $("#runtimeEvents");
+  container.innerHTML = `
+    <article class="event-row">
+      <span class="badge loading">loading</span>
+      <h2>최근 위반 이벤트 로딩 중</h2>
+      <p>response-server와 Gatekeeper 수집 버퍼를 확인하고 있습니다.</p>
+    </article>
+  `;
+  const response = await fetch("/runtime-events?limit=20");
+  const body = await response.json();
+  if (!body.events || body.events.length === 0) {
+    container.innerHTML = `
+      <article class="event-row">
+        <span class="badge ready">empty</span>
+        <h2>최근 위반 이벤트 없음</h2>
+        <p>${escapeHtml(body.source_status?.response_server_error || "수집된 이벤트가 없습니다.")}</p>
+      </article>
+    `;
+    return;
+  }
+  container.innerHTML = body.events
+    .map(
+      (event) => `
+        <button class="event-row runtime-event-button" data-event-id="${escapeHtml(event.id || "")}">
+          <span class="badge ${escapeHtml(event.severity || "medium")}">${escapeHtml(event.severity || "medium")}</span>
+          <h2>${escapeHtml(event.rule || "unknown rule")}</h2>
+          <p>${escapeHtml(event.namespace || "unknown")}/${escapeHtml(event.pod_name || "unknown")} · ${escapeHtml(event.action_taken || event.source || "event")}</p>
+        </button>
+      `,
+    )
+    .join("");
+}
+
+async function loadRuntimeEvent(eventId) {
+  const response = await fetch(`/runtime-events/${encodeURIComponent(eventId)}`);
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+  selectedRuntimeEvent = await response.json();
+  $("#eventPayload").value = JSON.stringify(eventToAnalysisPayload(selectedRuntimeEvent), null, 2);
+  $("#resourceManifest").value = "";
+  showToast("이벤트 상세를 불러왔습니다");
+}
+
+async function loadSelectedManifest() {
+  if (!selectedRuntimeEvent) {
+    showToast("먼저 이벤트를 선택하세요");
+    return;
+  }
+  const namespace = selectedRuntimeEvent.namespace || "";
+  const pod = selectedRuntimeEvent.pod_name || "";
+  const response = await fetch(
+    `/resource-manifest?namespace=${encodeURIComponent(namespace)}&pod=${encodeURIComponent(pod)}`,
+  );
+  const body = await response.json();
+  if (body.manifest) {
+    $("#resourceManifest").value = body.manifest;
+    showToast("매니페스트 조회 완료");
+  } else {
+    showInlineAlert(body.error || "매니페스트를 조회하지 못했습니다.");
+  }
+}
+
+async function generateReport() {
+  $("#reportResult").innerHTML = `
+    <span class="badge loading">loading</span>
+    <h2>리포트 생성 중</h2>
+    <p>최근 Falco/Gatekeeper 이벤트를 집계하고 있습니다.</p>
+  `;
+  const response = await fetch("/compliance-report");
+  const report = await response.json();
+  latestReportText = JSON.stringify(report, null, 2);
+  const recommendations = (report.recommendations || [])
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
+  const topRules = (report.top_rules || [])
+    .map((item) => `<li>${escapeHtml(item.rule)}: ${escapeHtml(item.count)}</li>`)
+    .join("");
+  $("#reportResult").innerHTML = `
+    <span class="badge ready">generated</span>
+    <h2>AI 컴플라이언스 리포트</h2>
+    <p>generated_at: ${escapeHtml(report.generated_at || "")}</p>
+    <h3>상위 위반 Rule</h3>
+    <ul>${topRules || "<li>수집된 rule 없음</li>"}</ul>
+    <h3>권장 조치</h3>
+    <ul>${recommendations}</ul>
+    <div class="analysis-code-block">
+      <pre><code>${escapeHtml(latestReportText)}</code></pre>
+    </div>
+  `;
+}
+
 async function copyText(value) {
   if (!value) {
     showToast("복사할 결과 없음");
@@ -351,6 +465,42 @@ $("#copyPolicy").addEventListener("click", () => {
 
 $("#copyAnalysis").addEventListener("click", () => {
   copyText(latestAnalysisText).catch((error) => showToast(error.message));
+});
+
+$("#refreshRuntimeEvents").addEventListener("click", () => {
+  refreshRuntimeEvents().catch((error) => {
+    showInlineAlert(error.message);
+    showToast("위반 목록 로드 실패");
+  });
+});
+
+$("#runtimeEvents").addEventListener("click", (event) => {
+  const button = event.target.closest(".runtime-event-button");
+  if (!button) {
+    return;
+  }
+  loadRuntimeEvent(button.dataset.eventId).catch((error) => {
+    showInlineAlert(error.message);
+    showToast("이벤트 상세 로드 실패");
+  });
+});
+
+$("#loadSelectedManifest").addEventListener("click", () => {
+  loadSelectedManifest().catch((error) => {
+    showInlineAlert(error.message);
+    showToast("매니페스트 조회 실패");
+  });
+});
+
+$("#generateReport").addEventListener("click", () => {
+  generateReport().catch((error) => {
+    showInlineAlert(error.message);
+    showToast("리포트 생성 실패");
+  });
+});
+
+$("#copyReport").addEventListener("click", () => {
+  copyText(latestReportText).catch((error) => showToast(error.message));
 });
 
 $("#analysisResult").addEventListener("click", (event) => {
@@ -441,4 +591,8 @@ function initLlmKeyPanel() {
 
 initLlmKeyPanel();
 syncPolicyPromptMode();
+refreshRuntimeEvents().catch(() => {});
+window.setInterval(() => {
+  refreshRuntimeEvents().catch(() => {});
+}, 30000);
 loadConfig().catch(() => showToast("설정 로드 실패"));

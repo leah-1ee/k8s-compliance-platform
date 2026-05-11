@@ -65,6 +65,8 @@ def test_ui_is_served():
     assert "Violation Detail" in response.text
     assert "Resource Manifest" in response.text
     assert "LLM으로 원인/수정 YAML 생성" in response.text
+    assert "최근 위반 새로고침" in response.text
+    assert "AI Report" in response.text
     assert 'data-copy-target="templateOutput"' in response.text
     assert 'aria-label="ConstraintTemplate 복사"' in response.text
 
@@ -309,6 +311,55 @@ def test_analyze_violation_uses_llm_when_enabled(monkeypatch):
     assert body["llm_used"] is True
     assert "허용되지 않은 shell" in body["root_cause"]
     assert "runAsNonRoot" in body["yaml_snippet"]
+
+
+def test_gatekeeper_event_is_collected_and_reported():
+    response = client.post(
+        "/gatekeeper-events",
+        json={
+            "constraint": "k8sdisallowlatesttag",
+            "message": "container <app> uses latest image tag",
+            "namespace": "default",
+            "pod_name": "bad-pod",
+        },
+    )
+
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["status"] == "recorded"
+    event_id = body["event"]["id"]
+
+    list_response = client.get("/runtime-events?limit=5")
+    list_body = list_response.json()
+
+    assert list_response.status_code == 200
+    assert any(event["id"] == event_id for event in list_body["events"])
+
+    detail_response = client.get(f"/runtime-events/{event_id}")
+    detail_body = detail_response.json()
+
+    assert detail_response.status_code == 200
+    assert detail_body["source"] == "gatekeeper"
+    assert detail_body["action_taken"] == "deny"
+
+    report_response = client.get("/compliance-report")
+    report_body = report_response.json()
+
+    assert report_response.status_code == 200
+    assert report_body["summary"]["total_events"] >= 1
+    assert report_body["recommendations"]
+
+
+def test_resource_manifest_without_kube_env_is_clear(monkeypatch):
+    monkeypatch.setattr("app.runtime_client.KUBE_API_URL", "")
+
+    response = client.get("/resource-manifest?namespace=default&pod=test-pod")
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["manifest"] == ""
+    assert "Kubernetes API 환경 변수" in body["error"]
 
 
 def test_parse_llm_incident_json_accepts_code_fence():

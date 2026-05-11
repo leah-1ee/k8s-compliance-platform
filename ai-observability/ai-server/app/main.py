@@ -14,6 +14,13 @@ from app.analyzer import analyze_violation
 from app.classifier import classify_event
 from app.policy_generator import generate_policy
 from app.policy_generator import SUPPORTED_POLICY_EXAMPLES, UnsupportedPolicyError
+from app.runtime_client import (
+    build_report,
+    fetch_resource_manifest,
+    get_runtime_event,
+    list_runtime_events,
+    record_gatekeeper_event,
+)
 from app.schemas import (
     ClassificationRequest,
     ClassificationResponse,
@@ -100,7 +107,10 @@ def healthz() -> dict[str, str]:
 @app.get("/config")
 def config() -> dict[str, str]:
     # UI 설정
-    return {"grafana_url": os.getenv("GRAFANA_URL", DEFAULT_GRAFANA_URL).strip()}
+    return {
+        "grafana_url": os.getenv("GRAFANA_URL", DEFAULT_GRAFANA_URL).strip(),
+        "response_server_url": os.getenv("RESPONSE_SERVER_URL", "http://response-server:8080").strip(),
+    }
 
 
 @app.post("/classify", response_model=ClassificationResponse)
@@ -131,6 +141,82 @@ def analyze(
         llm_provider=sanitize_llm_provider(x_llm_provider),
         llm_api_key=sanitize_llm_api_key(x_llm_api_key),
     )
+
+
+@app.get("/runtime-events")
+def runtime_events(limit: int = 50) -> dict:
+    # Falco/Gatekeeper 최근 위반 이벤트 목록
+    return list_runtime_events(limit=limit)
+
+
+@app.get("/runtime-events/{event_id}")
+def runtime_event(event_id: str):
+    # 위반 이벤트 상세
+    event = get_runtime_event(event_id)
+    if event is None:
+        return JSONResponse(status_code=404, content={"error": f"event {event_id} not found"})
+    return event
+
+
+@app.get("/resource-manifest")
+def resource_manifest(namespace: str = "", pod: str = "") -> dict[str, str]:
+    # Kubernetes API에서 관련 Pod 매니페스트 조회
+    return fetch_resource_manifest(namespace, pod)
+
+
+@app.post("/analyze-runtime-event/{event_id}", response_model=ViolationAnalysisResponse)
+@limiter.limit("5/hour", exempt_when=has_user_llm_key)
+def analyze_runtime_event(
+    request: Request,
+    event_id: str,
+    x_llm_provider: str | None = Header(default=None),
+    x_llm_api_key: str | None = Header(default=None),
+):
+    # 저장된 이벤트와 매니페스트를 결합해 상세 분석
+    _ = request
+    event = get_runtime_event(event_id)
+    if event is None:
+        return JSONResponse(status_code=404, content={"error": f"event {event_id} not found"})
+    manifest_result = fetch_resource_manifest(event.get("namespace", ""), event.get("pod_name", ""))
+    payload = ViolationAnalysisRequest(
+        cluster=os.getenv("CLUSTER_NAME", "current-cluster"),
+        rule=event.get("rule", ""),
+        priority=event.get("priority", ""),
+        output=event.get("classification_reason", "") or event.get("output", ""),
+        output_fields={
+            "k8s.ns.name": event.get("namespace", ""),
+            "k8s.pod.name": event.get("pod_name", ""),
+            "container.name": event.get("container_name", ""),
+            "container.image.repository": event.get("image", ""),
+            "user.name": event.get("user", ""),
+            "proc.cmdline": event.get("command", ""),
+        },
+        tags=[event.get("source", "runtime")],
+        time=event.get("timestamp", ""),
+        resource_manifest=manifest_result.get("manifest", ""),
+        use_llm=has_user_llm_key(),
+    )
+    result = analyze_violation(
+        payload,
+        llm_provider=sanitize_llm_provider(x_llm_provider),
+        llm_api_key=sanitize_llm_api_key(x_llm_api_key),
+    )
+    if manifest_result.get("error") and not result.llm_error:
+        result.llm_error = manifest_result["error"]
+    return result
+
+
+@app.post("/gatekeeper-events")
+def gatekeeper_events(payload: dict) -> dict:
+    # Gatekeeper deny/audit 이벤트 push 수집
+    event = record_gatekeeper_event(payload)
+    return {"status": "recorded", "event": event}
+
+
+@app.get("/compliance-report")
+def compliance_report() -> dict:
+    # AI 리포트 탭용 JSON 리포트
+    return build_report()
 
 
 @app.post("/generate-policy", response_model=PolicyGenerationResponse)
