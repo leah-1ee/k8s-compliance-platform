@@ -40,7 +40,8 @@ if ! kubectl get namespace compliance-system &>/dev/null; then
 fi
 
 RS_PORT=$(docker ps --format '{{.Ports}}' 2>/dev/null \
-    | grep -oP '0\.0\.0\.0:\K[0-9]+(?=->30500)' | head -1 || true)
+    | grep -oP '0\.0\.0\.0:\K[0-9]+(?=->30500)' \
+    | head -1 || true)
 if [ -z "$RS_PORT" ]; then
     RS_PORT="5000"
     echo "  [WARN] Could not detect kind NodePort, using default ${RS_PORT}"

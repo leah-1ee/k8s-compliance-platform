@@ -45,7 +45,9 @@ echo "  Installed: /etc/falco/rules.d/compliance-rules.yaml"
 echo "[4/6] Configuring Falco output..."
 
 # Detect Response Server port (kind NodePort mapping)
-RS_PORT=$(docker ps --format '{{.Ports}}' 2>/dev/null | grep -oP '0\.0\.0\.0:\K[0-9]+(?=->30500)' | head -1)
+RS_PORT=$(docker ps --format '{{.Ports}}' 2>/dev/null \
+    | grep -oP '0\.0\.0\.0:\K[0-9]+(?=->30500)' \
+    | head -1 || true)
 if [ -z "$RS_PORT" ]; then
     RS_PORT="5000"
     echo "  [WARN] Could not detect kind port mapping, using default ${RS_PORT}"
