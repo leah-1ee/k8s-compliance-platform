@@ -3,6 +3,7 @@ import httpx
 
 from app.llm_client import LLMClient
 from app.main import app
+from app.analyzer import _parse_llm_incident_json
 from app.policy_generator import _complete_review, _format_llm_http_error
 
 
@@ -59,6 +60,9 @@ def test_ui_is_served():
     assert "policyLoadingText" in response.text
     assert "정책을 생성하면 여기에 결과가 표시됩니다" in response.text
     assert "LLM 검토를 선택하면 여기에 결과가 표시됩니다" in response.text
+    assert "Violation Detail" in response.text
+    assert "Resource Manifest" in response.text
+    assert "LLM으로 원인/수정 YAML 생성" in response.text
     assert 'data-copy-target="templateOutput"' in response.text
     assert 'aria-label="ConstraintTemplate 복사"' in response.text
 
@@ -251,7 +255,18 @@ def test_llm_http_error_includes_provider_detail():
 
 
 def test_analyze_violation_contract():
-    response = client.post("/analyze-violation", json=_analysis_payload())
+    payload = _analysis_payload()
+    payload["resource_manifest"] = """apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod
+  namespace: default
+spec:
+  containers:
+    - name: app
+      image: nginx:latest
+"""
+    response = client.post("/analyze-violation", json=payload)
 
     body = response.json()
 
@@ -259,6 +274,52 @@ def test_analyze_violation_contract():
     assert body["severity"] in {"low", "medium", "high"}
     assert "school-cloud" in body["summary"]
     assert body["recommended_actions"]
+    assert body["root_cause"]
+    assert body["remediation"]
+    assert body["yaml_snippet"]
+
+
+def test_analyze_violation_uses_llm_when_enabled(monkeypatch):
+    def fake_complete_text(self, prompt: str, system_prompt: str, max_tokens: int = 1200) -> str:
+        return """{
+  "root_cause": "컨테이너에서 허용되지 않은 shell 실행이 감지되었습니다.",
+  "remediation": "불필요한 shell 진입점을 제거하고 non-root 보안 컨텍스트를 적용하세요.",
+  "yaml_snippet": "securityContext:\\n  runAsNonRoot: true"
+}"""
+
+    monkeypatch.setattr(LLMClient, "complete_text", fake_complete_text)
+    payload = _analysis_payload()
+    payload["resource_manifest"] = "apiVersion: v1\nkind: Pod\nmetadata:\n  name: test-pod\n"
+    payload["use_llm"] = True
+
+    response = client.post(
+        "/analyze-violation",
+        headers={
+            "X-LLM-Provider": "google",
+            "X-LLM-API-Key": "test-user-key",
+        },
+        json=payload,
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["llm_used"] is True
+    assert "허용되지 않은 shell" in body["root_cause"]
+    assert "runAsNonRoot" in body["yaml_snippet"]
+
+
+def test_parse_llm_incident_json_accepts_code_fence():
+    parsed = _parse_llm_incident_json(
+        """```json
+{"root_cause":"원인","remediation":"수정","yaml_snippet":"kind: Pod"}
+```"""
+    )
+
+    assert parsed == {
+        "root_cause": "원인",
+        "remediation": "수정",
+        "yaml_snippet": "kind: Pod",
+    }
 
 
 def test_default_key_rate_limit_returns_json_error():

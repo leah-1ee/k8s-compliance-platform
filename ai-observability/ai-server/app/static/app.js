@@ -248,6 +248,8 @@ async function analyzeViolation() {
     setAnalysisState("error", "JSON 형식 오류", error.message);
     throw error;
   }
+  payload.resource_manifest = $("#resourceManifest").value;
+  payload.use_llm = $("#useViolationLlm").checked;
   const result = await postJson("/analyze-violation", payload);
   const actions = result.recommended_actions
     .map((item) => `<li>${escapeHtml(item)}</li>`)
@@ -257,6 +259,13 @@ async function analyzeViolation() {
     <h2>${escapeHtml(result.summary)}</h2>
     <p>confidence: ${escapeHtml(result.confidence)}</p>
     <p>${escapeHtml(result.reason)}</p>
+    <h3>원인 설명</h3>
+    <p>${escapeHtml(result.root_cause)}</p>
+    <h3>수정 방법</h3>
+    <p>${escapeHtml(result.remediation)}</p>
+    <h3>수정 YAML 스니펫</h3>
+    <pre>${escapeHtml(result.yaml_snippet)}</pre>
+    ${result.llm_error ? `<p>${escapeHtml(result.llm_error)}</p>` : ""}
     <ul>${actions}</ul>
   `;
   latestAnalysisText = JSON.stringify(result, null, 2);

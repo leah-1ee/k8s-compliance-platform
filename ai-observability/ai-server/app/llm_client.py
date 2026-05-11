@@ -75,12 +75,29 @@ class LLMClient:
             return self._review_policy_google(prompt)
         return self._review_policy_openai_compatible(prompt)
 
-    def _review_policy_openai_compatible(self, prompt: str) -> str:
+    def complete_text(self, prompt: str, system_prompt: str, max_tokens: int = 1200) -> str:
+        # 자유 형식 LLM 응답
+        if not self.configured:
+            return ""
+
+        if self.provider == "anthropic":
+            return self._review_policy_anthropic(prompt, system_prompt, max_tokens, normalize=False)
+        if self.provider == "google":
+            return self._review_policy_google(prompt, system_prompt, max_tokens, normalize=False)
+        return self._review_policy_openai_compatible(prompt, system_prompt, max_tokens, normalize=False)
+
+    def _review_policy_openai_compatible(
+        self,
+        prompt: str,
+        system_prompt: str | None = None,
+        max_tokens: int = 700,
+        normalize: bool = True,
+    ) -> str:
         # OpenAI 호환 요청
         payload = {
             "model": self.model,
-            "messages": self._messages(prompt),
-            "max_tokens": 700,
+            "messages": self._messages(prompt, system_prompt),
+            "max_tokens": max_tokens,
             "temperature": 0,
         }
         headers = {
@@ -92,19 +109,21 @@ class LLMClient:
             response.raise_for_status()
             body = response.json()
 
-        return self._normalize_review(
-            body.get("choices", [{}])[0]
-            .get("message", {})
-            .get("content", "")
-            .strip()
-        )
+        text = body.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+        return self._normalize_review(text) if normalize else text
 
-    def _review_policy_anthropic(self, prompt: str) -> str:
+    def _review_policy_anthropic(
+        self,
+        prompt: str,
+        system_prompt: str | None = None,
+        max_tokens: int = 700,
+        normalize: bool = True,
+    ) -> str:
         # Anthropic 요청
         payload = {
             "model": self.model,
-            "max_tokens": 700,
-            "system": self._system_prompt(),
+            "max_tokens": max_tokens,
+            "system": system_prompt or self._system_prompt(),
             "messages": [{"role": "user", "content": prompt}],
         }
         headers = {
@@ -119,10 +138,17 @@ class LLMClient:
 
         content = body.get("content", [])
         if content and isinstance(content[0], dict):
-            return self._normalize_review(content[0].get("text", "").strip())
+            text = content[0].get("text", "").strip()
+            return self._normalize_review(text) if normalize else text
         return ""
 
-    def _review_policy_google(self, prompt: str) -> str:
+    def _review_policy_google(
+        self,
+        prompt: str,
+        system_prompt: str | None = None,
+        max_tokens: int = 700,
+        normalize: bool = True,
+    ) -> str:
         # Google 요청
         api_url = self.api_url.format(model=self.model)
         separator = "&" if "?" in api_url else "?"
@@ -131,12 +157,12 @@ class LLMClient:
             "contents": [
                 {
                     "role": "user",
-                    "parts": [{"text": f"{self._system_prompt()}\n\n{prompt}"}],
+                    "parts": [{"text": f"{system_prompt or self._system_prompt()}\n\n{prompt}"}],
                 }
             ],
             "generationConfig": {
                 "temperature": 0,
-                "maxOutputTokens": 700,
+                "maxOutputTokens": max_tokens,
             },
         }
         with httpx.Client(timeout=self.timeout) as client:
@@ -151,13 +177,14 @@ class LLMClient:
             else []
         )
         if parts and isinstance(parts[0], dict):
-            return self._normalize_review(parts[0].get("text", "").strip())
+            text = parts[0].get("text", "").strip()
+            return self._normalize_review(text) if normalize else text
         return ""
 
-    def _messages(self, prompt: str) -> list[dict[str, str]]:
+    def _messages(self, prompt: str, system_prompt: str | None = None) -> list[dict[str, str]]:
         # 채팅 메시지
         return [
-            {"role": "system", "content": self._system_prompt()},
+            {"role": "system", "content": system_prompt or self._system_prompt()},
             {"role": "user", "content": prompt},
         ]
 

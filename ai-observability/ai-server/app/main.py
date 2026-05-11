@@ -125,8 +125,12 @@ def analyze(
     x_llm_api_key: str | None = Header(default=None),
 ) -> ViolationAnalysisResponse:
     # 위반 분석
-    _ = (request, sanitize_llm_provider(x_llm_provider), sanitize_llm_api_key(x_llm_api_key))
-    return analyze_violation(payload)
+    _ = request
+    return analyze_violation(
+        payload,
+        llm_provider=sanitize_llm_provider(x_llm_provider),
+        llm_api_key=sanitize_llm_api_key(x_llm_api_key),
+    )
 
 
 @app.post("/generate-policy", response_model=PolicyGenerationResponse)

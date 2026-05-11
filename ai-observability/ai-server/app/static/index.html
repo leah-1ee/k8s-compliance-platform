@@ -47,7 +47,7 @@
 
         <nav class="tabs" aria-label="console tabs">
           <button class="tab is-active" data-tab="policy">Policy Generator</button>
-          <button class="tab" data-tab="analysis">Violation Analyzer</button>
+          <button class="tab" data-tab="analysis">Violation Detail</button>
           <button class="tab" data-tab="queries">Dashboard Queries</button>
         </nav>
 
@@ -190,15 +190,34 @@
   "tags": ["shell", "runtime"]
 }</textarea>
             </label>
+            <label>
+              Resource Manifest (관련 리소스 매니페스트)
+              <textarea id="resourceManifest" rows="12">apiVersion: v1
+kind: Pod
+metadata:
+  name: test-pod
+  namespace: default
+  labels:
+    app: test-pod
+spec:
+  containers:
+    - name: app
+      image: nginx:latest
+      command: ["sh"]</textarea>
+            </label>
+            <label class="checkbox-row">
+              <input id="useViolationLlm" type="checkbox" />
+              LLM으로 원인/수정 YAML 생성
+            </label>
           </div>
           <div class="actions">
-            <button class="primary" id="analyzeViolation">위반 분석</button>
+            <button class="primary" id="analyzeViolation">상세 분석</button>
             <button id="copyAnalysis">분석 복사</button>
           </div>
           <div class="analysis-card" id="analysisResult">
             <span class="badge ready">● 준비됨</span>
-            <h2>분석 대기</h2>
-            <p>이벤트 JSON 입력 후 분석 실행</p>
+            <h2>위반 상세 대기</h2>
+            <p>Falco/Gatekeeper 이벤트와 관련 매니페스트 입력 후 분석 실행</p>
           </div>
         </section>
 
@@ -239,6 +258,6 @@
       </section>
     </main>
     <div class="toast" id="toast" role="status"></div>
-    <script src="/static/app.js?v=policy-ux-2"></script>
+    <script src="/static/app.js?v=violation-detail-1"></script>
   </body>
 </html>

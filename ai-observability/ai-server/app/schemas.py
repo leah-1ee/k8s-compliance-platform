@@ -99,8 +99,24 @@ class PolicyGenerationResponse(BaseModel):
 
 class ViolationAnalysisRequest(ClassificationRequest):
     cluster: str = Field(default="", max_length=120)
+    resource_manifest: str = Field(default="", max_length=12000)
+    use_llm: bool = False
+
+    @field_validator("resource_manifest")
+    @classmethod
+    def strip_manifest_control_chars(cls, value: str) -> str:
+        # YAML 줄바꿈 보존
+        allowed_whitespace = {"\n", "\t", "\r"}
+        return "".join(
+            ch for ch in value.strip() if ch.isprintable() or ch in allowed_whitespace
+        )
 
 
 class ViolationAnalysisResponse(ClassificationResponse):
     summary: str = Field(min_length=1, max_length=1000)
     recommended_actions: list[str] = Field(default_factory=list, max_length=8)
+    root_cause: str = Field(default="", max_length=1200)
+    remediation: str = Field(default="", max_length=1600)
+    yaml_snippet: str = Field(default="", max_length=4000)
+    llm_used: bool = False
+    llm_error: str = ""
