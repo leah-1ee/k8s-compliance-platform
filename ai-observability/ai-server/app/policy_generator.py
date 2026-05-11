@@ -60,10 +60,20 @@ def generate_policy(
         )
     elif policy_kind == "security-context-mutation":
         rego, template, constraint = _security_context_mutation_policy(excluded_namespaces)
-    else:
+    elif policy_kind == "resource-limits-mutation":
         rego, template, constraint = _resource_limits_mutation_policy(excluded_namespaces)
+    else:
+        rego, template, constraint = _network_policy(constraint_name, request.prompt)
 
-    prompt = build_policy_prompt(request, policy_kind)
+    prompt = build_policy_prompt(
+        request,
+        policy_kind,
+        {
+            "ConstraintTemplate": template,
+            "Constraint or Manifest": constraint,
+            "Rego": rego,
+        },
+    )
     llm_review = ""
     llm_error = ""
     llm_used = False
@@ -124,6 +134,16 @@ def _safe_llm_review(
 def _detect_policy_kind(prompt: str) -> PolicyKind:
     # 키워드 기반 분류
     normalized = prompt.lower()
+    if (
+        "networkpolicy" in normalized
+        or "network policy" in normalized
+        or "network-policy" in normalized
+        or "네트워크 정책" in normalized
+        or "네트워크정책" in normalized
+        or "ingress" in normalized
+        or "인그레스" in normalized
+    ):
+        return "network-policy"
     if "latest" in normalized or "태그" in normalized:
         return "latest-tag"
     if "resource" in normalized or "limit" in normalized or "리소스" in normalized:
@@ -331,6 +351,41 @@ def _resource_limits_mutation_policy(excluded_namespaces: list[str]) -> tuple[st
         excluded_namespaces,
     )
     return "", "", mutation
+
+
+def _network_policy(name: str, prompt: str) -> tuple[str, str, str]:
+    # Kubernetes NetworkPolicy 생성
+    normalized = prompt.lower()
+    include_egress = "egress" in normalized or "이그레스" in normalized
+    if include_egress and ("ingress" not in normalized and "인그레스" not in normalized):
+        policy_types = "  policyTypes:\n    - Egress"
+        rule_block = "  egress: []"
+        description = "기본 egress 트래픽을 차단합니다."
+    elif include_egress:
+        policy_types = "  policyTypes:\n    - Ingress\n    - Egress"
+        rule_block = "  ingress: []\n  egress: []"
+        description = "기본 ingress와 egress 트래픽을 차단합니다."
+    else:
+        policy_types = "  policyTypes:\n    - Ingress"
+        rule_block = "  ingress: []"
+        description = "기본 ingress 트래픽을 차단합니다."
+
+    manifest = "\n".join(
+        [
+            "apiVersion: networking.k8s.io/v1",
+            "kind: NetworkPolicy",
+            "metadata:",
+            f"  name: {name}",
+            "  namespace: default",
+            "  annotations:",
+            f'    description: "{description}"',
+            "spec:",
+            "  podSelector: {}",
+            policy_types,
+            rule_block,
+        ]
+    )
+    return "", "", manifest
 
 
 def _assign_yaml(

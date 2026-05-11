@@ -54,7 +54,7 @@
         <section class="panel is-active" id="policyPanel">
           <div class="form-grid">
             <label>
-              Policy Request (정책 요청)
+              Policy Generation Request (정책 생성 요청)
               <textarea id="policyPrompt" rows="6">latest 태그를 사용하는 컨테이너 이미지를 금지하는 Gatekeeper 정책을 만들어줘</textarea>
             </label>
             <div class="compact-grid">
@@ -68,6 +68,7 @@
                   <option value="host-namespace">host namespace 금지</option>
                   <option value="security-context-mutation">securityContext 자동 주입</option>
                   <option value="resource-limits-mutation">resource limits 자동 주입</option>
+                  <option value="network-policy">NetworkPolicy</option>
                 </select>
               </label>
               <label>
@@ -93,7 +94,7 @@
             </label>
             <label class="checkbox-row">
               <input id="useLlm" type="checkbox" />
-              LLM 검토 사용
+              생성 결과 LLM 검토
             </label>
           </div>
           <div class="actions">
@@ -161,9 +162,9 @@
                     <path d="M20 6 9 17l-5-5"></path>
                   </svg>
                 </button>
-                <h2>LLM Review (AI 검토)</h2>
+                <h2>LLM Review (생성 결과 검토)</h2>
               </div>
-              <pre id="llmOutput" data-empty="true">정책을 생성하면 여기에 결과가 표시됩니다</pre>
+              <pre id="llmOutput" data-empty="true">LLM 검토를 선택하면 여기에 결과가 표시됩니다</pre>
             </article>
           </div>
         </section>
@@ -238,6 +239,6 @@
       </section>
     </main>
     <div class="toast" id="toast" role="status"></div>
-    <script src="/static/app.js?v=llm-feedback-2"></script>
+    <script src="/static/app.js?v=policy-network-1"></script>
   </body>
 </html>

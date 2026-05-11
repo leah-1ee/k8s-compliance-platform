@@ -52,8 +52,11 @@ def test_ui_is_served():
     assert "xAI (Grok)" in response.text
     assert "Use my own API key" in response.text
     assert "Your API key is used only for requests in this session" in response.text
+    assert "Policy Generation Request" in response.text
+    assert "생성 결과 LLM 검토" in response.text
     assert "policyLoadingText" in response.text
     assert "정책을 생성하면 여기에 결과가 표시됩니다" in response.text
+    assert "LLM 검토를 선택하면 여기에 결과가 표시됩니다" in response.text
     assert 'data-copy-target="templateOutput"' in response.text
     assert 'aria-label="ConstraintTemplate 복사"' in response.text
 
@@ -143,6 +146,27 @@ def test_generate_mutation_policy_contract():
     assert body["rego"] == ""
     assert "kind: Assign" in body["constraint"]
     assert "resources.limits.cpu" in body["constraint"]
+
+
+def test_generate_network_policy_from_ingress_prompt():
+    response = client.post(
+        "/generate-policy",
+        json={
+            "prompt": "ingress 네트워크 정책 만들어줘",
+            "constraint_name": "default-deny-ingress",
+        },
+    )
+
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["policy_kind"] == "network-policy"
+    assert body["constraint_template"] == ""
+    assert body["rego"] == ""
+    assert "kind: NetworkPolicy" in body["constraint"]
+    assert "policyTypes:\n    - Ingress" in body["constraint"]
+    assert "ingress: []" in body["constraint"]
+    assert "latest" not in body["constraint"]
 
 
 def test_analyze_violation_contract():

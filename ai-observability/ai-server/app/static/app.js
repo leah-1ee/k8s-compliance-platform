@@ -79,7 +79,7 @@ async function postJson(path, payload) {
     let message = text || `HTTP ${response.status}`;
     try {
       const body = JSON.parse(text);
-      message = body.error || body.detail || message;
+      message = formatErrorMessage(body.error || body.detail || message);
     } catch (error) {
       // 오류 본문 원문 사용
     }
@@ -88,6 +88,28 @@ async function postJson(path, payload) {
     throw error;
   }
   return response.json();
+}
+
+function formatErrorMessage(value) {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === "string") {
+          return item;
+        }
+        const path = Array.isArray(item.loc) ? item.loc.join(".") : "";
+        const detail = item.msg || JSON.stringify(item);
+        return path ? `${path}: ${detail}` : detail;
+      })
+      .join("\n");
+  }
+  if (value && typeof value === "object") {
+    return value.message || value.msg || JSON.stringify(value);
+  }
+  return String(value);
 }
 
 function activateTab(tabName) {
@@ -150,7 +172,7 @@ async function generatePolicy() {
   };
   try {
     const result = await postJson("/generate-policy", payload);
-    const llmText = result.llm_review || result.llm_error || "LLM 검토 미사용";
+    const llmText = result.llm_review || result.llm_error || "LLM 검토를 선택하지 않았습니다.";
     setOutput(
       "#templateOutput",
       result.constraint_template || "Mutation 정책은 ConstraintTemplate을 사용하지 않습니다.",

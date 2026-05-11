@@ -1,12 +1,36 @@
 from app.schemas import PolicyGenerationRequest, PolicyKind
 
 
-def build_policy_prompt(request: PolicyGenerationRequest, policy_kind: PolicyKind) -> str:
+def build_policy_prompt(
+    request: PolicyGenerationRequest,
+    policy_kind: PolicyKind,
+    generated_artifacts: dict[str, str] | None = None,
+) -> str:
     # 정책 검토 프롬프트
     registries = ", ".join(request.allowed_registries) or "docker.io/library/, gcr.io/, ghcr.io/, registry.k8s.io/"
     excluded = ", ".join(request.excluded_namespaces) or "kube-system, gatekeeper-system, kube-flannel, monitoring"
-    output_type = "Assign mutation YAML" if "mutation" in policy_kind else "Rego, ConstraintTemplate YAML, and Constraint YAML"
-    return f"""You are reviewing an already generated Kubernetes Gatekeeper policy.
+    if policy_kind == "network-policy":
+        output_type = "Kubernetes NetworkPolicy YAML"
+    elif "mutation" in policy_kind:
+        output_type = "Assign mutation YAML"
+    else:
+        output_type = "Rego, ConstraintTemplate YAML, and Constraint YAML"
+    context_lines = [
+        f"- Generated artifact type: {output_type}.",
+        f"- Use constraint name: {request.constraint_name}",
+        f"- Exclude namespaces when appropriate: {excluded}",
+        f"- Allowed registries when needed: {registries}",
+    ]
+    if policy_kind != "network-policy":
+        context_lines.insert(1, f"- Use enforcementAction: {request.enforcement_action}")
+
+    artifact_lines = ""
+    if generated_artifacts:
+        artifact_lines = "\nGenerated artifacts to review:\n"
+        for label, value in generated_artifacts.items():
+            if value:
+                artifact_lines += f"\n[{label}]\n{value}\n"
+    return f"""You are reviewing an already generated Kubernetes policy resource.
 Return only plain Korean text. No YAML, Rego, Markdown, or code blocks.
 Write exactly 4 lines. Each line must be one complete sentence under 90 Korean characters.
 Do not include extra explanations after line 4.
@@ -23,9 +47,6 @@ Policy kind:
 {policy_kind}
 
 Context:
-- Generated artifact type: {output_type}.
-- Use enforcementAction: {request.enforcement_action}
-- Use constraint name: {request.constraint_name}
-- Exclude namespaces when appropriate: {excluded}
-- Allowed registries when needed: {registries}
+{chr(10).join(context_lines)}
+{artifact_lines}
 """
