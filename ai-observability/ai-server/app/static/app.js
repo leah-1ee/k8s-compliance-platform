@@ -226,6 +226,7 @@ async function generatePolicy() {
 function syncPolicyPromptMode() {
   const useLlm = $("#useLlm").checked;
   const selectedPolicyKind = $("#policyKind").value;
+  $("#policyPromptField").hidden = !useLlm;
   $("#policyPrompt").disabled = !useLlm;
   $("#policyKind").querySelector('option[value=""]').disabled = !useLlm;
   if (!useLlm && !selectedPolicyKind) {
