@@ -19,6 +19,7 @@ from app.runtime_client import (
     fetch_resource_manifest,
     get_runtime_event,
     list_runtime_events,
+    record_falco_event,
     record_gatekeeper_event,
 )
 from app.schemas import (
@@ -144,9 +145,9 @@ def analyze(
 
 
 @app.get("/runtime-events")
-def runtime_events(limit: int = 50) -> dict:
+def runtime_events(limit: int = 50, cluster: str = "") -> dict:
     # Falco/Gatekeeper 최근 위반 이벤트 목록
-    return list_runtime_events(limit=limit)
+    return list_runtime_events(limit=limit, cluster=cluster)
 
 
 @app.get("/runtime-events/{event_id}")
@@ -156,6 +157,13 @@ def runtime_event(event_id: str):
     if event is None:
         return JSONResponse(status_code=404, content={"error": f"event {event_id} not found"})
     return event
+
+
+@app.post("/ingest/falco-events")
+def ingest_falco_events(payload: dict) -> dict:
+    # 사용자 클러스터 compliance-agent가 전송한 Falco 이벤트 수집
+    event = record_falco_event(payload)
+    return {"status": "recorded", "event": event}
 
 
 @app.get("/resource-manifest")
@@ -177,7 +185,10 @@ def analyze_runtime_event(
     event = get_runtime_event(event_id)
     if event is None:
         return JSONResponse(status_code=404, content={"error": f"event {event_id} not found"})
-    manifest_result = fetch_resource_manifest(event.get("namespace", ""), event.get("pod_name", ""))
+    resource_manifest = event.get("resource_manifest", "")
+    manifest_result = {"manifest": resource_manifest, "error": ""}
+    if not resource_manifest:
+        manifest_result = fetch_resource_manifest(event.get("namespace", ""), event.get("pod_name", ""))
     payload = ViolationAnalysisRequest(
         cluster=os.getenv("CLUSTER_NAME", "current-cluster"),
         rule=event.get("rule", ""),

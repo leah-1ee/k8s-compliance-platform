@@ -4,41 +4,45 @@ from typing import Any
 
 import httpx
 
+from app import storage
+
 
 RESPONSE_SERVER_URL = os.getenv("RESPONSE_SERVER_URL", "http://response-server:8080").rstrip("/")
 KUBE_API_URL = os.getenv("KUBERNETES_SERVICE_HOST", "")
 KUBE_API_PORT = os.getenv("KUBERNETES_SERVICE_PORT", "443")
 SERVICEACCOUNT_DIR = "/var/run/secrets/kubernetes.io/serviceaccount"
 
-_gatekeeper_events: list[dict[str, Any]] = []
 
+def list_runtime_events(limit: int = 50, cluster: str = "") -> dict[str, Any]:
+    # SQLite 저장 이벤트와 레거시 response-server 이벤트를 통합
+    events: list[dict[str, Any]] = storage.list_events(limit=limit, cluster=cluster)
+    source_status = {
+        "response_server": "unavailable",
+        "sqlite": "ok",
+    }
 
-def list_runtime_events(limit: int = 50) -> dict[str, Any]:
-    # Falco response-server 이벤트와 AI 서버가 수집한 Gatekeeper 이벤트를 통합
-    events: list[dict[str, Any]] = []
-    source_status = {"response_server": "unavailable", "gatekeeper_buffer": "ok"}
-    try:
-        response = httpx.get(
-            f"{RESPONSE_SERVER_URL}/api/v1/events",
-            params={"limit": limit},
-            timeout=3,
-        )
-        response.raise_for_status()
-        body = response.json()
-        events.extend(_normalize_event(item, source="falco") for item in body.get("events", []))
-        source_status["response_server"] = "ok"
-    except httpx.HTTPError as error:
-        source_status["response_server_error"] = str(error)
+    if not cluster:
+        try:
+            response = httpx.get(
+                f"{RESPONSE_SERVER_URL}/api/v1/events",
+                params={"limit": limit},
+                timeout=3,
+            )
+            response.raise_for_status()
+            body = response.json()
+            events.extend(_normalize_event(item, source="falco") for item in body.get("events", []))
+            source_status["response_server"] = "ok"
+        except httpx.HTTPError as error:
+            source_status["response_server_error"] = str(error)
 
-    events.extend(reversed(_gatekeeper_events[-limit:]))
     events = sorted(events, key=lambda item: item.get("timestamp", ""), reverse=True)[:limit]
     return {"count": len(events), "events": events, "source_status": source_status}
 
 
 def get_runtime_event(event_id: str) -> dict[str, Any] | None:
-    for event in _gatekeeper_events:
-        if event.get("id") == event_id:
-            return event
+    stored = storage.get_event(event_id)
+    if stored is not None:
+        return stored
 
     try:
         response = httpx.get(f"{RESPONSE_SERVER_URL}/api/v1/events/{event_id}", timeout=3)
@@ -51,29 +55,13 @@ def get_runtime_event(event_id: str) -> dict[str, Any] | None:
 
 
 def get_runtime_summary() -> dict[str, Any]:
+    summary = storage.event_summary()
     try:
         response = httpx.get(f"{RESPONSE_SERVER_URL}/api/v1/events/summary", timeout=3)
         response.raise_for_status()
-        summary = response.json()
+        _merge_summary(summary, response.json())
     except httpx.HTTPError as error:
-        summary = {
-            "total_events": 0,
-            "by_severity": {},
-            "by_rule": {},
-            "by_namespace": {},
-            "by_action": {},
-            "recent_high": [],
-            "source_error": str(error),
-        }
-
-    gatekeeper_count = len(_gatekeeper_events)
-    if gatekeeper_count:
-        summary["total_events"] = int(summary.get("total_events", 0)) + gatekeeper_count
-        by_rule = summary.setdefault("by_rule", {})
-        by_severity = summary.setdefault("by_severity", {})
-        for event in _gatekeeper_events:
-            by_rule[event.get("rule", "Gatekeeper deny")] = by_rule.get(event.get("rule", "Gatekeeper deny"), 0) + 1
-            by_severity[event.get("severity", "medium")] = by_severity.get(event.get("severity", "medium"), 0) + 1
+        summary["source_error"] = str(error)
     return summary
 
 
@@ -86,7 +74,6 @@ def record_gatekeeper_event(payload: dict[str, Any]) -> dict[str, Any]:
     namespace = payload.get("namespace") or metadata.get("namespace", "")
     name = payload.get("pod_name") or metadata.get("name", "")
     event = {
-        "id": f"gk-{len(_gatekeeper_events) + 1:06d}",
         "timestamp": payload.get("timestamp") or now,
         "source": "gatekeeper",
         "rule": payload.get("constraint") or payload.get("rule") or "Gatekeeper deny",
@@ -104,9 +91,58 @@ def record_gatekeeper_event(payload: dict[str, Any]) -> dict[str, Any]:
         "action_taken": "deny",
         "raw_event": payload,
     }
-    _gatekeeper_events.append(event)
-    del _gatekeeper_events[:-200]
-    return event
+    return storage.save_event(event)
+
+
+def record_falco_event(payload: dict[str, Any]) -> dict[str, Any]:
+    # 사용자 클러스터 agent가 전송한 Falco 이벤트와 매니페스트 스냅샷을 저장
+    now = datetime.now(timezone.utc).isoformat()
+    raw_event = payload.get("event", payload)
+    if not isinstance(raw_event, dict):
+        raw_event = {}
+    output_fields = raw_event.get("output_fields", {})
+    if not isinstance(output_fields, dict):
+        output_fields = {}
+
+    namespace = (
+        payload.get("namespace")
+        or output_fields.get("k8s.ns.name")
+        or output_fields.get("k8s.ns")
+        or ""
+    )
+    pod_name = (
+        payload.get("pod_name")
+        or output_fields.get("k8s.pod.name")
+        or output_fields.get("k8s.pod")
+        or ""
+    )
+    repository = output_fields.get("container.image.repository", "")
+    image_tag = output_fields.get("container.image.tag", "")
+    image = payload.get("image") or repository
+    if repository and image_tag:
+        image = f"{repository}:{image_tag}"
+
+    event = {
+        "timestamp": payload.get("timestamp") or raw_event.get("time") or now,
+        "source": "falco-agent",
+        "cluster": payload.get("cluster") or raw_event.get("cluster") or "unknown-cluster",
+        "rule": raw_event.get("rule", "Falco runtime event"),
+        "priority": raw_event.get("priority", ""),
+        "severity": payload.get("severity") or _priority_to_severity(raw_event.get("priority", "")),
+        "classification_source": "agent",
+        "classification_reason": raw_event.get("output", "") or raw_event.get("message", ""),
+        "confidence": 0.75,
+        "namespace": namespace,
+        "pod_name": pod_name,
+        "container_name": payload.get("container_name") or output_fields.get("container.name", ""),
+        "image": image,
+        "user": payload.get("user") or output_fields.get("user.name", ""),
+        "command": payload.get("command") or output_fields.get("proc.cmdline", ""),
+        "action_taken": "alert_and_monitor",
+        "resource_manifest": payload.get("resource_manifest", ""),
+        "raw_event": raw_event,
+    }
+    return storage.save_event(event)
 
 
 def fetch_resource_manifest(namespace: str, pod_name: str) -> dict[str, str]:
@@ -178,6 +214,15 @@ def _normalize_event(item: dict[str, Any], source: str) -> dict[str, Any]:
     return normalized
 
 
+def _merge_summary(target: dict[str, Any], source: dict[str, Any]) -> None:
+    target["total_events"] = int(target.get("total_events", 0)) + int(source.get("total_events", 0) or 0)
+    for key in ("by_severity", "by_rule", "by_namespace", "by_action"):
+        bucket = target.setdefault(key, {})
+        for item_key, count in source.get(key, {}).items():
+            bucket[item_key] = int(bucket.get(item_key, 0)) + int(count or 0)
+    target.setdefault("recent_high", []).extend(source.get("recent_high", []))
+
+
 def _pod_to_yaml(pod: dict[str, Any]) -> str:
     # 데모용으로 핵심 필드만 안정적으로 출력
     metadata = pod.get("metadata", {})
@@ -209,3 +254,12 @@ def _pod_to_yaml(pod: dict[str, Any]) -> str:
                 rendered = str(value).lower() if isinstance(value, bool) else value
                 lines.append(f"        {key}: {rendered}")
     return "\n".join(lines)
+
+
+def _priority_to_severity(priority: str) -> str:
+    normalized = str(priority or "").lower()
+    if normalized in {"emergency", "alert", "critical", "error"}:
+        return "high"
+    if normalized in {"warning", "notice"}:
+        return "medium"
+    return "low"

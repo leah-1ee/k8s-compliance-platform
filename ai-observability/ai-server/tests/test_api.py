@@ -351,6 +351,51 @@ def test_gatekeeper_event_is_collected_and_reported():
     assert report_body["recommendations"]
 
 
+def test_ingested_falco_event_is_listed_with_manifest_snapshot():
+    response = client.post(
+        "/ingest/falco-events",
+        json={
+            "cluster": "customer-a",
+            "resource_manifest": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: suspicious-pod",
+            "event": {
+                "time": "2026-05-11T12:34:56Z",
+                "rule": "Compliance - Shell Spawned in Container",
+                "priority": "Warning",
+                "output": "shell spawned",
+                "output_fields": {
+                    "k8s.ns.name": "prod",
+                    "k8s.pod.name": "suspicious-pod",
+                    "container.name": "app",
+                    "container.image.repository": "docker.io/library/busybox",
+                    "container.image.tag": "1.36.1",
+                    "user.name": "root",
+                    "proc.cmdline": "sh",
+                },
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["status"] == "recorded"
+    event_id = body["event"]["id"]
+
+    list_response = client.get("/runtime-events?limit=5")
+    list_body = list_response.json()
+
+    assert list_response.status_code == 200
+    assert any(event["id"] == event_id for event in list_body["events"])
+
+    detail_response = client.get(f"/runtime-events/{event_id}")
+    detail_body = detail_response.json()
+
+    assert detail_response.status_code == 200
+    assert detail_body["source"] == "falco-agent"
+    assert detail_body["cluster"] == "customer-a"
+    assert detail_body["namespace"] == "prod"
+    assert detail_body["resource_manifest"].startswith("apiVersion: v1")
+
+
 def test_resource_manifest_without_kube_env_is_clear(monkeypatch):
     monkeypatch.setattr("app.runtime_client.KUBE_API_URL", "")
 
