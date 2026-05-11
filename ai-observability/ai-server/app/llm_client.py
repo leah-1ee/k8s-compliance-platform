@@ -164,7 +164,7 @@ class LLMClient:
     def _system_prompt(self) -> str:
         # 시스템 프롬프트
         return (
-            "You review Kubernetes Gatekeeper policies. "
+            "You review generated Kubernetes policy resources. "
             "Return only concise Korean plain text. "
             "Do not return Markdown, bullets, code blocks, YAML, or Rego."
         )

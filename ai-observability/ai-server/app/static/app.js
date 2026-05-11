@@ -80,6 +80,9 @@ async function postJson(path, payload) {
     try {
       const body = JSON.parse(text);
       message = formatErrorMessage(body.error || body.detail || message);
+      if (Array.isArray(body.examples) && body.examples.length > 0) {
+        message = `${message}\n예시: ${body.examples.slice(0, 3).join(" / ")}`;
+      }
     } catch (error) {
       // 오류 본문 원문 사용
     }

@@ -13,6 +13,7 @@ from slowapi.util import get_remote_address
 from app.analyzer import analyze_violation
 from app.classifier import classify_event
 from app.policy_generator import generate_policy
+from app.policy_generator import SUPPORTED_POLICY_EXAMPLES, UnsupportedPolicyError
 from app.schemas import (
     ClassificationRequest,
     ClassificationResponse,
@@ -138,11 +139,20 @@ def generate(
 ) -> PolicyGenerationResponse:
     # 정책 생성
     _ = request
-    return generate_policy(
-        payload,
-        llm_provider=sanitize_llm_provider(x_llm_provider),
-        llm_api_key=sanitize_llm_api_key(x_llm_api_key),
-    )
+    try:
+        return generate_policy(
+            payload,
+            llm_provider=sanitize_llm_provider(x_llm_provider),
+            llm_api_key=sanitize_llm_api_key(x_llm_api_key),
+        )
+    except UnsupportedPolicyError as error:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": str(error),
+                "examples": SUPPORTED_POLICY_EXAMPLES,
+            },
+        )
 
 
 @app.get("/ui", response_class=FileResponse)

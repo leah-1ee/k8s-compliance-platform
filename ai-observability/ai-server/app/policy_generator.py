@@ -20,6 +20,27 @@ DEFAULT_ALLOWED_REGISTRIES = [
     "ghcr.io/",
     "registry.k8s.io/",
 ]
+SUPPORTED_POLICY_EXAMPLES = [
+    "latest 태그를 사용하는 컨테이너 이미지를 금지해줘",
+    "non-root 실행을 강제하는 정책을 만들어줘",
+    "허용된 이미지 레지스트리만 사용하게 해줘",
+    "host namespace 사용을 금지해줘",
+    "securityContext를 자동 주입해줘",
+    "resource limits를 자동 주입해줘",
+    "ingress 네트워크 정책 만들어줘",
+]
+
+
+class UnsupportedPolicyError(ValueError):
+    """Raised when a natural-language policy request is outside the template set."""
+
+    def __init__(self, prompt: str) -> None:
+        self.prompt = prompt
+        super().__init__(
+            "지원하지 않는 정책 요청입니다. 현재는 latest 태그 금지, non-root 강제, "
+            "레지스트리 제한, host namespace 금지, securityContext/resource limits 자동 주입, "
+            "NetworkPolicy 생성만 지원합니다."
+        )
 
 
 def generate_policy(
@@ -29,6 +50,8 @@ def generate_policy(
 ) -> PolicyGenerationResponse:
     # 정책 유형 판별
     policy_kind = request.policy_kind or _detect_policy_kind(request.prompt)
+    if policy_kind is None:
+        raise UnsupportedPolicyError(request.prompt)
     constraint_name = _safe_name(request.constraint_name)
     excluded_namespaces = request.excluded_namespaces or DEFAULT_EXCLUDED_NAMESPACES
     allowed_registries = request.allowed_registries or DEFAULT_ALLOWED_REGISTRIES
@@ -79,6 +102,12 @@ def generate_policy(
     llm_used = False
     if request.use_llm:
         llm_review, llm_error = _safe_llm_review(prompt, llm_provider, llm_api_key)
+        llm_review = _complete_review(
+            llm_review,
+            policy_kind,
+            request.enforcement_action,
+            excluded_namespaces,
+        )
         llm_used = bool(llm_review)
 
     return PolicyGenerationResponse(
@@ -116,10 +145,7 @@ def _safe_llm_review(
             return "", "LLM 응답이 비어 있습니다. API key, provider, model 설정을 확인하세요."
         return review, ""
     except httpx.HTTPStatusError as error:
-        return (
-            "",
-            f"LLM 요청 실패: HTTP {error.response.status_code}. API key, provider, model 설정을 확인하세요.",
-        )
+        return "", _format_llm_http_error(error)
     except httpx.TimeoutException:
         return "", "LLM 연결 시간 초과: VM의 외부 HTTPS 연결 또는 provider endpoint 설정을 확인하세요."
     except httpx.RequestError:
@@ -131,7 +157,41 @@ def _safe_llm_review(
         return "", "LLM 처리 실패: provider와 model 설정을 확인하세요."
 
 
-def _detect_policy_kind(prompt: str) -> PolicyKind:
+def _format_llm_http_error(error: httpx.HTTPStatusError) -> str:
+    # Provider 오류 본문 요약
+    status_code = error.response.status_code
+    provider_message = ""
+    provider_status = ""
+    try:
+        body = error.response.json()
+        if isinstance(body, dict):
+            detail = body.get("error", body)
+            if isinstance(detail, dict):
+                provider_message = str(detail.get("message", ""))
+                provider_status = str(detail.get("status", ""))
+            elif isinstance(detail, str):
+                provider_message = detail
+    except ValueError:
+        provider_message = error.response.text.strip()
+
+    provider_message = re.sub(r"\s+", " ", provider_message)[:220]
+    if status_code in {401, 403}:
+        reason = "API key 권한 또는 결제/프로젝트 접근 권한 문제일 가능성이 큽니다."
+    elif status_code == 404:
+        reason = "provider 또는 model 이름이 현재 계정/엔드포인트에서 유효하지 않을 수 있습니다."
+    elif status_code == 429:
+        reason = "요청 한도 또는 quota 초과입니다."
+    elif status_code in {500, 502, 503, 504}:
+        reason = "LLM 제공자 서버나 선택한 모델이 일시적으로 응답하지 않는 상태입니다."
+    else:
+        reason = "provider, model, API key, 요청 형식을 확인하세요."
+
+    status_suffix = f" ({provider_status})" if provider_status else ""
+    message_suffix = f" Provider 메시지: {provider_message}" if provider_message else ""
+    return f"LLM 요청 실패: HTTP {status_code}{status_suffix}. {reason}{message_suffix}"
+
+
+def _detect_policy_kind(prompt: str) -> PolicyKind | None:
     # 키워드 기반 분류
     normalized = prompt.lower()
     if (
@@ -156,7 +216,74 @@ def _detect_policy_kind(prompt: str) -> PolicyKind:
         return "allowed-registries"
     if "host" in normalized or "namespace" in normalized or "네임스페이스" in normalized:
         return "host-namespace"
-    return "latest-tag"
+    return None
+
+
+def _complete_review(
+    review: str,
+    policy_kind: PolicyKind,
+    enforcement_action: str,
+    excluded_namespaces: list[str],
+) -> str:
+    # LLM이 일부 항목만 반환해도 UI에는 일관된 4줄 검토를 표시
+    if not review:
+        return ""
+    defaults = _default_review_lines(policy_kind, enforcement_action, excluded_namespaces)
+    lines_by_label: dict[str, str] = {}
+    ordered_labels = ["정책 의도", "적용 범위", "주의할 점", "운영 권장사항"]
+    for line in review.splitlines():
+        normalized = line.strip()
+        for label in ordered_labels:
+            if normalized.startswith(f"{label}:"):
+                lines_by_label[label] = normalized
+                break
+    for line in review.splitlines():
+        if len(lines_by_label) >= 4:
+            break
+        normalized = line.strip()
+        if normalized and not any(normalized.startswith(f"{label}:") for label in ordered_labels):
+            missing = next(label for label in ordered_labels if label not in lines_by_label)
+            lines_by_label[missing] = f"{missing}: {normalized}"
+
+    return "\n".join(lines_by_label.get(label, defaults[label]) for label in ordered_labels)
+
+
+def _default_review_lines(
+    policy_kind: PolicyKind,
+    enforcement_action: str,
+    excluded_namespaces: list[str],
+) -> dict[str, str]:
+    excluded = ", ".join(excluded_namespaces)
+    intent_by_kind = {
+        "latest-tag": "컨테이너 이미지의 latest 태그와 태그 누락을 차단합니다.",
+        "non-root": "Pod 컨테이너가 root 권한으로 실행되지 않도록 강제합니다.",
+        "allowed-registries": "허용된 이미지 레지스트리 외의 이미지를 차단합니다.",
+        "host-namespace": "hostPID, hostIPC, hostNetwork 사용을 차단합니다.",
+        "security-context-mutation": "누락된 securityContext 기본값을 Pod 컨테이너에 자동 주입합니다.",
+        "resource-limits-mutation": "누락된 CPU와 메모리 limit 값을 Pod 컨테이너에 자동 주입합니다.",
+        "network-policy": "선택한 방향의 기본 네트워크 트래픽을 NetworkPolicy로 제한합니다.",
+    }
+    scope = (
+        "적용 범위: 생성된 NetworkPolicy의 namespace와 podSelector 대상 Pod에 적용됩니다."
+        if policy_kind == "network-policy"
+        else f"적용 범위: Pod 리소스에 적용되며 {excluded} 네임스페이스는 제외됩니다."
+    )
+    caution = (
+        "주의할 점: podSelector가 비어 있으면 namespace 내 모든 Pod에 적용될 수 있습니다."
+        if policy_kind == "network-policy"
+        else "주의할 점: 기존 워크로드가 정책 조건을 만족하지 않으면 배포가 거부될 수 있습니다."
+    )
+    recommendation = (
+        "운영 권장사항: 테스트 네임스페이스에서 통신 영향도를 먼저 확인하세요."
+        if policy_kind == "network-policy"
+        else f"운영 권장사항: {enforcement_action} 적용 전 테스트 네임스페이스에서 검증하세요."
+    )
+    return {
+        "정책 의도": f"정책 의도: {intent_by_kind[policy_kind]}",
+        "적용 범위": scope,
+        "주의할 점": caution,
+        "운영 권장사항": recommendation,
+    }
 
 
 def _safe_name(value: str) -> str:

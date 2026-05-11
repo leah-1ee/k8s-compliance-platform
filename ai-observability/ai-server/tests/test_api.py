@@ -1,7 +1,9 @@
 from fastapi.testclient import TestClient
+import httpx
 
 from app.llm_client import LLMClient
 from app.main import app
+from app.policy_generator import _format_llm_http_error
 
 
 client = TestClient(app)
@@ -167,6 +169,73 @@ def test_generate_network_policy_from_ingress_prompt():
     assert "policyTypes:\n    - Ingress" in body["constraint"]
     assert "ingress: []" in body["constraint"]
     assert "latest" not in body["constraint"]
+
+
+def test_generate_policy_rejects_unsupported_prompt_with_examples():
+    response = client.post(
+        "/generate-policy",
+        json={
+            "prompt": "서비스 메시 mTLS 정책 만들어줘",
+            "constraint_name": "mesh-mtls",
+        },
+    )
+
+    body = response.json()
+
+    assert response.status_code == 400
+    assert "지원하지 않는 정책 요청" in body["error"]
+    assert "latest 태그를 사용하는 컨테이너 이미지를 금지해줘" in body["examples"]
+
+
+def test_llm_partial_review_is_completed(monkeypatch):
+    def fake_review_policy(self, prompt: str) -> str:
+        return "정책 의도: 기본 ingress 트래픽을 제한합니다."
+
+    monkeypatch.setattr(LLMClient, "review_policy", fake_review_policy)
+    response = client.post(
+        "/generate-policy",
+        headers={
+            "X-LLM-Provider": "google",
+            "X-LLM-API-Key": "test-user-key",
+        },
+        json={
+            "prompt": "ingress 네트워크 정책 만들어줘",
+            "constraint_name": "default-deny-ingress",
+            "use_llm": True,
+        },
+    )
+
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["llm_used"] is True
+    assert body["llm_review"].splitlines() == [
+        "정책 의도: 기본 ingress 트래픽을 제한합니다.",
+        "적용 범위: 생성된 NetworkPolicy의 namespace와 podSelector 대상 Pod에 적용됩니다.",
+        "주의할 점: podSelector가 비어 있으면 namespace 내 모든 Pod에 적용될 수 있습니다.",
+        "운영 권장사항: 테스트 네임스페이스에서 통신 영향도를 먼저 확인하세요.",
+    ]
+
+
+def test_llm_http_error_includes_provider_detail():
+    request = httpx.Request("POST", "https://example.test")
+    response = httpx.Response(
+        503,
+        request=request,
+        json={
+            "error": {
+                "status": "UNAVAILABLE",
+                "message": "The model is overloaded. Please try again later.",
+            }
+        },
+    )
+    error = httpx.HTTPStatusError("server unavailable", request=request, response=response)
+
+    message = _format_llm_http_error(error)
+
+    assert "HTTP 503 (UNAVAILABLE)" in message
+    assert "일시적으로 응답하지 않는 상태" in message
+    assert "The model is overloaded" in message
 
 
 def test_analyze_violation_contract():
