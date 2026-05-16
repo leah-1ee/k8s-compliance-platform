@@ -49,7 +49,6 @@ check_http() {
       echo "[ok] ${name} reachable: ${url}"
       return 0
     fi
-
     sleep "${wait_seconds}"
     attempt=$((attempt + 1))
   done
@@ -61,7 +60,6 @@ check_http() {
 print_log_tail() {
   local name="$1"
   local log_file="${LOG_DIR}/${name}.log"
-
   if [ -f "${log_file}" ]; then
     echo
     echo "Last log lines for ${name}:"
@@ -72,7 +70,6 @@ print_log_tail() {
 zrok_host_from_url() {
   local url="$1"
   local without_scheme
-
   without_scheme="${url#http://}"
   without_scheme="${without_scheme#https://}"
   echo "${without_scheme%%/*}"
@@ -104,16 +101,12 @@ delete_zrok_shares_for_host() {
   done <<< "${share_tokens}"
 }
 
-share_namespace() {
-  echo "${1%%:*}"
-}
-
-share_name() {
-  echo "${1#*:}"
-}
+# namespace:name 에서 name만 추출 (create name 명령용)
+share_namespace() { echo "${1%%:*}"; }
+share_name()      { echo "${1#*:}"; }
 
 ensure_zrok_name() {
-  local full_name="$1"
+  local full_name="$1"   # ex) public:compliance-ai-console
   local namespace
   local name
   local log_file
@@ -169,24 +162,6 @@ start_bg() {
   echo "[ok] ${name} running pid=$(cat "${pid_file}") log=${log_file}"
 }
 
-stop_bg() {
-  local name="$1"
-  local pid_file="${PID_DIR}/${name}.pid"
-
-  if ! pid_is_running "${pid_file}"; then
-    rm -f "${pid_file}"
-    return
-  fi
-
-  echo "[stop] stale ${name} pid=$(cat "${pid_file}")"
-  kill "$(cat "${pid_file}")" 2>/dev/null || true
-  sleep 1
-  if pid_is_running "${pid_file}"; then
-    kill -9 "$(cat "${pid_file}")" 2>/dev/null || true
-  fi
-  rm -f "${pid_file}"
-}
-
 start_zrok_share() {
   local name="$1"
   local public_url="$2"
@@ -203,6 +178,24 @@ start_zrok_share() {
   delete_zrok_shares_for_host "${public_host}"
 
   start_bg "${name}" "$@"
+}
+
+stop_bg() {
+  local name="$1"
+  local pid_file="${PID_DIR}/${name}.pid"
+
+  if ! pid_is_running "${pid_file}"; then
+    rm -f "${pid_file}"
+    return
+  fi
+
+  echo "[stop] stale ${name} pid=$(cat "${pid_file}")"
+  kill "$(cat "${pid_file}")" 2>/dev/null || true
+  sleep 1
+  if pid_is_running "${pid_file}"; then
+    kill -9 "$(cat "${pid_file}")" 2>/dev/null || true
+  fi
+  rm -f "${pid_file}"
 }
 
 require_command kubectl
@@ -225,6 +218,7 @@ start_bg ai-console-port-forward \
   kubectl port-forward -n compliance-system deploy/ai-classifier \
   "${AI_LOCAL_PORT}:${AI_TARGET_PORT}"
 
+# ★ 핵심 수정: -n 에 full_name (public:compliance-xxx) 그대로 전달
 start_zrok_share grafana-zrok "${GRAFANA_PUBLIC_URL}" \
   "${ZROK_BIN}" share public "http://127.0.0.1:${GRAFANA_LOCAL_PORT}" \
   -n "${GRAFANA_SHARE_NAME}"
@@ -259,4 +253,3 @@ echo "- Webhook:    http://127.0.0.1:${RESPONSE_LOCAL_PORT}/webhook"
 echo
 echo "Logs: ${LOG_DIR}"
 echo "Stop: scripts/stop-demo-tunnels.sh"
-echo "All tunnel processes are running in the background; this command should return to your shell prompt."
