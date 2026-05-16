@@ -21,6 +21,7 @@ spec:
   parameters:
     repos:
       - "docker.io/library/"
+      - "docker.io/leeon3345/"
       - "gcr.io/"
       - "ghcr.io/"
       - "registry.k8s.io/"
