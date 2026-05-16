@@ -455,6 +455,22 @@ button.event-row:focus-visible {
   color: var(--ok);
 }
 
+.badge.compact {
+  min-height: 22px;
+  padding: 0 8px;
+  font-size: 0.78rem;
+}
+
+.badge.demo {
+  background: rgba(88, 166, 255, 0.16);
+  color: var(--brand);
+}
+
+.badge.customer {
+  background: rgba(124, 195, 110, 0.16);
+  color: var(--ok);
+}
+
 .query-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

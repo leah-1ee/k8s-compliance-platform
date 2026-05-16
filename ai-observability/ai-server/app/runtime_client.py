@@ -8,20 +8,25 @@ from app import storage
 
 
 RESPONSE_SERVER_URL = os.getenv("RESPONSE_SERVER_URL", "http://response-server:8080").rstrip("/")
+DEMO_CLUSTER_NAME = os.getenv("DEMO_CLUSTER_NAME", os.getenv("CLUSTER_NAME", "demo-cluster")).strip()
 KUBE_API_URL = os.getenv("KUBERNETES_SERVICE_HOST", "")
 KUBE_API_PORT = os.getenv("KUBERNETES_SERVICE_PORT", "443")
 SERVICEACCOUNT_DIR = "/var/run/secrets/kubernetes.io/serviceaccount"
 
 
-def list_runtime_events(limit: int = 50, cluster: str = "") -> dict[str, Any]:
+def list_runtime_events(limit: int = 50, cluster: str = "", cluster_kind: str = "") -> dict[str, Any]:
     # SQLite 저장 이벤트와 레거시 response-server 이벤트를 통합
-    events: list[dict[str, Any]] = storage.list_events(limit=limit, cluster=cluster)
+    events: list[dict[str, Any]] = storage.list_events(
+        limit=limit,
+        cluster=cluster,
+        cluster_kind=cluster_kind,
+    )
     source_status = {
         "response_server": "unavailable",
         "sqlite": "ok",
     }
 
-    if not cluster:
+    if not cluster and cluster_kind in {"", "demo"}:
         try:
             response = httpx.get(
                 f"{RESPONSE_SERVER_URL}/api/v1/events",
@@ -30,7 +35,15 @@ def list_runtime_events(limit: int = 50, cluster: str = "") -> dict[str, Any]:
             )
             response.raise_for_status()
             body = response.json()
-            events.extend(_normalize_event(item, source="falco") for item in body.get("events", []))
+            events.extend(
+                _normalize_event(
+                    item,
+                    source="falco",
+                    cluster_name=DEMO_CLUSTER_NAME,
+                    cluster_kind="demo",
+                )
+                for item in body.get("events", [])
+            )
             source_status["response_server"] = "ok"
         except httpx.HTTPError as error:
             source_status["response_server_error"] = str(error)
@@ -76,6 +89,8 @@ def record_gatekeeper_event(payload: dict[str, Any]) -> dict[str, Any]:
     event = {
         "timestamp": payload.get("timestamp") or now,
         "source": "gatekeeper",
+        "cluster": payload.get("cluster") or DEMO_CLUSTER_NAME,
+        "cluster_kind": payload.get("cluster_kind") or "demo",
         "rule": payload.get("constraint") or payload.get("rule") or "Gatekeeper deny",
         "priority": "Warning",
         "severity": payload.get("severity") or "medium",
@@ -96,7 +111,9 @@ def record_gatekeeper_event(payload: dict[str, Any]) -> dict[str, Any]:
 
 def record_falco_event(
     payload: dict[str, Any],
+    cluster_id: str = "",
     cluster_name: str = "",
+    cluster_kind: str = "customer",
     source: str = "sidekick",
 ) -> dict[str, Any]:
     # Falco Sidekick/agent가 전송한 이벤트를 저장
@@ -129,7 +146,9 @@ def record_falco_event(
     event = {
         "timestamp": payload.get("timestamp") or raw_event.get("time") or now,
         "source": source,
+        "cluster_id": cluster_id,
         "cluster": cluster_name or payload.get("cluster") or raw_event.get("cluster") or "unknown-cluster",
+        "cluster_kind": cluster_kind,
         "rule": raw_event.get("rule", "Falco runtime event"),
         "priority": raw_event.get("priority", ""),
         "severity": payload.get("severity") or _priority_to_severity(raw_event.get("priority", "")),
@@ -179,9 +198,9 @@ def fetch_resource_manifest(namespace: str, pod_name: str) -> dict[str, str]:
         return {"manifest": "", "error": f"Kubernetes API 조회 실패: {error}"}
 
 
-def build_report() -> dict[str, Any]:
+def build_report(cluster_kind: str = "") -> dict[str, Any]:
     summary = get_runtime_summary()
-    events = list_runtime_events(limit=100)["events"]
+    events = list_runtime_events(limit=100, cluster_kind=cluster_kind)["events"]
     top_rules = sorted(summary.get("by_rule", {}).items(), key=lambda item: item[1], reverse=True)[:5]
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -206,9 +225,16 @@ def _report_recommendations(summary: dict[str, Any], events: list[dict[str, Any]
     return recommendations
 
 
-def _normalize_event(item: dict[str, Any], source: str) -> dict[str, Any]:
+def _normalize_event(
+    item: dict[str, Any],
+    source: str,
+    cluster_name: str = "",
+    cluster_kind: str = "customer",
+) -> dict[str, Any]:
     normalized = dict(item)
     normalized.setdefault("source", source)
+    normalized.setdefault("cluster", cluster_name)
+    normalized.setdefault("cluster_kind", cluster_kind)
     normalized.setdefault("timestamp", item.get("time", ""))
     normalized.setdefault("rule", item.get("rule", ""))
     normalized.setdefault("namespace", item.get("namespace", item.get("k8s.ns.name", "")))

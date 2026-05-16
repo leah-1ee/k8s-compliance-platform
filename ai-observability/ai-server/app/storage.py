@@ -29,6 +29,7 @@ def init_db() -> None:
                 CREATE TABLE IF NOT EXISTS clusters (
                     id TEXT PRIMARY KEY,
                     name TEXT NOT NULL UNIQUE,
+                    kind TEXT NOT NULL DEFAULT 'customer',
                     token_hash TEXT,
                     status TEXT NOT NULL DEFAULT 'active',
                     last_seen_at TEXT,
@@ -38,7 +39,9 @@ def init_db() -> None:
                 CREATE TABLE IF NOT EXISTS events (
                     id TEXT PRIMARY KEY,
                     source TEXT NOT NULL,
+                    cluster_id TEXT,
                     cluster TEXT,
+                    cluster_kind TEXT NOT NULL DEFAULT 'customer',
                     timestamp TEXT,
                     rule TEXT,
                     priority TEXT,
@@ -64,6 +67,12 @@ def init_db() -> None:
                 CREATE INDEX IF NOT EXISTS idx_events_severity ON events(severity);
                 """
             )
+            _ensure_column(conn, "clusters", "kind", "TEXT NOT NULL DEFAULT 'customer'")
+            _ensure_column(conn, "events", "cluster_id", "TEXT")
+            _ensure_column(conn, "events", "cluster_kind", "TEXT NOT NULL DEFAULT 'customer'")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_events_cluster_id ON events(cluster_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_events_cluster_kind ON events(cluster_kind)")
+            _mark_env_demo_clusters(conn)
         _INITIALIZED = True
 
 
@@ -71,21 +80,26 @@ def save_event(event: dict[str, Any]) -> dict[str, Any]:
     init_db()
     stored = dict(event)
     stored["id"] = stored.get("id") or _new_event_id(stored.get("source", "event"))
+    stored["cluster_kind"] = _normalize_cluster_kind(
+        stored.get("cluster_kind") or _cluster_kind_for_name(stored.get("cluster", ""))
+    )
     with _LOCK, _connect() as conn:
         conn.execute(
             """
             INSERT OR REPLACE INTO events (
-                id, source, cluster, timestamp, rule, priority, severity, namespace,
-                pod_name, container_name, image, user_name, command, action_taken,
+                id, source, cluster_id, cluster, cluster_kind, timestamp, rule, priority,
+                severity, namespace, pod_name, container_name, image, user_name, command, action_taken,
                 classification_source, classification_reason, confidence,
                 resource_manifest, raw_event_json
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 stored["id"],
                 stored.get("source", ""),
+                stored.get("cluster_id", ""),
                 stored.get("cluster", ""),
+                stored.get("cluster_kind", "customer"),
                 stored.get("timestamp", ""),
                 stored.get("rule", ""),
                 stored.get("priority", ""),
@@ -107,18 +121,19 @@ def save_event(event: dict[str, Any]) -> dict[str, Any]:
     return stored
 
 
-def create_cluster(name: str) -> dict[str, Any]:
+def create_cluster(name: str, kind: str = "customer") -> dict[str, Any]:
     init_db()
     normalized = _normalize_cluster_name(name)
+    normalized_kind = _normalize_cluster_kind(kind)
     token = secrets.token_urlsafe(32)
     cluster_id = f"cluster-{uuid.uuid4().hex[:12]}"
     with _LOCK, _connect() as conn:
         conn.execute(
             """
-            INSERT INTO clusters (id, name, token_hash, status)
-            VALUES (?, ?, ?, 'active')
+            INSERT INTO clusters (id, name, kind, token_hash, status)
+            VALUES (?, ?, ?, ?, 'active')
             """,
-            (cluster_id, normalized, _token_hash(token)),
+            (cluster_id, normalized, normalized_kind, _token_hash(token)),
         )
     cluster = get_cluster(cluster_id)
     assert cluster is not None
@@ -131,7 +146,7 @@ def list_clusters() -> list[dict[str, Any]]:
     with _connect() as conn:
         rows = conn.execute(
             """
-            SELECT id, name, status, last_seen_at, created_at
+            SELECT id, name, kind, status, last_seen_at, created_at
             FROM clusters
             ORDER BY created_at DESC
             """
@@ -144,7 +159,7 @@ def get_cluster(cluster_id: str) -> dict[str, Any] | None:
     with _connect() as conn:
         row = conn.execute(
             """
-            SELECT id, name, status, last_seen_at, created_at
+            SELECT id, name, kind, status, last_seen_at, created_at
             FROM clusters
             WHERE id = ?
             """,
@@ -153,6 +168,24 @@ def get_cluster(cluster_id: str) -> dict[str, Any] | None:
     if row is None:
         return None
     return dict(row)
+
+
+def update_cluster_kind(cluster_id: str, kind: str) -> dict[str, Any] | None:
+    init_db()
+    normalized_kind = _normalize_cluster_kind(kind)
+    with _LOCK, _connect() as conn:
+        row = conn.execute("SELECT name FROM clusters WHERE id = ?", (cluster_id,)).fetchone()
+        if row is None:
+            return None
+        cursor = conn.execute(
+            "UPDATE clusters SET kind = ? WHERE id = ?",
+            (normalized_kind, cluster_id),
+        )
+        conn.execute(
+            "UPDATE events SET cluster_kind = ? WHERE cluster_id = ? OR cluster = ?",
+            (normalized_kind, cluster_id, row["name"]),
+        )
+    return get_cluster(cluster_id)
 
 
 def rotate_cluster_token(cluster_id: str) -> dict[str, Any] | None:
@@ -193,7 +226,7 @@ def find_cluster_by_token(token: str) -> dict[str, Any] | None:
     with _connect() as conn:
         row = conn.execute(
             """
-            SELECT id, name, status, last_seen_at, created_at
+            SELECT id, name, kind, status, last_seen_at, created_at
             FROM clusters
             WHERE token_hash = ? AND status = 'active'
             """,
@@ -213,14 +246,20 @@ def mark_cluster_seen(cluster_id: str, timestamp: str) -> None:
         )
 
 
-def list_events(limit: int = 50, cluster: str = "") -> list[dict[str, Any]]:
+def list_events(limit: int = 50, cluster: str = "", cluster_kind: str = "") -> list[dict[str, Any]]:
     init_db()
     limit = max(1, min(int(limit or 50), 500))
     query = "SELECT * FROM events"
     params: list[Any] = []
+    filters: list[str] = []
     if cluster:
-        query += " WHERE cluster = ?"
+        filters.append("cluster = ?")
         params.append(cluster)
+    if cluster_kind:
+        filters.append("cluster_kind = ?")
+        params.append(_normalize_cluster_kind(cluster_kind))
+    if filters:
+        query += " WHERE " + " AND ".join(filters)
     query += " ORDER BY COALESCE(timestamp, created_at) DESC, created_at DESC LIMIT ?"
     params.append(limit)
     with _connect() as conn:
@@ -290,7 +329,9 @@ def _row_to_event(row: sqlite3.Row) -> dict[str, Any]:
     return {
         "id": row["id"],
         "source": row["source"],
+        "cluster_id": row["cluster_id"] or "",
         "cluster": row["cluster"],
+        "cluster_kind": row["cluster_kind"] or _cluster_kind_for_name(row["cluster"]),
         "timestamp": row["timestamp"],
         "rule": row["rule"],
         "priority": row["priority"],
@@ -319,6 +360,26 @@ def _new_event_id(source: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:12]}"
 
 
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
+def _mark_env_demo_clusters(conn: sqlite3.Connection) -> None:
+    names = _demo_cluster_names()
+    if not names:
+        return
+    conn.executemany(
+        "UPDATE clusters SET kind = 'demo' WHERE name = ?",
+        [(name,) for name in names],
+    )
+    conn.executemany(
+        "UPDATE events SET cluster_kind = 'demo' WHERE cluster = ?",
+        [(name,) for name in names],
+    )
+
+
 def _normalize_cluster_name(name: str) -> str:
     normalized = " ".join(str(name or "").strip().split())
     if not normalized:
@@ -326,6 +387,24 @@ def _normalize_cluster_name(name: str) -> str:
     if len(normalized) > 80:
         raise ValueError("cluster name must be 80 characters or fewer")
     return normalized
+
+
+def _normalize_cluster_kind(kind: str) -> str:
+    normalized = str(kind or "").strip().lower()
+    if normalized in {"demo", "test"}:
+        return "demo"
+    return "customer"
+
+
+def _cluster_kind_for_name(name: str) -> str:
+    if str(name or "").strip() in _demo_cluster_names():
+        return "demo"
+    return "customer"
+
+
+def _demo_cluster_names() -> set[str]:
+    raw = os.getenv("DEMO_CLUSTER_NAMES", os.getenv("CLUSTER_NAME", ""))
+    return {item.strip() for item in raw.split(",") if item.strip()}
 
 
 def _token_hash(token: str) -> str:

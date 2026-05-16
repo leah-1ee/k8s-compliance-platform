@@ -407,7 +407,9 @@ def test_ingested_falco_event_is_listed_with_manifest_snapshot():
 
     assert detail_response.status_code == 200
     assert detail_body["source"] == "sidekick"
+    assert detail_body["cluster_id"] == cluster_body["cluster"]["id"]
     assert detail_body["cluster"] == "customer-a"
+    assert detail_body["cluster_kind"] == "customer"
     assert detail_body["namespace"] == "prod"
     assert detail_body["resource_manifest"].startswith("apiVersion: v1")
 
@@ -438,6 +440,7 @@ def test_admin_cluster_lifecycle():
 
     assert create_response.status_code == 200
     assert create_body["cluster"]["name"] == "lifecycle-cluster"
+    assert create_body["cluster"]["kind"] == "customer"
     assert create_body["cluster"]["token"]
     assert "falcosidekick.enabled=true" in create_body["cluster"]["install_command"]
     assert "https://console.example.test/ingest/falco-events" in create_body["cluster"]["install_command"]
@@ -463,6 +466,20 @@ def test_admin_cluster_lifecycle():
 
     assert rotate_response.status_code == 200
     assert rotate_body["cluster"]["token"] != old_token
+
+    mark_demo_response = client.post(
+        f"/admin/api/clusters/{cluster_id}/mark-demo",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    assert mark_demo_response.status_code == 200
+    assert mark_demo_response.json()["cluster"]["kind"] == "demo"
+
+    mark_customer_response = client.post(
+        f"/admin/api/clusters/{cluster_id}/mark-customer",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    assert mark_customer_response.status_code == 200
+    assert mark_customer_response.json()["cluster"]["kind"] == "customer"
 
     disable_response = client.post(
         f"/admin/api/clusters/{cluster_id}/disable",

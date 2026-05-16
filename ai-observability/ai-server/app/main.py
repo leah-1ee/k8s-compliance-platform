@@ -168,9 +168,9 @@ def analyze(
 
 
 @app.get("/runtime-events")
-def runtime_events(limit: int = 50, cluster: str = "") -> dict:
+def runtime_events(limit: int = 50, cluster: str = "", cluster_kind: str = "") -> dict:
     # Falco/Gatekeeper 최근 위반 이벤트 목록
-    return list_runtime_events(limit=limit, cluster=cluster)
+    return list_runtime_events(limit=limit, cluster=cluster, cluster_kind=cluster_kind)
 
 
 @app.get("/runtime-events/{event_id}")
@@ -189,7 +189,13 @@ def ingest_falco_events(payload: dict, authorization: str | None = Header(defaul
     cluster = storage.find_cluster_by_token(cluster_token)
     if cluster is None:
         return JSONResponse(status_code=401, content={"error": "valid cluster token required"})
-    event = record_falco_event(payload, cluster_name=cluster["name"], source="sidekick")
+    event = record_falco_event(
+        payload,
+        cluster_id=cluster["id"],
+        cluster_name=cluster["name"],
+        cluster_kind=cluster.get("kind", "customer"),
+        source="sidekick",
+    )
     storage.mark_cluster_seen(cluster["id"], event.get("timestamp", ""))
     return {"status": "recorded", "event": event}
 
@@ -218,7 +224,10 @@ def admin_create_cluster(
     if auth_error:
         return auth_error
     try:
-        cluster = storage.create_cluster(str(payload.get("name", "")))
+        cluster = storage.create_cluster(
+            str(payload.get("name", "")),
+            kind=str(payload.get("kind", "customer")),
+        )
     except ValueError as error:
         return JSONResponse(status_code=400, content={"error": str(error)})
     except Exception as error:
@@ -226,6 +235,28 @@ def admin_create_cluster(
             return JSONResponse(status_code=409, content={"error": "cluster name already exists"})
         raise
     cluster["install_command"] = _sidekick_install_command(request, cluster["token"])
+    return {"cluster": cluster}
+
+
+@app.post("/admin/api/clusters/{cluster_id}/mark-demo")
+def admin_mark_demo_cluster(cluster_id: str, x_admin_token: str | None = Header(default=None)):
+    auth_error = require_admin(x_admin_token)
+    if auth_error:
+        return auth_error
+    cluster = storage.update_cluster_kind(cluster_id, "demo")
+    if cluster is None:
+        return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    return {"cluster": cluster}
+
+
+@app.post("/admin/api/clusters/{cluster_id}/mark-customer")
+def admin_mark_customer_cluster(cluster_id: str, x_admin_token: str | None = Header(default=None)):
+    auth_error = require_admin(x_admin_token)
+    if auth_error:
+        return auth_error
+    cluster = storage.update_cluster_kind(cluster_id, "customer")
+    if cluster is None:
+        return JSONResponse(status_code=404, content={"error": "cluster not found"})
     return {"cluster": cluster}
 
 
@@ -280,7 +311,7 @@ def analyze_runtime_event(
     if not resource_manifest:
         manifest_result = fetch_resource_manifest(event.get("namespace", ""), event.get("pod_name", ""))
     payload = ViolationAnalysisRequest(
-        cluster=os.getenv("CLUSTER_NAME", "current-cluster"),
+        cluster=event.get("cluster") or os.getenv("CLUSTER_NAME", "current-cluster"),
         rule=event.get("rule", ""),
         priority=event.get("priority", ""),
         output=event.get("classification_reason", "") or event.get("output", ""),

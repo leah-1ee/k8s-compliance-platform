@@ -358,7 +358,12 @@ async function refreshRuntimeEvents() {
         <button class="event-row runtime-event-button" data-event-id="${escapeHtml(event.id || "")}">
           <span class="badge ${escapeHtml(event.severity || "medium")}">${escapeHtml(event.severity || "medium")}</span>
           <h2>${escapeHtml(event.rule || "unknown rule")}</h2>
-          <p>${escapeHtml(event.namespace || "unknown")}/${escapeHtml(event.pod_name || "unknown")} · ${escapeHtml(event.action_taken || event.source || "event")}</p>
+          <p>
+            ${escapeHtml(event.cluster || "unknown-cluster")}
+            <span class="badge compact ${escapeHtml(event.cluster_kind || "customer")}">${escapeHtml(event.cluster_kind || "customer")}</span>
+            · ${escapeHtml(event.namespace || "unknown")}/${escapeHtml(event.pod_name || "unknown")}
+            · ${escapeHtml(event.action_taken || event.source || "event")}
+          </p>
         </button>
       `,
     )

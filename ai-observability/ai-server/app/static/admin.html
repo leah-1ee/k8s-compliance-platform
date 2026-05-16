@@ -144,6 +144,13 @@
             클러스터 이름
             <input id="clusterName" placeholder="school-cloud" />
           </label>
+          <label>
+            구분
+            <select id="clusterKind">
+              <option value="customer">사용자 클러스터</option>
+              <option value="demo">데모/테스트 클러스터</option>
+            </select>
+          </label>
           <button class="primary" id="createCluster">등록</button>
         </div>
       </section>
@@ -167,6 +174,7 @@
       const clustersEl = document.querySelector("#clusters");
       const installCommand = document.querySelector("#installCommand");
       const clusterName = document.querySelector("#clusterName");
+      const clusterKind = document.querySelector("#clusterKind");
 
       tokenInput.value = localStorage.getItem("adminToken") || "";
 
@@ -208,11 +216,17 @@
             <strong>${cluster.name}</strong>
             <span class="meta">
               id=${cluster.id} ·
+              kind=${cluster.kind || "customer"} ·
               status=<span class="status-${cluster.status}">${cluster.status}</span> ·
               last_seen=${cluster.last_seen_at || "-"}
             </span>
             <div class="row">
               <button data-rotate="${cluster.id}">토큰 재발급</button>
+              ${
+                (cluster.kind || "customer") === "demo"
+                  ? `<button data-mark-customer="${cluster.id}">사용자 클러스터로 전환</button>`
+                  : `<button data-mark-demo="${cluster.id}">데모로 분리</button>`
+              }
               <button class="danger" data-disable="${cluster.id}">비활성화</button>
             </div>
           </div>
@@ -239,7 +253,7 @@
         try {
           const body = await requestJson("/admin/api/clusters", {
             method: "POST",
-            body: JSON.stringify({ name: clusterName.value }),
+            body: JSON.stringify({ name: clusterName.value, kind: clusterKind.value }),
           });
           installCommand.value = body.cluster.install_command || "";
           clusterName.value = "";
@@ -256,12 +270,24 @@
       clustersEl.addEventListener("click", async (event) => {
         const rotateId = event.target.dataset.rotate;
         const disableId = event.target.dataset.disable;
+        const markDemoId = event.target.dataset.markDemo;
+        const markCustomerId = event.target.dataset.markCustomer;
         try {
           if (rotateId) {
             const body = await requestJson(`/admin/api/clusters/${rotateId}/rotate-token`, { method: "POST" });
             installCommand.value = body.cluster.install_command || "";
             await loadClusters();
             setMessage("토큰을 재발급했습니다. 설치 명령어는 지금만 표시됩니다.");
+          }
+          if (markDemoId) {
+            await requestJson(`/admin/api/clusters/${markDemoId}/mark-demo`, { method: "POST" });
+            await loadClusters();
+            setMessage("클러스터를 데모/테스트 클러스터로 분리했습니다.");
+          }
+          if (markCustomerId) {
+            await requestJson(`/admin/api/clusters/${markCustomerId}/mark-customer`, { method: "POST" });
+            await loadClusters();
+            setMessage("클러스터를 사용자 클러스터로 전환했습니다.");
           }
           if (disableId) {
             await requestJson(`/admin/api/clusters/${disableId}/disable`, { method: "POST" });
