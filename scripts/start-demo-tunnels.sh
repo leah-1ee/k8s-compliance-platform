@@ -69,6 +69,41 @@ print_log_tail() {
   fi
 }
 
+zrok_host_from_url() {
+  local url="$1"
+  local without_scheme
+
+  without_scheme="${url#http://}"
+  without_scheme="${without_scheme#https://}"
+  echo "${without_scheme%%/*}"
+}
+
+delete_zrok_shares_for_host() {
+  local host="$1"
+  local share_tokens
+
+  share_tokens="$(
+    "${ZROK_BIN}" list shares |
+      awk -F '│' -v host="${host}" '
+        index($0, host) {
+          token = $2
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", token)
+          print token
+        }
+      '
+  )"
+
+  if [ -z "${share_tokens}" ]; then
+    return
+  fi
+
+  while IFS= read -r share_token; do
+    [ -n "${share_token}" ] || continue
+    echo "[delete] stale zrok share ${host} share_token=${share_token}"
+    "${ZROK_BIN}" delete share "${share_token}" >/dev/null
+  done <<< "${share_tokens}"
+}
+
 share_namespace() {
   echo "${1%%:*}"
 }
@@ -134,9 +169,28 @@ start_bg() {
   echo "[ok] ${name} running pid=$(cat "${pid_file}") log=${log_file}"
 }
 
+stop_bg() {
+  local name="$1"
+  local pid_file="${PID_DIR}/${name}.pid"
+
+  if ! pid_is_running "${pid_file}"; then
+    rm -f "${pid_file}"
+    return
+  fi
+
+  echo "[stop] stale ${name} pid=$(cat "${pid_file}")"
+  kill "$(cat "${pid_file}")" 2>/dev/null || true
+  sleep 1
+  if pid_is_running "${pid_file}"; then
+    kill -9 "$(cat "${pid_file}")" 2>/dev/null || true
+  fi
+  rm -f "${pid_file}"
+}
+
 start_zrok_share() {
   local name="$1"
   local public_url="$2"
+  local public_host
   shift 2
 
   if check_http "${name} existing public endpoint" "${public_url}" 2 1; then
@@ -144,10 +198,9 @@ start_zrok_share() {
     return
   fi
 
-  if "${ZROK_BIN}" list shares 2>/dev/null | grep -q "${public_url#https://}"; then
-    echo "[warn] ${name} is registered in zrok but is not reachable yet."
-    echo "       Starting another share may fail with shareConflict if the old session is stale."
-  fi
+  public_host="$(zrok_host_from_url "${public_url}")"
+  stop_bg "${name}"
+  delete_zrok_shares_for_host "${public_host}"
 
   start_bg "${name}" "$@"
 }
@@ -173,11 +226,11 @@ start_bg ai-console-port-forward \
   "${AI_LOCAL_PORT}:${AI_TARGET_PORT}"
 
 start_zrok_share grafana-zrok "${GRAFANA_PUBLIC_URL}" \
-  "${ZROK_BIN}" share public "http://localhost:${GRAFANA_LOCAL_PORT}" \
+  "${ZROK_BIN}" share public "http://127.0.0.1:${GRAFANA_LOCAL_PORT}" \
   -n "${GRAFANA_SHARE_NAME}"
 
 start_zrok_share ai-console-zrok "${AI_PUBLIC_URL}" \
-  "${ZROK_BIN}" share public "http://localhost:${AI_LOCAL_PORT}" \
+  "${ZROK_BIN}" share public "http://127.0.0.1:${AI_LOCAL_PORT}" \
   -n "${AI_SHARE_NAME}"
 
 echo

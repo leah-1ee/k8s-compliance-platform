@@ -18,26 +18,28 @@ require_file() {
 
 delete_share_for_host() {
   local host="$1"
-  local share_token
+  local share_tokens
 
-  share_token="$(
+  share_tokens="$(
     "${ZROK_BIN}" list shares |
       awk -F '│' -v host="${host}" '
         index($0, host) {
           token = $2
           gsub(/^[[:space:]]+|[[:space:]]+$/, "", token)
           print token
-          exit
         }
       '
   )"
-  if [ -z "${share_token}" ]; then
+  if [ -z "${share_tokens}" ]; then
     echo "[skip] no zrok share found for ${host}"
     return
   fi
 
-  echo "[delete] ${host} share_token=${share_token}"
-  "${ZROK_BIN}" delete share "${share_token}"
+  while IFS= read -r share_token; do
+    [ -n "${share_token}" ] || continue
+    echo "[delete] ${host} share_token=${share_token}"
+    "${ZROK_BIN}" delete share "${share_token}"
+  done <<< "${share_tokens}"
 }
 
 require_file "${ZROK_BIN}"
