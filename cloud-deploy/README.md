@@ -82,6 +82,17 @@ kubectl create secret generic ai-classifier-admin \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 
+AI 서버는 SQLite를 `/data/compliance-ai-server.sqlite3`에 저장한다. PVC는 `local-path`
+StorageClass를 사용하므로, StorageClass가 없다면 먼저 local-path provisioner를 설치한다.
+
+```bash
+bash install-local-path-provisioner.sh
+kubectl get storageclass
+```
+
+SQLite 동시 쓰기를 피하기 위해 AI 서버는 `replicas: 1`과 `strategy.type: Recreate`를
+유지해야 한다. `/data`는 파일이 아니라 디렉토리 단위로 mount한다.
+
 ```bash
 kubectl apply -f ai-server.yaml
 kubectl apply -f response-server.yaml

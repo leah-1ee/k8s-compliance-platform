@@ -66,6 +66,18 @@ kubectl create secret generic ai-classifier-admin \
 AI 서버는 SQLite 파일을 `/data/compliance-ai-server.sqlite3`에 저장한다. `ai-server.yaml`의
 `PersistentVolumeClaim/ai-classifier-data`가 이 경로를 보존한다.
 
+SQLite는 단일 파일 DB이므로 AI 서버 Deployment는 반드시 `replicas: 1`과
+`strategy.type: Recreate`를 유지한다. Kubernetes rolling update로 두 Pod가 동시에
+같은 SQLite 파일을 쓰는 상황을 피하기 위한 설정이다. PVC는 파일이 아니라 `/data`
+디렉토리 단위로 mount한다.
+
+학교 클러스터에 기본 StorageClass가 없으면 먼저 local-path provisioner를 설치한다.
+
+```bash
+bash cloud-deploy/install-local-path-provisioner.sh
+kubectl get storageclass
+```
+
 ```bash
 kubectl apply -f ai-observability/k8s/ai-server.yaml
 kubectl rollout status deployment/ai-classifier -n compliance-system
