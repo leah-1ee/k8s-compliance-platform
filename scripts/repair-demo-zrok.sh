@@ -20,7 +20,17 @@ delete_share_for_host() {
   local host="$1"
   local share_token
 
-  share_token="$("${ZROK_BIN}" list shares | awk -v host="${host}" '$0 ~ host {print $2; exit}')"
+  share_token="$(
+    "${ZROK_BIN}" list shares |
+      awk -F '│' -v host="${host}" '
+        index($0, host) {
+          token = $2
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", token)
+          print token
+          exit
+        }
+      '
+  )"
   if [ -z "${share_token}" ]; then
     echo "[skip] no zrok share found for ${host}"
     return
