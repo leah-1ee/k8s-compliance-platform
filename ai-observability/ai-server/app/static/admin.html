@@ -191,7 +191,9 @@
         });
         const body = await response.json().catch(() => ({}));
         if (!response.ok) {
-          throw new Error(body.error || `HTTP ${response.status}`);
+          const error = new Error(body.error || `HTTP ${response.status}`);
+          error.status = response.status;
+          throw error;
         }
         return body;
       }
@@ -226,6 +228,7 @@
       document.querySelector("#saveToken").addEventListener("click", () => {
         localStorage.setItem("adminToken", tokenInput.value.trim());
         setMessage("관리자 토큰을 저장했습니다.");
+        loadClusters().catch((error) => setMessage(error.message));
       });
 
       document.querySelector("#refreshClusters").addEventListener("click", () => {
@@ -243,6 +246,9 @@
           await loadClusters();
           setMessage("클러스터를 등록했습니다. 설치 명령어는 지금만 표시됩니다.");
         } catch (error) {
+          if (error.status === 409) {
+            await loadClusters().catch(() => {});
+          }
           setMessage(error.message);
         }
       });
@@ -271,6 +277,10 @@
         await navigator.clipboard.writeText(installCommand.value);
         setMessage("설치 명령어를 복사했습니다.");
       });
+
+      if (tokenInput.value.trim()) {
+        loadClusters().catch((error) => setMessage(error.message));
+      }
     </script>
   </body>
 </html>
