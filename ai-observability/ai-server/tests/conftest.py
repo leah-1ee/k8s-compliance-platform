@@ -13,3 +13,5 @@ os.environ.setdefault(
 )
 os.environ.setdefault("ADMIN_TOKEN", "test-admin-token")
 os.environ.setdefault("PUBLIC_BASE_URL", "https://console.example.test")
+os.environ.pop("GOOGLE_CLIENT_ID", None)
+os.environ.pop("GOOGLE_CLIENT_SECRET", None)

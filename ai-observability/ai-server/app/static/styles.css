@@ -81,6 +81,22 @@ button {
   place-items: center;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.auth-status {
+  color: var(--muted);
+  font-weight: 700;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+}
+
 button.primary {
   background: var(--brand);
   color: #07111f;

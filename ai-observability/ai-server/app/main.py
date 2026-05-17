@@ -3,9 +3,11 @@ import os
 import secrets
 from contextvars import ContextVar
 from pathlib import Path
+from urllib.parse import urlencode
 
-from fastapi import FastAPI, Header, Request
-from fastapi.responses import FileResponse, JSONResponse
+import httpx
+from fastapi import Cookie, FastAPI, Header, Request
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
@@ -42,6 +44,11 @@ logger = logging.getLogger("ai-server")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 DEFAULT_GRAFANA_URL = "https://compliance-grafana.shares.zrok.io"
 RATE_LIMIT_MESSAGE = "Rate limit exceeded. Add your own API key above to continue."
+SESSION_COOKIE_NAME = "compliance_ai_session"
+OAUTH_STATE_COOKIE_NAME = "compliance_ai_oauth_state"
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 current_request: ContextVar[Request | None] = ContextVar("current_request", default=None)
 
 
@@ -85,6 +92,56 @@ def require_admin(value: str | None):
     if not is_admin_token(value):
         return JSONResponse(status_code=401, content={"error": "admin token required"})
     return None
+
+
+def current_user(session_token: str | None) -> dict | None:
+    return storage.get_user_by_session(session_token or "")
+
+
+def auth_configured() -> bool:
+    return bool(os.getenv("GOOGLE_CLIENT_ID", "").strip() and os.getenv("GOOGLE_CLIENT_SECRET", "").strip())
+
+
+def public_base_url(request: Request) -> str:
+    configured = os.getenv("PUBLIC_BASE_URL", "").strip()
+    if configured:
+        return configured.rstrip("/")
+    return str(request.base_url).rstrip("/")
+
+
+def oauth_redirect_uri(request: Request) -> str:
+    return f"{public_base_url(request)}/auth/google/callback"
+
+
+def session_cookie_secure(request: Request) -> bool:
+    configured = os.getenv("SESSION_COOKIE_SECURE", "").strip().lower()
+    if configured in {"true", "1", "yes"}:
+        return True
+    if configured in {"false", "0", "no"}:
+        return False
+    return public_base_url(request).startswith("https://")
+
+
+def set_session_cookie(response: Response, request: Request, token: str) -> None:
+    response.set_cookie(
+        SESSION_COOKIE_NAME,
+        token,
+        httponly=True,
+        secure=session_cookie_secure(request),
+        samesite="lax",
+        max_age=60 * 60 * 24 * 30,
+        path="/",
+    )
+
+
+def clear_session_cookie(response: Response, request: Request) -> None:
+    response.delete_cookie(
+        SESSION_COOKIE_NAME,
+        httponly=True,
+        secure=session_cookie_secure(request),
+        samesite="lax",
+        path="/",
+    )
 
 
 def _bearer_or_raw_token(value: str | None) -> str:
@@ -134,7 +191,124 @@ def config() -> dict[str, str]:
     return {
         "grafana_url": os.getenv("GRAFANA_URL", DEFAULT_GRAFANA_URL).strip(),
         "response_server_url": os.getenv("RESPONSE_SERVER_URL", "http://response-server:8080").strip(),
+        "auth_provider": "google" if auth_configured() else "",
     }
+
+
+@app.get("/me")
+def me(compliance_ai_session: str | None = Cookie(default=None)) -> dict:
+    # 현재 로그인 사용자
+    user = current_user(compliance_ai_session)
+    return {
+        "authenticated": user is not None,
+        "user": _public_user(user) if user else None,
+        "auth": {
+            "google_configured": auth_configured(),
+        },
+    }
+
+
+@app.get("/auth/google/login")
+def google_login(request: Request):
+    # Google OAuth 시작
+    client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+    if not auth_configured():
+        return JSONResponse(status_code=503, content={"error": "Google OAuth is not configured"})
+    state = secrets.token_urlsafe(24)
+    params = {
+        "client_id": client_id,
+        "redirect_uri": oauth_redirect_uri(request),
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+        "access_type": "online",
+        "prompt": "select_account",
+    }
+    response = RedirectResponse(f"{GOOGLE_AUTH_URL}?{urlencode(params)}", status_code=302)
+    response.set_cookie(
+        OAUTH_STATE_COOKIE_NAME,
+        state,
+        httponly=True,
+        secure=session_cookie_secure(request),
+        samesite="lax",
+        max_age=600,
+        path="/",
+    )
+    return response
+
+
+@app.get("/auth/google/callback")
+def google_callback(
+    request: Request,
+    code: str = "",
+    state: str = "",
+    compliance_ai_oauth_state: str | None = Cookie(default=None),
+):
+    # Google OAuth 콜백
+    if not auth_configured():
+        return JSONResponse(status_code=503, content={"error": "Google OAuth is not configured"})
+    if not state or not compliance_ai_oauth_state or not secrets.compare_digest(state, compliance_ai_oauth_state):
+        return JSONResponse(status_code=400, content={"error": "invalid oauth state"})
+    if not code:
+        return JSONResponse(status_code=400, content={"error": "missing oauth code"})
+
+    try:
+        token_response = httpx.post(
+            GOOGLE_TOKEN_URL,
+            data={
+                "code": code,
+                "client_id": os.getenv("GOOGLE_CLIENT_ID", "").strip(),
+                "client_secret": os.getenv("GOOGLE_CLIENT_SECRET", "").strip(),
+                "redirect_uri": oauth_redirect_uri(request),
+                "grant_type": "authorization_code",
+            },
+            timeout=10,
+        )
+        token_response.raise_for_status()
+        access_token = token_response.json().get("access_token", "")
+        if not access_token:
+            return JSONResponse(status_code=502, content={"error": "Google OAuth token response missing access_token"})
+        userinfo_response = httpx.get(
+            GOOGLE_USERINFO_URL,
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=10,
+        )
+        userinfo_response.raise_for_status()
+        profile = userinfo_response.json()
+    except httpx.HTTPError as error:
+        return JSONResponse(status_code=502, content={"error": f"Google OAuth request failed: {error}"})
+
+    try:
+        user = storage.upsert_user(
+            provider="google",
+            provider_subject=str(profile.get("sub", "")),
+            email=str(profile.get("email", "")),
+            name=str(profile.get("name", "")),
+            picture=str(profile.get("picture", "")),
+        )
+    except ValueError as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+
+    session_token = storage.create_session(user["id"])
+    response = RedirectResponse("/ui", status_code=302)
+    set_session_cookie(response, request, session_token)
+    response.delete_cookie(
+        OAUTH_STATE_COOKIE_NAME,
+        httponly=True,
+        secure=session_cookie_secure(request),
+        samesite="lax",
+        path="/",
+    )
+    return response
+
+
+@app.post("/logout")
+def logout(request: Request, compliance_ai_session: str | None = Cookie(default=None)):
+    # 세션 로그아웃
+    storage.delete_session(compliance_ai_session or "")
+    response = JSONResponse({"status": "logged_out"})
+    clear_session_cookie(response, request)
+    return response
 
 
 @app.post("/classify", response_model=ClassificationResponse)
@@ -379,6 +553,18 @@ def _sidekick_install_command(request: Request, token: str) -> str:
             '  --set falcosidekick.config.webhook.minimumpriority="warning"',
         ]
     )
+
+
+def _public_user(user: dict | None) -> dict | None:
+    if not user:
+        return None
+    return {
+        "id": user.get("id", ""),
+        "email": user.get("email", ""),
+        "name": user.get("name", ""),
+        "picture": user.get("picture", ""),
+        "provider": user.get("provider", ""),
+    }
 
 
 @app.post("/generate-policy", response_model=PolicyGenerationResponse)

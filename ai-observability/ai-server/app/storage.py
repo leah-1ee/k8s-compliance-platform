@@ -4,6 +4,7 @@ import secrets
 import sqlite3
 import threading
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,26 @@ def init_db() -> None:
                     status TEXT NOT NULL DEFAULT 'active',
                     last_seen_at TEXT,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    provider TEXT NOT NULL,
+                    provider_subject TEXT NOT NULL,
+                    email TEXT NOT NULL,
+                    name TEXT,
+                    picture TEXT,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    last_login_at TEXT,
+                    UNIQUE(provider, provider_subject)
+                );
+
+                CREATE TABLE IF NOT EXISTS sessions (
+                    token_hash TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    FOREIGN KEY(user_id) REFERENCES users(id)
                 );
 
                 CREATE TABLE IF NOT EXISTS events (
@@ -72,8 +93,111 @@ def init_db() -> None:
             _ensure_column(conn, "events", "cluster_kind", "TEXT NOT NULL DEFAULT 'customer'")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_events_cluster_id ON events(cluster_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_events_cluster_kind ON events(cluster_kind)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)")
             _mark_env_demo_clusters(conn)
         _INITIALIZED = True
+
+
+def upsert_user(provider: str, provider_subject: str, email: str, name: str = "", picture: str = "") -> dict[str, Any]:
+    init_db()
+    normalized_provider = str(provider or "").strip().lower()
+    normalized_subject = str(provider_subject or "").strip()
+    normalized_email = str(email or "").strip().lower()
+    if not normalized_provider or not normalized_subject or not normalized_email:
+        raise ValueError("provider, provider_subject, and email are required")
+    now = _utc_now()
+    with _LOCK, _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT id FROM users
+            WHERE provider = ? AND provider_subject = ?
+            """,
+            (normalized_provider, normalized_subject),
+        ).fetchone()
+        if row is None:
+            user_id = f"user-{uuid.uuid4().hex[:12]}"
+            conn.execute(
+                """
+                INSERT INTO users (id, provider, provider_subject, email, name, picture, last_login_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (user_id, normalized_provider, normalized_subject, normalized_email, name, picture, now),
+            )
+        else:
+            user_id = row["id"]
+            conn.execute(
+                """
+                UPDATE users
+                SET email = ?, name = ?, picture = ?, last_login_at = ?
+                WHERE id = ?
+                """,
+                (normalized_email, name, picture, now, user_id),
+            )
+    user = get_user(user_id)
+    assert user is not None
+    return user
+
+
+def get_user(user_id: str) -> dict[str, Any] | None:
+    init_db()
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT id, provider, provider_subject, email, name, picture, created_at, last_login_at
+            FROM users
+            WHERE id = ?
+            """,
+            (user_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return dict(row)
+
+
+def create_session(user_id: str, ttl_days: int = 30) -> str:
+    init_db()
+    token = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(days=max(1, int(ttl_days or 30)))
+    with _LOCK, _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO sessions (token_hash, user_id, created_at, expires_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (_token_hash(token), user_id, now.isoformat(), expires_at.isoformat()),
+        )
+    return token
+
+
+def get_user_by_session(token: str) -> dict[str, Any] | None:
+    init_db()
+    if not token:
+        return None
+    now = _utc_now()
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT users.id, users.provider, users.provider_subject, users.email, users.name,
+                   users.picture, users.created_at, users.last_login_at
+            FROM sessions
+            JOIN users ON users.id = sessions.user_id
+            WHERE sessions.token_hash = ? AND sessions.expires_at > ?
+            """,
+            (_token_hash(token), now),
+        ).fetchone()
+    if row is None:
+        return None
+    return dict(row)
+
+
+def delete_session(token: str) -> None:
+    init_db()
+    if not token:
+        return
+    with _LOCK, _connect() as conn:
+        conn.execute("DELETE FROM sessions WHERE token_hash = ?", (_token_hash(token),))
 
 
 def save_event(event: dict[str, Any]) -> dict[str, Any]:
@@ -413,6 +537,10 @@ def _cluster_kind_for_name(name: str) -> str:
 def _demo_cluster_names() -> set[str]:
     raw = os.getenv("DEMO_CLUSTER_NAMES", os.getenv("CLUSTER_NAME", ""))
     return {item.strip() for item in raw.split(",") if item.strip()}
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _token_hash(token: str) -> str:

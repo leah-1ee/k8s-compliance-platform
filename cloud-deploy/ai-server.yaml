@@ -115,11 +115,27 @@ spec:
               value: "https://compliance-ai-console.shares.zrok.io"
             - name: SQLITE_PATH
               value: "/data/compliance-ai-server.sqlite3"
+            - name: DEMO_CLUSTER_NAMES
+              value: "school-cloud,boanlab-cloud"
+            - name: SESSION_COOKIE_SECURE
+              value: "true"
             - name: ADMIN_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: ai-classifier-admin
                   key: ADMIN_TOKEN
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: ai-google-oauth
+                  key: GOOGLE_CLIENT_ID
+                  optional: true
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ai-google-oauth
+                  key: GOOGLE_CLIENT_SECRET
+                  optional: true
           livenessProbe:
             httpGet:
               path: /healthz

@@ -6,6 +6,7 @@ let latestYamlSnippet = "";
 let latestReportText = "";
 let selectedRuntimeEvent = null;
 let grafanaUrl = "";
+let authState = { authenticated: false, user: null, auth: { google_configured: false } };
 const SESSION_KEY = "complianceAiLlmApiKey";
 const POLICY_PROMPTS = {
   "latest-tag": "latest 태그를 사용하는 컨테이너 이미지를 금지하는 Gatekeeper 정책을 만들어줘",
@@ -580,6 +581,12 @@ $("#policyKind").addEventListener("change", () => {
   syncPolicyPromptMode();
 });
 
+$("#logoutButton").addEventListener("click", () => {
+  logout()
+    .then(() => showToast("로그아웃되었습니다"))
+    .catch((error) => showToast(error.message));
+});
+
 $("#grafanaLink").addEventListener("click", (event) => {
   if (!grafanaUrl) {
     event.preventDefault();
@@ -596,6 +603,36 @@ async function loadConfig() {
     $("#grafanaLink").target = "_blank";
     $("#grafanaLink").rel = "noreferrer";
   }
+}
+
+async function loadAuthStatus() {
+  const response = await fetch("/me");
+  authState = await response.json();
+  renderAuthStatus();
+}
+
+function renderAuthStatus() {
+  const status = $("#authStatus");
+  const loginLink = $("#loginLink");
+  const logoutButton = $("#logoutButton");
+  if (authState.authenticated) {
+    status.textContent = authState.user?.email || "로그인됨";
+    loginLink.hidden = true;
+    logoutButton.hidden = false;
+    return;
+  }
+  status.textContent = authState.auth?.google_configured ? "로그인 필요" : "OAuth 미설정";
+  loginLink.hidden = !authState.auth?.google_configured;
+  logoutButton.hidden = true;
+}
+
+async function logout() {
+  const response = await fetch("/logout", { method: "POST" });
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+  authState = { authenticated: false, user: null, auth: authState.auth };
+  renderAuthStatus();
 }
 
 function initLlmKeyPanel() {
@@ -616,3 +653,6 @@ window.setInterval(() => {
   refreshRuntimeEvents().catch(() => {});
 }, 30000);
 loadConfig().catch(() => showToast("설정 로드 실패"));
+loadAuthStatus().catch(() => {
+  $("#authStatus").textContent = "로그인 상태 확인 실패";
+});

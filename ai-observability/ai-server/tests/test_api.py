@@ -5,6 +5,7 @@ from app.llm_client import LLMClient
 from app.main import app
 from app.analyzer import _parse_llm_incident_json
 from app.policy_generator import _complete_review, _format_llm_http_error
+from app import storage
 
 
 client = TestClient(app)
@@ -41,6 +42,7 @@ def test_config_contract():
 
     assert response.status_code == 200
     assert response.json()["grafana_url"] == "https://compliance-grafana.shares.zrok.io"
+    assert response.json()["auth_provider"] == ""
 
 
 def test_ui_is_served():
@@ -54,6 +56,7 @@ def test_ui_is_served():
     assert "Google (Gemini)" in response.text
     assert "xAI (Grok)" in response.text
     assert "Use my own API key" in response.text
+    assert "Google 로그인" in response.text
     assert "Your API key is used only for requests in this session" in response.text
     assert "Policy Generation Request" in response.text
     assert '<label id="policyPromptField" hidden>' in response.text
@@ -79,6 +82,41 @@ def test_admin_is_served():
     assert response.status_code == 200
     assert "Compliance Admin" in response.text
     assert "클러스터 등록" in response.text
+
+
+def test_me_reports_anonymous_user():
+    response = client.get("/me")
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["authenticated"] is False
+    assert body["user"] is None
+    assert body["auth"]["google_configured"] is False
+
+
+def test_me_reports_authenticated_session():
+    user = storage.upsert_user(
+        provider="google",
+        provider_subject="google-subject-1",
+        email="user@example.com",
+        name="Example User",
+    )
+    token = storage.create_session(user["id"])
+
+    response = client.get("/me", cookies={"compliance_ai_session": token})
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["authenticated"] is True
+    assert body["user"]["email"] == "user@example.com"
+    assert body["user"]["provider"] == "google"
+
+
+def test_google_login_requires_oauth_configuration():
+    response = client.get("/auth/google/login", follow_redirects=False)
+
+    assert response.status_code == 503
+    assert response.json()["error"] == "Google OAuth is not configured"
 
 
 def test_classify_contract():
