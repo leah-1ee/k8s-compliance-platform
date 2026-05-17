@@ -53,6 +53,7 @@
 
         <nav class="tabs" aria-label="console tabs">
           <button class="tab is-active" data-tab="policy">Policy Generator</button>
+          <button class="tab" data-tab="setup">Cluster Setup</button>
           <button class="tab" data-tab="analysis">Violation Detail</button>
           <button class="tab" data-tab="report">AI Report</button>
           <button class="tab" data-tab="queries">Dashboard Queries</button>
@@ -173,6 +174,49 @@
               </div>
               <pre id="llmOutput" data-empty="true">LLM 검토를 선택하면 여기에 결과가 표시됩니다</pre>
             </article>
+          </div>
+        </section>
+
+        <section class="panel" id="setupPanel">
+          <div class="auth-required" id="clusterSetupAuthMessage" hidden>
+            <span class="badge loading">login</span>
+            <h2>로그인 후 클러스터를 등록할 수 있습니다.</h2>
+            <p>상단의 Google 로그인 또는 개발 로그인을 사용하세요.</p>
+          </div>
+          <div id="clusterSetupContent">
+            <div class="form-grid">
+              <label>
+                클러스터 이름
+                <input id="setupClusterName" placeholder="school-cloud-prod" autocomplete="off" />
+              </label>
+            </div>
+            <div class="actions">
+              <button class="primary" id="registerUserCluster">등록</button>
+              <button id="refreshUserClusters">새로고침</button>
+            </div>
+            <div class="setup-grid">
+              <article class="result-card">
+                <div class="card-heading">
+                  <button class="copy-section" data-copy-target="setupInstallCommand" aria-label="Falco Sidekick 설치 명령 복사" title="복사">
+                    <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+                      <path d="M5 15V6a2 2 0 0 1 2-2h9"></path>
+                    </svg>
+                    <svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M20 6 9 17l-5-5"></path>
+                    </svg>
+                  </button>
+                  <h2>Falco Sidekick 설치 명령</h2>
+                </div>
+                <pre id="setupInstallCommand" data-empty="true">클러스터를 등록하거나 토큰을 재발급하면 여기에 설치 명령이 표시됩니다.</pre>
+              </article>
+              <article>
+                <h2>내 클러스터</h2>
+                <div class="cluster-list" id="userClusters">
+                  <p>클러스터 목록을 불러오는 중입니다.</p>
+                </div>
+              </article>
+            </div>
           </div>
         </section>
 

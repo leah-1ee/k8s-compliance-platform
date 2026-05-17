@@ -59,6 +59,9 @@ def test_ui_is_served():
     assert "Google 로그인" in response.text
     assert "개발 로그인" in response.text
     assert "Your API key is used only for requests in this session" in response.text
+    assert "Cluster Setup" in response.text
+    assert "Falco Sidekick 설치 명령" in response.text
+    assert "내 클러스터" in response.text
     assert "Policy Generation Request" in response.text
     assert '<label id="policyPromptField" hidden>' in response.text
     assert "생성 결과 LLM 검토" in response.text
@@ -147,6 +150,92 @@ def test_dev_login_creates_session(monkeypatch):
     assert body["authenticated"] is True
     assert body["user"]["email"] == "dev-user@example.test"
     assert body["user"]["provider"] == "dev"
+    client.cookies.clear()
+
+
+def test_user_cluster_registration_requires_login():
+    response = client.post("/api/clusters", json={"name": "login-required-cluster"})
+
+    assert response.status_code == 401
+    assert response.json()["error"] == "login required"
+
+
+def test_user_cluster_registration_returns_install_command():
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="cluster-owner@example.test",
+        email="cluster-owner@example.test",
+        name="Cluster Owner",
+    )
+    token = storage.create_session(user["id"])
+
+    create_response = client.post(
+        "/api/clusters",
+        cookies={"compliance_ai_session": token},
+        json={"name": "owned-cluster-a"},
+    )
+    create_body = create_response.json()
+
+    assert create_response.status_code == 200
+    assert create_body["cluster"]["name"] == "owned-cluster-a"
+    assert create_body["cluster"]["user_id"] == user["id"]
+    assert create_body["cluster"]["kind"] == "customer"
+    assert create_body["cluster"]["token"]
+    assert "falcosidekick.enabled=true" in create_body["cluster"]["install_command"]
+
+    list_response = client.get("/api/clusters", cookies={"compliance_ai_session": token})
+    list_body = list_response.json()
+
+    assert list_response.status_code == 200
+    assert any(cluster["id"] == create_body["cluster"]["id"] for cluster in list_body["clusters"])
+    assert all("token" not in cluster for cluster in list_body["clusters"])
+
+    rotate_response = client.post(
+        f"/api/clusters/{create_body['cluster']['id']}/rotate-token",
+        cookies={"compliance_ai_session": token},
+    )
+    rotate_body = rotate_response.json()
+
+    assert rotate_response.status_code == 200
+    assert rotate_body["cluster"]["token"] != create_body["cluster"]["token"]
+    assert "https://console.example.test/ingest/falco-events" in rotate_body["cluster"]["install_command"]
+
+
+def test_cluster_names_are_scoped_per_user():
+    owner_a = storage.upsert_user(
+        provider="dev",
+        provider_subject="same-name-a@example.test",
+        email="same-name-a@example.test",
+    )
+    owner_b = storage.upsert_user(
+        provider="dev",
+        provider_subject="same-name-b@example.test",
+        email="same-name-b@example.test",
+    )
+    session_a = storage.create_session(owner_a["id"])
+    session_b = storage.create_session(owner_b["id"])
+
+    first = client.post(
+        "/api/clusters",
+        cookies={"compliance_ai_session": session_a},
+        json={"name": "shared-prod-name"},
+    )
+    second = client.post(
+        "/api/clusters",
+        cookies={"compliance_ai_session": session_b},
+        json={"name": "shared-prod-name"},
+    )
+    duplicate = client.post(
+        "/api/clusters",
+        cookies={"compliance_ai_session": session_a},
+        json={"name": "shared-prod-name"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["cluster"]["user_id"] == owner_a["id"]
+    assert second.json()["cluster"]["user_id"] == owner_b["id"]
+    assert duplicate.status_code == 409
 
 
 def test_classify_contract():
@@ -497,6 +586,62 @@ def test_ingested_falco_event_is_listed_with_manifest_snapshot():
     assert detail_body["cluster_kind"] == "customer"
     assert detail_body["namespace"] == "prod"
     assert detail_body["resource_manifest"].startswith("apiVersion: v1")
+
+
+def test_runtime_events_are_scoped_to_logged_in_users():
+    owner_a = storage.upsert_user(
+        provider="dev",
+        provider_subject="runtime-owner-a@example.test",
+        email="runtime-owner-a@example.test",
+    )
+    owner_b = storage.upsert_user(
+        provider="dev",
+        provider_subject="runtime-owner-b@example.test",
+        email="runtime-owner-b@example.test",
+    )
+    session_a = storage.create_session(owner_a["id"])
+    session_b = storage.create_session(owner_b["id"])
+    cluster_a = storage.create_cluster("runtime-owned-a", user_id=owner_a["id"])
+    cluster_b = storage.create_cluster("runtime-owned-b", user_id=owner_b["id"])
+
+    event_a = client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster_a['token']}"},
+        json={
+            "event": {
+                "time": "2026-05-12T00:00:00Z",
+                "rule": "Owner A Event",
+                "priority": "Warning",
+            },
+        },
+    ).json()["event"]
+    event_b = client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster_b['token']}"},
+        json={
+            "event": {
+                "time": "2026-05-12T00:00:01Z",
+                "rule": "Owner B Event",
+                "priority": "Warning",
+            },
+        },
+    ).json()["event"]
+
+    list_a = client.get("/runtime-events?limit=20", cookies={"compliance_ai_session": session_a}).json()
+    list_b = client.get("/runtime-events?limit=20", cookies={"compliance_ai_session": session_b}).json()
+
+    ids_a = {event["id"] for event in list_a["events"]}
+    ids_b = {event["id"] for event in list_b["events"]}
+    assert event_a["id"] in ids_a
+    assert event_b["id"] not in ids_a
+    assert event_b["id"] in ids_b
+    assert event_a["id"] not in ids_b
+
+    hidden_detail = client.get(
+        f"/runtime-events/{event_b['id']}",
+        cookies={"compliance_ai_session": session_a},
+    )
+    assert hidden_detail.status_code == 404
 
 
 def test_runtime_events_skip_legacy_response_server_by_default(monkeypatch):

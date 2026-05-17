@@ -20,6 +20,7 @@ def list_runtime_events(
     cluster_kind: str = "",
     source: str = "",
     include_legacy: bool = False,
+    user_id: str = "",
 ) -> dict[str, Any]:
     # SQLite 저장 이벤트와 레거시 response-server 이벤트를 통합
     events: list[dict[str, Any]] = storage.list_events(
@@ -27,13 +28,14 @@ def list_runtime_events(
         cluster=cluster,
         cluster_kind=cluster_kind,
         source=source,
+        user_id=user_id,
     )
     source_status = {
         "response_server": "skipped",
         "sqlite": "ok",
     }
 
-    if include_legacy and not cluster and not source and cluster_kind in {"", "demo"}:
+    if not user_id and include_legacy and not cluster and not source and cluster_kind in {"", "demo"}:
         source_status["response_server"] = "unavailable"
         try:
             response = httpx.get(
@@ -60,10 +62,12 @@ def list_runtime_events(
     return {"count": len(events), "events": events, "source_status": source_status}
 
 
-def get_runtime_event(event_id: str) -> dict[str, Any] | None:
-    stored = storage.get_event(event_id)
+def get_runtime_event(event_id: str, user_id: str = "") -> dict[str, Any] | None:
+    stored = storage.get_event(event_id, user_id=user_id)
     if stored is not None:
         return stored
+    if user_id:
+        return None
 
     try:
         response = httpx.get(f"{RESPONSE_SERVER_URL}/api/v1/events/{event_id}", timeout=3)
@@ -75,8 +79,10 @@ def get_runtime_event(event_id: str) -> dict[str, Any] | None:
         raise
 
 
-def get_runtime_summary() -> dict[str, Any]:
-    summary = storage.event_summary()
+def get_runtime_summary(user_id: str = "") -> dict[str, Any]:
+    summary = storage.event_summary(user_id=user_id)
+    if user_id:
+        return summary
     try:
         response = httpx.get(f"{RESPONSE_SERVER_URL}/api/v1/events/summary", timeout=3)
         response.raise_for_status()
@@ -206,12 +212,13 @@ def fetch_resource_manifest(namespace: str, pod_name: str) -> dict[str, str]:
         return {"manifest": "", "error": f"Kubernetes API 조회 실패: {error}"}
 
 
-def build_report(cluster_kind: str = "", include_legacy: bool = False) -> dict[str, Any]:
-    summary = get_runtime_summary()
+def build_report(cluster_kind: str = "", include_legacy: bool = False, user_id: str = "") -> dict[str, Any]:
+    summary = get_runtime_summary(user_id=user_id)
     events = list_runtime_events(
         limit=100,
         cluster_kind=cluster_kind,
         include_legacy=include_legacy,
+        user_id=user_id,
     )["events"]
     top_rules = sorted(summary.get("by_rule", {}).items(), key=lambda item: item[1], reverse=True)[:5]
     return {

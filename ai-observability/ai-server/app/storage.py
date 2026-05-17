@@ -29,12 +29,14 @@ def init_db() -> None:
 
                 CREATE TABLE IF NOT EXISTS clusters (
                     id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL UNIQUE,
+                    user_id TEXT,
+                    name TEXT NOT NULL,
                     kind TEXT NOT NULL DEFAULT 'customer',
                     token_hash TEXT,
                     status TEXT NOT NULL DEFAULT 'active',
                     last_seen_at TEXT,
-                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(user_id) REFERENCES users(id)
                 );
 
                 CREATE TABLE IF NOT EXISTS users (
@@ -88,9 +90,12 @@ def init_db() -> None:
                 CREATE INDEX IF NOT EXISTS idx_events_severity ON events(severity);
                 """
             )
+            _ensure_column(conn, "clusters", "user_id", "TEXT")
             _ensure_column(conn, "clusters", "kind", "TEXT NOT NULL DEFAULT 'customer'")
             _ensure_column(conn, "events", "cluster_id", "TEXT")
             _ensure_column(conn, "events", "cluster_kind", "TEXT NOT NULL DEFAULT 'customer'")
+            _ensure_cluster_name_scope(conn)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_clusters_user_id ON clusters(user_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_events_cluster_id ON events(cluster_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_events_cluster_kind ON events(cluster_kind)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)")
@@ -245,19 +250,20 @@ def save_event(event: dict[str, Any]) -> dict[str, Any]:
     return stored
 
 
-def create_cluster(name: str, kind: str = "customer") -> dict[str, Any]:
+def create_cluster(name: str, kind: str = "customer", user_id: str = "") -> dict[str, Any]:
     init_db()
     normalized = _normalize_cluster_name(name)
     normalized_kind = _normalize_cluster_kind(kind)
+    normalized_user_id = str(user_id or "").strip()
     token = secrets.token_urlsafe(32)
     cluster_id = f"cluster-{uuid.uuid4().hex[:12]}"
     with _LOCK, _connect() as conn:
         conn.execute(
             """
-            INSERT INTO clusters (id, name, kind, token_hash, status)
-            VALUES (?, ?, ?, ?, 'active')
+            INSERT INTO clusters (id, user_id, name, kind, token_hash, status)
+            VALUES (?, ?, ?, ?, ?, 'active')
             """,
-            (cluster_id, normalized, normalized_kind, _token_hash(token)),
+            (cluster_id, normalized_user_id or None, normalized, normalized_kind, _token_hash(token)),
         )
     cluster = get_cluster(cluster_id)
     assert cluster is not None
@@ -265,15 +271,26 @@ def create_cluster(name: str, kind: str = "customer") -> dict[str, Any]:
     return cluster
 
 
-def list_clusters() -> list[dict[str, Any]]:
+def list_clusters(user_id: str = "") -> list[dict[str, Any]]:
     init_db()
+    normalized_user_id = str(user_id or "").strip()
+    params: list[Any] = []
+    where = ""
+    if normalized_user_id:
+        where = "WHERE clusters.user_id = ?"
+        params.append(normalized_user_id)
     with _connect() as conn:
         rows = conn.execute(
-            """
-            SELECT id, name, kind, status, last_seen_at, created_at
+            f"""
+            SELECT clusters.id, clusters.user_id, clusters.name, clusters.kind, clusters.status,
+                   clusters.last_seen_at, clusters.created_at, users.email AS user_email,
+                   users.name AS user_name
             FROM clusters
-            ORDER BY created_at DESC
-            """
+            LEFT JOIN users ON users.id = clusters.user_id
+            {where}
+            ORDER BY clusters.created_at DESC
+            """,
+            params,
         ).fetchall()
     return [dict(row) for row in rows]
 
@@ -283,7 +300,7 @@ def get_cluster(cluster_id: str) -> dict[str, Any] | None:
     with _connect() as conn:
         row = conn.execute(
             """
-            SELECT id, name, kind, status, last_seen_at, created_at
+            SELECT id, user_id, name, kind, status, last_seen_at, created_at
             FROM clusters
             WHERE id = ?
             """,
@@ -350,7 +367,7 @@ def find_cluster_by_token(token: str) -> dict[str, Any] | None:
     with _connect() as conn:
         row = conn.execute(
             """
-            SELECT id, name, kind, status, last_seen_at, created_at
+            SELECT id, user_id, name, kind, status, last_seen_at, created_at
             FROM clusters
             WHERE token_hash = ? AND status = 'active'
             """,
@@ -375,6 +392,7 @@ def list_events(
     cluster: str = "",
     cluster_kind: str = "",
     source: str = "",
+    user_id: str = "",
 ) -> list[dict[str, Any]]:
     init_db()
     limit = max(1, min(int(limit or 50), 500))
@@ -390,6 +408,9 @@ def list_events(
     if source:
         filters.append("source = ?")
         params.append(source)
+    if user_id:
+        filters.append("cluster_id IN (SELECT id FROM clusters WHERE user_id = ?)")
+        params.append(user_id)
     if filters:
         query += " WHERE " + " AND ".join(filters)
     query += " ORDER BY COALESCE(timestamp, created_at) DESC, created_at DESC LIMIT ?"
@@ -399,30 +420,47 @@ def list_events(
     return [_row_to_event(row) for row in rows]
 
 
-def get_event(event_id: str) -> dict[str, Any] | None:
+def get_event(event_id: str, user_id: str = "") -> dict[str, Any] | None:
     init_db()
+    params: list[Any] = [event_id]
+    user_filter = ""
+    if user_id:
+        user_filter = " AND cluster_id IN (SELECT id FROM clusters WHERE user_id = ?)"
+        params.append(user_id)
     with _connect() as conn:
-        row = conn.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone()
+        row = conn.execute(f"SELECT * FROM events WHERE id = ?{user_filter}", params).fetchone()
     if row is None:
         return None
     return _row_to_event(row)
 
 
-def event_summary() -> dict[str, Any]:
+def event_summary(user_id: str = "") -> dict[str, Any]:
     init_db()
+    filters: list[str] = []
+    params: list[Any] = []
+    if user_id:
+        filters.append("cluster_id IN (SELECT id FROM clusters WHERE user_id = ?)")
+        params.append(user_id)
+    where = f"WHERE {' AND '.join(filters)}" if filters else ""
+    high_where = "WHERE severity = 'high'"
+    high_params: list[Any] = []
+    if user_id:
+        high_where += " AND cluster_id IN (SELECT id FROM clusters WHERE user_id = ?)"
+        high_params.append(user_id)
     with _connect() as conn:
-        total = conn.execute("SELECT COUNT(*) AS count FROM events").fetchone()["count"]
-        by_severity = _count_by(conn, "severity")
-        by_rule = _count_by(conn, "rule")
-        by_namespace = _count_by(conn, "namespace")
-        by_action = _count_by(conn, "action_taken")
+        total = conn.execute(f"SELECT COUNT(*) AS count FROM events {where}", params).fetchone()["count"]
+        by_severity = _count_by(conn, "severity", user_id=user_id)
+        by_rule = _count_by(conn, "rule", user_id=user_id)
+        by_namespace = _count_by(conn, "namespace", user_id=user_id)
+        by_action = _count_by(conn, "action_taken", user_id=user_id)
         recent_high = conn.execute(
-            """
+            f"""
             SELECT * FROM events
-            WHERE severity = 'high'
+            {high_where}
             ORDER BY COALESCE(timestamp, created_at) DESC, created_at DESC
             LIMIT 10
-            """
+            """,
+            high_params,
         ).fetchall()
     return {
         "total_events": total,
@@ -440,14 +478,20 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
-def _count_by(conn: sqlite3.Connection, column: str) -> dict[str, int]:
+def _count_by(conn: sqlite3.Connection, column: str, user_id: str = "") -> dict[str, int]:
+    filters = [f"{column} IS NOT NULL", f"{column} != ''"]
+    params: list[Any] = []
+    if user_id:
+        filters.append("cluster_id IN (SELECT id FROM clusters WHERE user_id = ?)")
+        params.append(user_id)
     rows = conn.execute(
         f"""
         SELECT {column} AS key, COUNT(*) AS count
         FROM events
-        WHERE {column} IS NOT NULL AND {column} != ''
+        WHERE {" AND ".join(filters)}
         GROUP BY {column}
-        """
+        """,
+        params,
     ).fetchall()
     return {row["key"]: row["count"] for row in rows}
 
@@ -496,6 +540,52 @@ def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition
     columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
     if column not in columns:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
+def _ensure_cluster_name_scope(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'clusters'"
+    ).fetchone()
+    table_sql = row["sql"] if row else ""
+    if "name TEXT NOT NULL UNIQUE" in table_sql:
+        conn.execute("ALTER TABLE clusters RENAME TO clusters_legacy_unique_name")
+        conn.execute(
+            """
+            CREATE TABLE clusters (
+                id TEXT PRIMARY KEY,
+                user_id TEXT,
+                name TEXT NOT NULL,
+                kind TEXT NOT NULL DEFAULT 'customer',
+                token_hash TEXT,
+                status TEXT NOT NULL DEFAULT 'active',
+                last_seen_at TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO clusters (id, user_id, name, kind, token_hash, status, last_seen_at, created_at)
+            SELECT id, user_id, name, kind, token_hash, status, last_seen_at, created_at
+            FROM clusters_legacy_unique_name
+            """
+        )
+        conn.execute("DROP TABLE clusters_legacy_unique_name")
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_clusters_user_name
+        ON clusters(user_id, name)
+        WHERE user_id IS NOT NULL
+        """
+    )
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_clusters_unowned_name
+        ON clusters(name)
+        WHERE user_id IS NULL
+        """
+    )
 
 
 def _mark_env_demo_clusters(conn: sqlite3.Connection) -> None:

@@ -98,6 +98,13 @@ def current_user(session_token: str | None) -> dict | None:
     return storage.get_user_by_session(session_token or "")
 
 
+def require_user(session_token: str | None) -> tuple[dict | None, JSONResponse | None]:
+    user = current_user(session_token)
+    if user is None:
+        return None, JSONResponse(status_code=401, content={"error": "login required"})
+    return user, None
+
+
 def auth_configured() -> bool:
     return bool(os.getenv("GOOGLE_CLIENT_ID", "").strip() and os.getenv("GOOGLE_CLIENT_SECRET", "").strip())
 
@@ -375,21 +382,25 @@ def runtime_events(
     cluster_kind: str = "",
     source: str = "",
     include_legacy: bool = False,
+    compliance_ai_session: str | None = Cookie(default=None),
 ) -> dict:
     # Falco/Gatekeeper 최근 위반 이벤트 목록
+    user = current_user(compliance_ai_session)
     return list_runtime_events(
         limit=limit,
         cluster=cluster,
         cluster_kind=cluster_kind,
         source=source,
         include_legacy=include_legacy,
+        user_id=user["id"] if user else "",
     )
 
 
 @app.get("/runtime-events/{event_id}")
-def runtime_event(event_id: str):
+def runtime_event(event_id: str, compliance_ai_session: str | None = Cookie(default=None)):
     # 위반 이벤트 상세
-    event = get_runtime_event(event_id)
+    user = current_user(compliance_ai_session)
+    event = get_runtime_event(event_id, user_id=user["id"] if user else "")
     if event is None:
         return JSONResponse(status_code=404, content={"error": f"event {event_id} not found"})
     return event
@@ -411,6 +422,64 @@ def ingest_falco_events(payload: dict, authorization: str | None = Header(defaul
     )
     storage.mark_cluster_seen(cluster["id"], event.get("timestamp", ""))
     return {"status": "recorded", "event": event}
+
+
+@app.get("/api/clusters")
+def user_list_clusters(compliance_ai_session: str | None = Cookie(default=None)) -> dict:
+    # 로그인 사용자의 클러스터 목록
+    user, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
+    assert user is not None
+    return {"clusters": storage.list_clusters(user_id=user["id"])}
+
+
+@app.post("/api/clusters")
+def user_create_cluster(
+    request: Request,
+    payload: dict,
+    compliance_ai_session: str | None = Cookie(default=None),
+):
+    # 로그인 사용자가 자기 클러스터를 등록하고 Sidekick 설치 명령을 받는다.
+    user, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
+    assert user is not None
+    try:
+        cluster = storage.create_cluster(
+            str(payload.get("name", "")),
+            kind="customer",
+            user_id=user["id"],
+        )
+    except ValueError as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+    except Exception as error:
+        if "UNIQUE" in str(error).upper():
+            return JSONResponse(status_code=409, content={"error": "cluster name already exists"})
+        raise
+    cluster["install_command"] = _sidekick_install_command(request, cluster["token"])
+    return {"cluster": cluster}
+
+
+@app.post("/api/clusters/{cluster_id}/rotate-token")
+def user_rotate_cluster_token(
+    request: Request,
+    cluster_id: str,
+    compliance_ai_session: str | None = Cookie(default=None),
+):
+    # 사용자가 자기 클러스터의 ingest token을 재발급한다.
+    user, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
+    assert user is not None
+    cluster = storage.get_cluster(cluster_id)
+    if cluster is None or cluster.get("user_id") != user["id"]:
+        return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    rotated = storage.rotate_cluster_token(cluster_id)
+    if rotated is None:
+        return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    rotated["install_command"] = _sidekick_install_command(request, rotated["token"])
+    return {"cluster": rotated}
 
 
 @app.get("/admin", response_class=FileResponse)
@@ -513,10 +582,12 @@ def analyze_runtime_event(
     event_id: str,
     x_llm_provider: str | None = Header(default=None),
     x_llm_api_key: str | None = Header(default=None),
+    compliance_ai_session: str | None = Cookie(default=None),
 ):
     # 저장된 이벤트와 매니페스트를 결합해 상세 분석
     _ = request
-    event = get_runtime_event(event_id)
+    user = current_user(compliance_ai_session)
+    event = get_runtime_event(event_id, user_id=user["id"] if user else "")
     if event is None:
         return JSONResponse(status_code=404, content={"error": f"event {event_id} not found"})
     resource_manifest = event.get("resource_manifest", "")
@@ -559,9 +630,18 @@ def gatekeeper_events(payload: dict) -> dict:
 
 
 @app.get("/compliance-report")
-def compliance_report(cluster_kind: str = "", include_legacy: bool = False) -> dict:
+def compliance_report(
+    cluster_kind: str = "",
+    include_legacy: bool = False,
+    compliance_ai_session: str | None = Cookie(default=None),
+) -> dict:
     # AI 리포트 탭용 JSON 리포트
-    return build_report(cluster_kind=cluster_kind, include_legacy=include_legacy)
+    user = current_user(compliance_ai_session)
+    return build_report(
+        cluster_kind=cluster_kind,
+        include_legacy=include_legacy,
+        user_id=user["id"] if user else "",
+    )
 
 
 def _sidekick_install_command(request: Request, token: str) -> str:

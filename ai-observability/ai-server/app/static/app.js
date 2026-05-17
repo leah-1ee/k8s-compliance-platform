@@ -7,6 +7,7 @@ let latestReportText = "";
 let selectedRuntimeEvent = null;
 let grafanaUrl = "";
 let authState = { authenticated: false, user: null, auth: { google_configured: false } };
+let userClusters = [];
 const SESSION_KEY = "complianceAiLlmApiKey";
 const POLICY_PROMPTS = {
   "latest-tag": "latest 태그를 사용하는 컨테이너 이미지를 금지하는 Gatekeeper 정책을 만들어줘",
@@ -104,6 +105,21 @@ async function postJson(path, payload) {
     throw error;
   }
   return response.json();
+}
+
+async function apiJson(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(formatErrorMessage(body.error || body.detail || `HTTP ${response.status}`));
+  }
+  return body;
 }
 
 function formatErrorMessage(value) {
@@ -377,6 +393,77 @@ async function refreshRuntimeEvents() {
     .join("");
 }
 
+function renderClusterSetupGate() {
+  const isAuthenticated = Boolean(authState.authenticated);
+  $("#clusterSetupAuthMessage").hidden = isAuthenticated;
+  $("#clusterSetupContent").hidden = !isAuthenticated;
+}
+
+function renderUserClusters() {
+  const container = $("#userClusters");
+  if (!authState.authenticated) {
+    container.innerHTML = "";
+    return;
+  }
+  if (!userClusters.length) {
+    container.innerHTML = '<p class="muted">등록된 클러스터가 없습니다.</p>';
+    return;
+  }
+  container.innerHTML = userClusters
+    .map(
+      (cluster) => `
+        <div class="cluster-row">
+          <div>
+            <strong>${escapeHtml(cluster.name || "unknown-cluster")}</strong>
+            <p>
+              status=${escapeHtml(cluster.status || "active")} ·
+              last_seen=${escapeHtml(cluster.last_seen_at || "-")}
+            </p>
+          </div>
+          <button data-user-rotate="${escapeHtml(cluster.id || "")}">토큰 재발급</button>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+async function loadUserClusters() {
+  renderClusterSetupGate();
+  if (!authState.authenticated) {
+    userClusters = [];
+    renderUserClusters();
+    return;
+  }
+  const body = await apiJson("/api/clusters");
+  userClusters = body.clusters || [];
+  renderUserClusters();
+}
+
+async function registerUserCluster() {
+  const name = $("#setupClusterName").value.trim();
+  if (!name) {
+    showToast("클러스터 이름을 입력하세요");
+    return;
+  }
+  const body = await apiJson("/api/clusters", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+  $("#setupClusterName").value = "";
+  setOutput("#setupInstallCommand", body.cluster.install_command || "");
+  await loadUserClusters();
+  showToast("클러스터 등록 완료");
+}
+
+async function rotateUserClusterToken(clusterId) {
+  const body = await apiJson(`/api/clusters/${encodeURIComponent(clusterId)}/rotate-token`, {
+    method: "POST",
+  });
+  setOutput("#setupInstallCommand", body.cluster.install_command || "");
+  await loadUserClusters();
+  showToast("토큰 재발급 완료");
+}
+
 async function loadRuntimeEvent(eventId) {
   const response = await fetch(`/runtime-events/${encodeURIComponent(eventId)}`);
   if (!response.ok) {
@@ -483,6 +570,33 @@ $("#refreshRuntimeEvents").addEventListener("click", () => {
   refreshRuntimeEvents().catch((error) => {
     showInlineAlert(error.message);
     showToast("위반 목록 로드 실패");
+  });
+});
+
+$("#registerUserCluster").addEventListener("click", () => {
+  registerUserCluster().catch((error) => {
+    showInlineAlert(error.message);
+    showToast("클러스터 등록 실패");
+  });
+});
+
+$("#refreshUserClusters").addEventListener("click", () => {
+  loadUserClusters()
+    .then(() => showToast("클러스터 목록 갱신"))
+    .catch((error) => {
+      showInlineAlert(error.message);
+      showToast("클러스터 목록 로드 실패");
+    });
+});
+
+$("#userClusters").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-user-rotate]");
+  if (!button) {
+    return;
+  }
+  rotateUserClusterToken(button.dataset.userRotate).catch((error) => {
+    showInlineAlert(error.message);
+    showToast("토큰 재발급 실패");
   });
 });
 
@@ -621,6 +735,7 @@ function renderAuthStatus() {
     loginLink.hidden = true;
     devLoginLink.hidden = true;
     logoutButton.hidden = false;
+    renderClusterSetupGate();
     return;
   }
   const googleConfigured = Boolean(authState.auth?.google_configured);
@@ -629,6 +744,7 @@ function renderAuthStatus() {
   loginLink.hidden = !authState.auth?.google_configured;
   devLoginLink.hidden = !authState.auth?.dev_enabled;
   logoutButton.hidden = true;
+  renderClusterSetupGate();
 }
 
 async function logout() {
@@ -637,7 +753,10 @@ async function logout() {
     throw new Error(await response.text());
   }
   authState = { authenticated: false, user: null, auth: authState.auth };
+  userClusters = [];
   renderAuthStatus();
+  renderUserClusters();
+  refreshRuntimeEvents().catch(() => {});
 }
 
 function initLlmKeyPanel() {
@@ -653,11 +772,14 @@ function initLlmKeyPanel() {
 
 initLlmKeyPanel();
 syncPolicyPromptMode();
-refreshRuntimeEvents().catch(() => {});
 window.setInterval(() => {
   refreshRuntimeEvents().catch(() => {});
 }, 30000);
 loadConfig().catch(() => showToast("설정 로드 실패"));
-loadAuthStatus().catch(() => {
-  $("#authStatus").textContent = "로그인 상태 확인 실패";
-});
+loadAuthStatus()
+  .then(() => Promise.all([loadUserClusters(), refreshRuntimeEvents()]))
+  .catch(() => {
+    $("#authStatus").textContent = "로그인 상태 확인 실패";
+    renderClusterSetupGate();
+    refreshRuntimeEvents().catch(() => {});
+  });

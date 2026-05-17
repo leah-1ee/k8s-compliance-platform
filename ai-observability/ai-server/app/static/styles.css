@@ -264,12 +264,45 @@ select:focus {
 }
 
 article,
-.analysis-card {
+.analysis-card,
+.auth-required {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #11171e;
   padding: 16px;
   min-width: 0;
+}
+
+.setup-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 16px;
+}
+
+.cluster-list {
+  display: grid;
+  gap: 10px;
+}
+
+.cluster-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border-top: 1px solid var(--line);
+  padding: 12px 0;
+}
+
+.cluster-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.cluster-row p,
+.muted,
+.auth-required p {
+  margin: 6px 0 0;
+  color: var(--muted);
 }
 
 h2 {
@@ -554,6 +587,7 @@ button.event-row:focus-visible {
   .compact-grid,
   .llm-key-grid,
   .result-grid,
+  .setup-grid,
   .query-list {
     grid-template-columns: 1fr;
   }
