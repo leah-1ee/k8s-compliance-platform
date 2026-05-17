@@ -385,22 +385,28 @@ def runtime_events(
     compliance_ai_session: str | None = Cookie(default=None),
 ) -> dict:
     # Falco/Gatekeeper 최근 위반 이벤트 목록
-    user = current_user(compliance_ai_session)
+    user, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
+    assert user is not None
     return list_runtime_events(
         limit=limit,
         cluster=cluster,
         cluster_kind=cluster_kind,
         source=source,
         include_legacy=include_legacy,
-        user_id=user["id"] if user else "",
+        user_id=user["id"],
     )
 
 
 @app.get("/runtime-events/{event_id}")
 def runtime_event(event_id: str, compliance_ai_session: str | None = Cookie(default=None)):
     # 위반 이벤트 상세
-    user = current_user(compliance_ai_session)
-    event = get_runtime_event(event_id, user_id=user["id"] if user else "")
+    user, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
+    assert user is not None
+    event = get_runtime_event(event_id, user_id=user["id"])
     if event is None:
         return JSONResponse(status_code=404, content={"error": f"event {event_id} not found"})
     return event
@@ -570,8 +576,15 @@ def admin_disable_cluster(cluster_id: str, x_admin_token: str | None = Header(de
 
 
 @app.get("/resource-manifest")
-def resource_manifest(namespace: str = "", pod: str = "") -> dict[str, str]:
+def resource_manifest(
+    namespace: str = "",
+    pod: str = "",
+    compliance_ai_session: str | None = Cookie(default=None),
+) -> dict[str, str]:
     # Kubernetes API에서 관련 Pod 매니페스트 조회
+    _, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
     return fetch_resource_manifest(namespace, pod)
 
 
@@ -586,8 +599,11 @@ def analyze_runtime_event(
 ):
     # 저장된 이벤트와 매니페스트를 결합해 상세 분석
     _ = request
-    user = current_user(compliance_ai_session)
-    event = get_runtime_event(event_id, user_id=user["id"] if user else "")
+    user, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
+    assert user is not None
+    event = get_runtime_event(event_id, user_id=user["id"])
     if event is None:
         return JSONResponse(status_code=404, content={"error": f"event {event_id} not found"})
     resource_manifest = event.get("resource_manifest", "")
@@ -636,11 +652,14 @@ def compliance_report(
     compliance_ai_session: str | None = Cookie(default=None),
 ) -> dict:
     # AI 리포트 탭용 JSON 리포트
-    user = current_user(compliance_ai_session)
+    user, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
+    assert user is not None
     return build_report(
         cluster_kind=cluster_kind,
         include_legacy=include_legacy,
-        user_id=user["id"] if user else "",
+        user_id=user["id"],
     )
 
 

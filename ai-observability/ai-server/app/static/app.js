@@ -287,6 +287,10 @@ function syncPolicyPromptMode() {
 }
 
 async function analyzeViolation() {
+  if (!authState.authenticated) {
+    showToast("로그인 후 사용할 수 있습니다");
+    return;
+  }
   clearInlineAlert();
   setAnalysisLoading(true);
   setAnalysisState(
@@ -350,6 +354,10 @@ async function analyzeViolation() {
 
 async function refreshRuntimeEvents() {
   const container = $("#runtimeEvents");
+  if (!authState.authenticated) {
+    container.innerHTML = "";
+    return;
+  }
   const query = new URLSearchParams({
     limit: "20",
     cluster_kind: $("#runtimeClusterKind").value,
@@ -365,6 +373,9 @@ async function refreshRuntimeEvents() {
   `;
   const response = await fetch(`/runtime-events?${query.toString()}`);
   const body = await response.json();
+  if (!response.ok) {
+    throw new Error(formatErrorMessage(body.error || body.detail || `HTTP ${response.status}`));
+  }
   if (!body.events || body.events.length === 0) {
     container.innerHTML = `
       <article class="event-row">
@@ -397,6 +408,16 @@ function renderClusterSetupGate() {
   const isAuthenticated = Boolean(authState.authenticated);
   $("#clusterSetupAuthMessage").hidden = isAuthenticated;
   $("#clusterSetupContent").hidden = !isAuthenticated;
+}
+
+function renderAuthGates() {
+  const isAuthenticated = Boolean(authState.authenticated);
+  $("#clusterSetupAuthMessage").hidden = isAuthenticated;
+  $("#clusterSetupContent").hidden = !isAuthenticated;
+  $("#analysisAuthMessage").hidden = isAuthenticated;
+  $("#analysisContent").hidden = !isAuthenticated;
+  $("#reportAuthMessage").hidden = isAuthenticated;
+  $("#reportContent").hidden = !isAuthenticated;
 }
 
 function renderUserClusters() {
@@ -465,6 +486,10 @@ async function rotateUserClusterToken(clusterId) {
 }
 
 async function loadRuntimeEvent(eventId) {
+  if (!authState.authenticated) {
+    showToast("로그인 후 사용할 수 있습니다");
+    return;
+  }
   const response = await fetch(`/runtime-events/${encodeURIComponent(eventId)}`);
   if (!response.ok) {
     throw new Error(await response.text());
@@ -476,6 +501,10 @@ async function loadRuntimeEvent(eventId) {
 }
 
 async function loadSelectedManifest() {
+  if (!authState.authenticated) {
+    showToast("로그인 후 사용할 수 있습니다");
+    return;
+  }
   if (!selectedRuntimeEvent) {
     showToast("먼저 이벤트를 선택하세요");
     return;
@@ -495,6 +524,10 @@ async function loadSelectedManifest() {
 }
 
 async function generateReport() {
+  if (!authState.authenticated) {
+    showToast("로그인 후 사용할 수 있습니다");
+    return;
+  }
   $("#reportResult").innerHTML = `
     <span class="badge loading">loading</span>
     <h2>리포트 생성 중</h2>
@@ -502,6 +535,9 @@ async function generateReport() {
   `;
   const response = await fetch("/compliance-report");
   const report = await response.json();
+  if (!response.ok) {
+    throw new Error(formatErrorMessage(report.error || report.detail || `HTTP ${response.status}`));
+  }
   latestReportText = JSON.stringify(report, null, 2);
   const recommendations = (report.recommendations || [])
     .map((item) => `<li>${escapeHtml(item)}</li>`)
@@ -735,7 +771,7 @@ function renderAuthStatus() {
     loginLink.hidden = true;
     devLoginLink.hidden = true;
     logoutButton.hidden = false;
-    renderClusterSetupGate();
+    renderAuthGates();
     return;
   }
   const googleConfigured = Boolean(authState.auth?.google_configured);
@@ -744,7 +780,7 @@ function renderAuthStatus() {
   loginLink.hidden = !authState.auth?.google_configured;
   devLoginLink.hidden = !authState.auth?.dev_enabled;
   logoutButton.hidden = true;
-  renderClusterSetupGate();
+  renderAuthGates();
 }
 
 async function logout() {
@@ -756,7 +792,8 @@ async function logout() {
   userClusters = [];
   renderAuthStatus();
   renderUserClusters();
-  refreshRuntimeEvents().catch(() => {});
+  selectedRuntimeEvent = null;
+  $("#runtimeEvents").innerHTML = "";
 }
 
 function initLlmKeyPanel() {
@@ -773,13 +810,14 @@ function initLlmKeyPanel() {
 initLlmKeyPanel();
 syncPolicyPromptMode();
 window.setInterval(() => {
-  refreshRuntimeEvents().catch(() => {});
+  if (authState.authenticated) {
+    refreshRuntimeEvents().catch(() => {});
+  }
 }, 30000);
 loadConfig().catch(() => showToast("설정 로드 실패"));
 loadAuthStatus()
-  .then(() => Promise.all([loadUserClusters(), refreshRuntimeEvents()]))
+  .then(() => Promise.all([loadUserClusters(), authState.authenticated ? refreshRuntimeEvents() : Promise.resolve()]))
   .catch(() => {
     $("#authStatus").textContent = "로그인 상태 확인 실패";
-    renderClusterSetupGate();
-    refreshRuntimeEvents().catch(() => {});
+    renderAuthGates();
   });

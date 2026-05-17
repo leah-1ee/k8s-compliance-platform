@@ -16,11 +16,12 @@
 - `clusters.user_id`가 추가됐고, 로그인 사용자는 `/ui`의 `Cluster Setup` 탭에서 자기 클러스터를 등록할 수 있다.
 - `Cluster Setup` 탭은 클러스터 이름 입력, 등록, Falco Sidekick 설치 명령 표시, last seen 확인, token 재발급을 제공한다.
 - 로그인한 사용자의 `/runtime-events`, 이벤트 상세, AI report는 해당 사용자의 클러스터 이벤트만 보도록 스코프가 적용됐다.
+- Violation Detail과 AI Report 탭은 로그인하지 않으면 안내 메시지만 보여준다.
+- `/runtime-events`, `/runtime-events/{event_id}`, `/resource-manifest`, `/analyze-runtime-event/{event_id}`, `/compliance-report`는 로그인 세션이 없으면 `401 login required`를 반환한다.
 
 ## 아직 남은 중요한 작업
 
-- 런타임 탭 자체를 로그인 필수 UI로 명확히 막아야 한다.
-- Violation Detail, AI Report, Cluster Setup, Slack 설정 영역은 로그인하지 않으면 안내 메시지를 보여줘야 한다.
+- Slack 설정 영역은 로그인하지 않으면 안내 메시지를 보여줘야 한다.
 - 관리자 대시보드는 전체 사용자 목록, 사용자별 클러스터 목록, active/disabled 상태, last seen, 이벤트 수를 볼 수 있게 정리해야 한다.
 - 중앙 AI 서버가 K8s API를 직접 조회하는 매니페스트 조회 구조는 사용자 클러스터 서비스 구조에 맞지 않는다.
 - 1차 fallback은 사용자 클러스터에서 실행할 `kubectl` 명령 제공, 2차는 collector/agent가 manifest snapshot을 함께 보내는 구조로 검토한다.
@@ -215,5 +216,5 @@ cd /Users/leeon/Documents/k8s-compliance-platform/ai-observability/ai-server
 최근 검증 결과:
 
 ```text
-41 passed, 14 warnings
+42 passed, 20 warnings
 ```

@@ -30,6 +30,15 @@ def _analysis_payload() -> dict:
     }
 
 
+def _session_for(email: str) -> str:
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject=email,
+        email=email,
+    )
+    return storage.create_session(user["id"])
+
+
 def test_healthz():
     response = client.get("/healthz")
 
@@ -60,6 +69,8 @@ def test_ui_is_served():
     assert "개발 로그인" in response.text
     assert "Your API key is used only for requests in this session" in response.text
     assert "Cluster Setup" in response.text
+    assert "로그인 후 런타임 위반을 확인할 수 있습니다." in response.text
+    assert "로그인 후 AI 리포트를 생성할 수 있습니다." in response.text
     assert "Falco Sidekick 설치 명령" in response.text
     assert "내 클러스터" in response.text
     assert "Policy Generation Request" in response.text
@@ -496,45 +507,23 @@ def test_gatekeeper_event_is_collected_and_reported():
     assert response.status_code == 200
     assert body["status"] == "recorded"
     event_id = body["event"]["id"]
-
-    list_response = client.get("/runtime-events?limit=5")
-    list_body = list_response.json()
-
-    assert list_response.status_code == 200
-    assert any(event["id"] == event_id for event in list_body["events"])
-
-    demo_list_response = client.get("/runtime-events?limit=20&cluster_kind=demo")
-    demo_list_body = demo_list_response.json()
-    assert demo_list_response.status_code == 200
-    assert any(event["id"] == event_id for event in demo_list_body["events"])
-
-    detail_response = client.get(f"/runtime-events/{event_id}")
-    detail_body = detail_response.json()
-
-    assert detail_response.status_code == 200
-    assert detail_body["source"] == "gatekeeper"
-    assert detail_body["action_taken"] == "deny"
-
-    report_response = client.get("/compliance-report")
-    report_body = report_response.json()
-
-    assert report_response.status_code == 200
-    assert report_body["summary"]["total_events"] >= 1
-    assert report_body["recommendations"]
+    assert event_id.startswith("gk-")
+    assert body["event"]["source"] == "gatekeeper"
+    assert body["event"]["action_taken"] == "deny"
 
 
 def test_ingested_falco_event_is_listed_with_manifest_snapshot():
-    cluster_response = client.post(
-        "/admin/api/clusters",
-        headers={"X-Admin-Token": "test-admin-token"},
-        json={"name": "customer-a"},
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="customer-a-owner@example.test",
+        email="customer-a-owner@example.test",
     )
-    cluster_body = cluster_response.json()
-    token = cluster_body["cluster"]["token"]
+    session = storage.create_session(owner["id"])
+    cluster = storage.create_cluster("customer-a", user_id=owner["id"])
 
     response = client.post(
         "/ingest/falco-events",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"Authorization": f"Bearer {cluster['token']}"},
         json={
             "resource_manifest": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: suspicious-pod",
             "event": {
@@ -560,28 +549,37 @@ def test_ingested_falco_event_is_listed_with_manifest_snapshot():
     assert body["status"] == "recorded"
     event_id = body["event"]["id"]
 
-    list_response = client.get("/runtime-events?limit=5")
+    list_response = client.get("/runtime-events?limit=5", cookies={"compliance_ai_session": session})
     list_body = list_response.json()
 
     assert list_response.status_code == 200
     assert any(event["id"] == event_id for event in list_body["events"])
 
-    customer_list_response = client.get("/runtime-events?limit=20&cluster_kind=customer")
+    customer_list_response = client.get(
+        "/runtime-events?limit=20&cluster_kind=customer",
+        cookies={"compliance_ai_session": session},
+    )
     customer_list_body = customer_list_response.json()
     assert customer_list_response.status_code == 200
     assert any(event["id"] == event_id for event in customer_list_body["events"])
 
-    demo_list_response = client.get("/runtime-events?limit=20&cluster_kind=demo")
+    demo_list_response = client.get(
+        "/runtime-events?limit=20&cluster_kind=demo",
+        cookies={"compliance_ai_session": session},
+    )
     demo_list_body = demo_list_response.json()
     assert demo_list_response.status_code == 200
     assert all(event["id"] != event_id for event in demo_list_body["events"])
 
-    detail_response = client.get(f"/runtime-events/{event_id}")
+    detail_response = client.get(
+        f"/runtime-events/{event_id}",
+        cookies={"compliance_ai_session": session},
+    )
     detail_body = detail_response.json()
 
     assert detail_response.status_code == 200
     assert detail_body["source"] == "sidekick"
-    assert detail_body["cluster_id"] == cluster_body["cluster"]["id"]
+    assert detail_body["cluster_id"] == cluster["id"]
     assert detail_body["cluster"] == "customer-a"
     assert detail_body["cluster_kind"] == "customer"
     assert detail_body["namespace"] == "prod"
@@ -653,12 +651,23 @@ def test_runtime_events_skip_legacy_response_server_by_default(monkeypatch):
 
     monkeypatch.setattr("app.runtime_client.httpx.get", fake_get)
 
-    response = client.get("/runtime-events?limit=1")
+    response = client.get(
+        "/runtime-events?limit=1",
+        cookies={"compliance_ai_session": _session_for("legacy-skip@example.test")},
+    )
     body = response.json()
 
     assert response.status_code == 200
     assert calls == []
     assert body["source_status"]["response_server"] == "skipped"
+
+
+def test_runtime_features_require_login():
+    assert client.get("/runtime-events?limit=1").status_code == 401
+    assert client.get("/runtime-events/missing-event").status_code == 401
+    assert client.get("/resource-manifest?namespace=default&pod=test-pod").status_code == 401
+    assert client.post("/analyze-runtime-event/missing-event").status_code == 401
+    assert client.get("/compliance-report").status_code == 401
 
 
 def test_ingest_rejects_missing_cluster_token():
@@ -740,7 +749,10 @@ def test_admin_cluster_lifecycle():
 def test_resource_manifest_without_kube_env_is_clear(monkeypatch):
     monkeypatch.setattr("app.runtime_client.KUBE_API_URL", "")
 
-    response = client.get("/resource-manifest?namespace=default&pod=test-pod")
+    response = client.get(
+        "/resource-manifest?namespace=default&pod=test-pod",
+        cookies={"compliance_ai_session": _session_for("manifest-user@example.test")},
+    )
     body = response.json()
 
     assert response.status_code == 200
