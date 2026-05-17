@@ -502,6 +502,25 @@ def admin_list_clusters(x_admin_token: str | None = Header(default=None)):
     return {"clusters": storage.list_clusters()}
 
 
+@app.get("/admin/api/users")
+def admin_list_users(x_admin_token: str | None = Header(default=None)):
+    auth_error = require_admin(x_admin_token)
+    if auth_error:
+        return auth_error
+    return {"users": storage.list_users()}
+
+
+@app.get("/admin/api/users/{user_id}/clusters")
+def admin_list_user_clusters(user_id: str, x_admin_token: str | None = Header(default=None)):
+    auth_error = require_admin(x_admin_token)
+    if auth_error:
+        return auth_error
+    user = storage.get_user(user_id)
+    if user is None:
+        return JSONResponse(status_code=404, content={"error": "user not found"})
+    return {"user": _public_user(user), "clusters": storage.list_clusters(user_id=user_id)}
+
+
 @app.post("/admin/api/clusters")
 def admin_create_cluster(
     request: Request,

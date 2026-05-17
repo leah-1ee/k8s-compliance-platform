@@ -160,6 +160,47 @@ def get_user(user_id: str) -> dict[str, Any] | None:
     return dict(row)
 
 
+def list_users() -> list[dict[str, Any]]:
+    init_db()
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT users.id, users.provider, users.provider_subject, users.email, users.name,
+                   users.picture, users.created_at, users.last_login_at,
+                   (
+                       SELECT COUNT(*)
+                       FROM clusters
+                       WHERE clusters.user_id = users.id
+                   ) AS cluster_count,
+                   (
+                       SELECT COUNT(*)
+                       FROM clusters
+                       WHERE clusters.user_id = users.id AND clusters.status = 'active'
+                   ) AS active_cluster_count,
+                   (
+                       SELECT COUNT(*)
+                       FROM clusters
+                       WHERE clusters.user_id = users.id AND clusters.status = 'disabled'
+                   ) AS disabled_cluster_count,
+                   (
+                       SELECT COUNT(*)
+                       FROM events
+                       WHERE events.cluster_id IN (
+                           SELECT clusters.id FROM clusters WHERE clusters.user_id = users.id
+                       )
+                   ) AS event_count,
+                   (
+                       SELECT MAX(clusters.last_seen_at)
+                       FROM clusters
+                       WHERE clusters.user_id = users.id
+                   ) AS last_seen_at
+            FROM users
+            ORDER BY COALESCE(users.last_login_at, users.created_at) DESC, users.created_at DESC
+            """
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def create_session(user_id: str, ttl_days: int = 30) -> str:
     init_db()
     token = secrets.token_urlsafe(32)
@@ -284,7 +325,12 @@ def list_clusters(user_id: str = "") -> list[dict[str, Any]]:
             f"""
             SELECT clusters.id, clusters.user_id, clusters.name, clusters.kind, clusters.status,
                    clusters.last_seen_at, clusters.created_at, users.email AS user_email,
-                   users.name AS user_name
+                   users.name AS user_name,
+                   (
+                       SELECT COUNT(*)
+                       FROM events
+                       WHERE events.cluster_id = clusters.id
+                   ) AS event_count
             FROM clusters
             LEFT JOIN users ON users.id = clusters.user_id
             {where}

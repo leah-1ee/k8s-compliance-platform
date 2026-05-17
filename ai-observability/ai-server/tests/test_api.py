@@ -97,6 +97,8 @@ def test_admin_is_served():
     assert response.status_code == 200
     assert "Compliance Admin" in response.text
     assert "클러스터 등록" in response.text
+    assert "운영 요약" in response.text
+    assert "사용자 목록" in response.text
 
 
 def test_me_reports_anonymous_user():
@@ -744,6 +746,65 @@ def test_admin_cluster_lifecycle():
 
     assert disable_response.status_code == 200
     assert disable_response.json()["cluster"]["status"] == "disabled"
+
+
+def test_admin_dashboard_lists_users_and_event_counts():
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="admin-dashboard-user@example.test",
+        email="admin-dashboard-user@example.test",
+        name="Admin Dashboard User",
+    )
+    cluster = storage.create_cluster("admin-dashboard-cluster", user_id=user["id"])
+    client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster['token']}"},
+        json={
+            "event": {
+                "time": "2026-05-13T00:00:00Z",
+                "rule": "Admin Dashboard Event",
+                "priority": "Warning",
+            },
+        },
+    )
+
+    unauthorized = client.get("/admin/api/users")
+    assert unauthorized.status_code == 401
+
+    users_response = client.get(
+        "/admin/api/users",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    users_body = users_response.json()
+
+    assert users_response.status_code == 200
+    listed_user = next(item for item in users_body["users"] if item["id"] == user["id"])
+    assert listed_user["email"] == "admin-dashboard-user@example.test"
+    assert listed_user["cluster_count"] == 1
+    assert listed_user["active_cluster_count"] == 1
+    assert listed_user["event_count"] == 1
+    assert listed_user["last_seen_at"] == "2026-05-13T00:00:00Z"
+
+    clusters_response = client.get(
+        "/admin/api/clusters",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    clusters_body = clusters_response.json()
+
+    assert clusters_response.status_code == 200
+    listed_cluster = next(item for item in clusters_body["clusters"] if item["id"] == cluster["id"])
+    assert listed_cluster["user_email"] == "admin-dashboard-user@example.test"
+    assert listed_cluster["event_count"] == 1
+
+    user_clusters_response = client.get(
+        f"/admin/api/users/{user['id']}/clusters",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    user_clusters_body = user_clusters_response.json()
+
+    assert user_clusters_response.status_code == 200
+    assert user_clusters_body["user"]["email"] == "admin-dashboard-user@example.test"
+    assert [item["id"] for item in user_clusters_body["clusters"]] == [cluster["id"]]
 
 
 def test_resource_manifest_without_kube_env_is_clear(monkeypatch):

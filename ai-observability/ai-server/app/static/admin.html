@@ -104,8 +104,54 @@
         border-top: 0;
         padding-top: 0;
       }
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .summary-card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #0c1218;
+        padding: 14px;
+      }
+      .summary-card strong {
+        display: block;
+        margin-top: 6px;
+        font-size: 24px;
+      }
+      .user {
+        display: grid;
+        gap: 12px;
+        border-top: 1px solid var(--line);
+        padding: 16px 0;
+      }
+      .user:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+      .user-clusters {
+        display: grid;
+        gap: 8px;
+      }
+      .user-cluster {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #0c1218;
+        padding: 10px 12px;
+      }
       .meta {
         color: var(--muted);
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 3px 8px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
       }
       .status-active {
         color: #7ee787;
@@ -116,6 +162,16 @@
       #message {
         min-height: 24px;
         color: var(--muted);
+      }
+      @media (max-width: 900px) {
+        .summary-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      @media (max-width: 640px) {
+        .summary-grid {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
@@ -164,6 +220,21 @@
       </section>
 
       <section>
+        <h2>운영 요약</h2>
+        <div class="summary-grid" id="adminSummary">
+          <div class="summary-card"><span class="meta">사용자</span><strong>-</strong></div>
+          <div class="summary-card"><span class="meta">클러스터</span><strong>-</strong></div>
+          <div class="summary-card"><span class="meta">활성 클러스터</span><strong>-</strong></div>
+          <div class="summary-card"><span class="meta">수집 이벤트</span><strong>-</strong></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>사용자 목록</h2>
+        <div id="users"></div>
+      </section>
+
+      <section>
         <h2>클러스터 목록</h2>
         <div id="clusters"></div>
       </section>
@@ -172,6 +243,8 @@
       const tokenInput = document.querySelector("#adminToken");
       const message = document.querySelector("#message");
       const clustersEl = document.querySelector("#clusters");
+      const usersEl = document.querySelector("#users");
+      const adminSummary = document.querySelector("#adminSummary");
       const installCommand = document.querySelector("#installCommand");
       const clusterName = document.querySelector("#clusterName");
       const clusterKind = document.querySelector("#clusterKind");
@@ -187,6 +260,15 @@
 
       function setMessage(text) {
         message.textContent = text;
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
       }
 
       async function requestJson(url, options = {}) {
@@ -213,40 +295,100 @@
         }
         clustersEl.innerHTML = clusters.map((cluster) => `
           <div class="cluster">
-            <strong>${cluster.name}</strong>
+            <strong>${escapeHtml(cluster.name)}</strong>
             <span class="meta">
-              id=${cluster.id} ·
-              kind=${cluster.kind || "customer"} ·
-              status=<span class="status-${cluster.status}">${cluster.status}</span> ·
-              last_seen=${cluster.last_seen_at || "-"}
+              id=${escapeHtml(cluster.id)} ·
+              owner=${escapeHtml(cluster.user_email || "admin/unassigned")} ·
+              kind=${escapeHtml(cluster.kind || "customer")} ·
+              status=<span class="status-${escapeHtml(cluster.status)}">${escapeHtml(cluster.status)}</span> ·
+              last_seen=${escapeHtml(cluster.last_seen_at || "-")} ·
+              events=${escapeHtml(cluster.event_count || 0)}
             </span>
             <div class="row">
-              <button data-rotate="${cluster.id}">토큰 재발급</button>
+              <button data-rotate="${escapeHtml(cluster.id)}">토큰 재발급</button>
               ${
                 (cluster.kind || "customer") === "demo"
-                  ? `<button data-mark-customer="${cluster.id}">사용자 클러스터로 전환</button>`
-                  : `<button data-mark-demo="${cluster.id}">데모로 분리</button>`
+                  ? `<button data-mark-customer="${escapeHtml(cluster.id)}">사용자 클러스터로 전환</button>`
+                  : `<button data-mark-demo="${escapeHtml(cluster.id)}">데모로 분리</button>`
               }
-              <button class="danger" data-disable="${cluster.id}">비활성화</button>
+              <button class="danger" data-disable="${escapeHtml(cluster.id)}">비활성화</button>
             </div>
           </div>
         `).join("");
       }
 
-      async function loadClusters() {
-        const body = await requestJson("/admin/api/clusters");
-        renderClusters(body.clusters || []);
-        setMessage("클러스터 목록을 불러왔습니다.");
+      function renderSummary(users, clusters) {
+        const totalEvents = clusters.reduce((sum, cluster) => sum + Number(cluster.event_count || 0), 0);
+        const activeClusters = clusters.filter((cluster) => cluster.status === "active").length;
+        adminSummary.innerHTML = `
+          <div class="summary-card"><span class="meta">사용자</span><strong>${users.length}</strong></div>
+          <div class="summary-card"><span class="meta">클러스터</span><strong>${clusters.length}</strong></div>
+          <div class="summary-card"><span class="meta">활성 클러스터</span><strong>${activeClusters}</strong></div>
+          <div class="summary-card"><span class="meta">수집 이벤트</span><strong>${totalEvents}</strong></div>
+        `;
+      }
+
+      function renderUsers(users, clusters) {
+        if (!users.length) {
+          usersEl.innerHTML = '<p class="meta">등록된 사용자가 없습니다.</p>';
+          return;
+        }
+        usersEl.innerHTML = users.map((user) => {
+          const ownedClusters = clusters.filter((cluster) => cluster.user_id === user.id);
+          const clusterList = ownedClusters.length
+            ? ownedClusters.map((cluster) => `
+                <div class="user-cluster">
+                  <strong>${escapeHtml(cluster.name)}</strong>
+                  <span class="meta">
+                    <span class="pill">${escapeHtml(cluster.status)}</span>
+                    kind=${escapeHtml(cluster.kind || "customer")} ·
+                    last_seen=${escapeHtml(cluster.last_seen_at || "-")} ·
+                    events=${escapeHtml(cluster.event_count || 0)}
+                  </span>
+                </div>
+              `).join("")
+            : '<p class="meta">사용자에게 귀속된 클러스터가 없습니다.</p>';
+          return `
+            <div class="user">
+              <strong>${escapeHtml(user.email)}</strong>
+              <span class="meta">
+                id=${escapeHtml(user.id)} ·
+                provider=${escapeHtml(user.provider)} ·
+                name=${escapeHtml(user.name || "-")} ·
+                clusters=${escapeHtml(user.cluster_count || 0)} ·
+                active=${escapeHtml(user.active_cluster_count || 0)} ·
+                disabled=${escapeHtml(user.disabled_cluster_count || 0)} ·
+                events=${escapeHtml(user.event_count || 0)} ·
+                last_seen=${escapeHtml(user.last_seen_at || "-")} ·
+                last_login=${escapeHtml(user.last_login_at || "-")}
+              </span>
+              <div class="user-clusters">${clusterList}</div>
+            </div>
+          `;
+        }).join("");
+      }
+
+      async function loadAdminDashboard() {
+        const [clusterBody, userBody] = await Promise.all([
+          requestJson("/admin/api/clusters"),
+          requestJson("/admin/api/users"),
+        ]);
+        const clusters = clusterBody.clusters || [];
+        const users = userBody.users || [];
+        renderSummary(users, clusters);
+        renderUsers(users, clusters);
+        renderClusters(clusters);
+        setMessage("관리자 대시보드를 불러왔습니다.");
       }
 
       document.querySelector("#saveToken").addEventListener("click", () => {
         localStorage.setItem("adminToken", tokenInput.value.trim());
         setMessage("관리자 토큰을 저장했습니다.");
-        loadClusters().catch((error) => setMessage(error.message));
+        loadAdminDashboard().catch((error) => setMessage(error.message));
       });
 
       document.querySelector("#refreshClusters").addEventListener("click", () => {
-        loadClusters().catch((error) => setMessage(error.message));
+        loadAdminDashboard().catch((error) => setMessage(error.message));
       });
 
       document.querySelector("#createCluster").addEventListener("click", async () => {
@@ -257,11 +399,11 @@
           });
           installCommand.value = body.cluster.install_command || "";
           clusterName.value = "";
-          await loadClusters();
+          await loadAdminDashboard();
           setMessage("클러스터를 등록했습니다. 설치 명령어는 지금만 표시됩니다.");
         } catch (error) {
           if (error.status === 409) {
-            await loadClusters().catch(() => {});
+            await loadAdminDashboard().catch(() => {});
           }
           setMessage(error.message);
         }
@@ -276,22 +418,22 @@
           if (rotateId) {
             const body = await requestJson(`/admin/api/clusters/${rotateId}/rotate-token`, { method: "POST" });
             installCommand.value = body.cluster.install_command || "";
-            await loadClusters();
+            await loadAdminDashboard();
             setMessage("토큰을 재발급했습니다. 설치 명령어는 지금만 표시됩니다.");
           }
           if (markDemoId) {
             await requestJson(`/admin/api/clusters/${markDemoId}/mark-demo`, { method: "POST" });
-            await loadClusters();
+            await loadAdminDashboard();
             setMessage("클러스터를 데모/테스트 클러스터로 분리했습니다.");
           }
           if (markCustomerId) {
             await requestJson(`/admin/api/clusters/${markCustomerId}/mark-customer`, { method: "POST" });
-            await loadClusters();
+            await loadAdminDashboard();
             setMessage("클러스터를 사용자 클러스터로 전환했습니다.");
           }
           if (disableId) {
             await requestJson(`/admin/api/clusters/${disableId}/disable`, { method: "POST" });
-            await loadClusters();
+            await loadAdminDashboard();
             setMessage("클러스터를 비활성화했습니다.");
           }
         } catch (error) {
@@ -305,7 +447,7 @@
       });
 
       if (tokenInput.value.trim()) {
-        loadClusters().catch((error) => setMessage(error.message));
+        loadAdminDashboard().catch((error) => setMessage(error.message));
       }
     </script>
   </body>
