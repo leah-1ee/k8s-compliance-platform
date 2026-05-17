@@ -375,6 +375,14 @@ def update_cluster_kind(cluster_id: str, kind: str) -> dict[str, Any] | None:
     return get_cluster(cluster_id)
 
 
+def is_demo_cluster_name(name: str) -> bool:
+    try:
+        normalized = _normalize_cluster_name(name)
+    except ValueError:
+        return False
+    return normalized in _demo_cluster_names()
+
+
 def rotate_cluster_token(cluster_id: str) -> dict[str, Any] | None:
     init_db()
     token = secrets.token_urlsafe(32)

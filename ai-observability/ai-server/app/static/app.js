@@ -360,6 +360,7 @@ async function refreshRuntimeEvents() {
   }
   const query = new URLSearchParams({
     limit: "20",
+    cluster: $("#runtimeCluster").value,
     cluster_kind: $("#runtimeClusterKind").value,
     source: $("#runtimeSource").value,
     include_legacy: $("#includeLegacyEvents").checked ? "true" : "false",
@@ -420,6 +421,21 @@ function renderAuthGates() {
   $("#reportContent").hidden = !isAuthenticated;
 }
 
+function renderRuntimeClusterFilter() {
+  const select = $("#runtimeCluster");
+  const selected = select.value;
+  select.innerHTML = [
+    '<option value="">전체 클러스터</option>',
+    ...userClusters.map(
+      (cluster) =>
+        `<option value="${escapeHtml(cluster.name || "")}">${escapeHtml(cluster.name || "unknown-cluster")}</option>`,
+    ),
+  ].join("");
+  if (userClusters.some((cluster) => cluster.name === selected)) {
+    select.value = selected;
+  }
+}
+
 function renderUserClusters() {
   const container = $("#userClusters");
   if (!authState.authenticated) {
@@ -452,11 +468,13 @@ async function loadUserClusters() {
   renderClusterSetupGate();
   if (!authState.authenticated) {
     userClusters = [];
+    renderRuntimeClusterFilter();
     renderUserClusters();
     return;
   }
   const body = await apiJson("/api/clusters");
   userClusters = body.clusters || [];
+  renderRuntimeClusterFilter();
   renderUserClusters();
 }
 
@@ -636,7 +654,7 @@ $("#userClusters").addEventListener("click", (event) => {
   });
 });
 
-["#runtimeClusterKind", "#runtimeSource", "#includeLegacyEvents"].forEach((selector) => {
+["#runtimeCluster", "#runtimeClusterKind", "#runtimeSource", "#includeLegacyEvents"].forEach((selector) => {
   $(selector).addEventListener("change", () => {
     refreshRuntimeEvents().catch((error) => {
       showInlineAlert(error.message);

@@ -419,11 +419,15 @@ def ingest_falco_events(payload: dict, authorization: str | None = Header(defaul
     cluster = storage.find_cluster_by_token(cluster_token)
     if cluster is None:
         return JSONResponse(status_code=401, content={"error": "valid cluster token required"})
+    cluster_kind = cluster.get("kind", "customer")
+    if cluster_kind != "demo" and storage.is_demo_cluster_name(cluster["name"]):
+        cluster = storage.update_cluster_kind(cluster["id"], "demo") or cluster
+        cluster_kind = "demo"
     event = record_falco_event(
         payload,
         cluster_id=cluster["id"],
         cluster_name=cluster["name"],
-        cluster_kind=cluster.get("kind", "customer"),
+        cluster_kind=cluster_kind,
         source="sidekick",
     )
     storage.mark_cluster_seen(cluster["id"], event.get("timestamp", ""))

@@ -588,6 +588,63 @@ def test_ingested_falco_event_is_listed_with_manifest_snapshot():
     assert detail_body["resource_manifest"].startswith("apiVersion: v1")
 
 
+def test_ingested_demo_cluster_event_is_tagged_and_filterable(monkeypatch):
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="demo-cluster-owner@example.test",
+        email="demo-cluster-owner@example.test",
+    )
+    session = storage.create_session(owner["id"])
+    cluster = storage.create_cluster("task-demo-cluster", user_id=owner["id"])
+    monkeypatch.setenv("DEMO_CLUSTER_NAMES", "task-demo-cluster")
+
+    response = client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster['token']}"},
+        json={
+            "event": {
+                "time": "2026-05-12T00:01:00Z",
+                "rule": "Demo Cluster Event",
+                "priority": "Critical",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["event"]["cluster_id"] == cluster["id"]
+    assert body["event"]["cluster"] == "task-demo-cluster"
+    assert body["event"]["cluster_kind"] == "demo"
+    assert storage.get_cluster(cluster["id"])["kind"] == "demo"
+
+    demo_response = client.get(
+        "/runtime-events?limit=20&cluster_kind=demo",
+        cookies={"compliance_ai_session": session},
+    )
+    customer_response = client.get(
+        "/runtime-events?limit=20&cluster_kind=customer",
+        cookies={"compliance_ai_session": session},
+    )
+    cluster_response = client.get(
+        "/runtime-events?limit=20&cluster=task-demo-cluster&source=sidekick",
+        cookies={"compliance_ai_session": session},
+    )
+    wrong_source_response = client.get(
+        "/runtime-events?limit=20&cluster=task-demo-cluster&source=gatekeeper",
+        cookies={"compliance_ai_session": session},
+    )
+
+    assert demo_response.status_code == 200
+    assert customer_response.status_code == 200
+    assert cluster_response.status_code == 200
+    assert wrong_source_response.status_code == 200
+    event_id = body["event"]["id"]
+    assert event_id in {event["id"] for event in demo_response.json()["events"]}
+    assert event_id not in {event["id"] for event in customer_response.json()["events"]}
+    assert event_id in {event["id"] for event in cluster_response.json()["events"]}
+    assert event_id not in {event["id"] for event in wrong_source_response.json()["events"]}
+
+
 def test_runtime_events_are_scoped_to_logged_in_users():
     owner_a = storage.upsert_user(
         provider="dev",
