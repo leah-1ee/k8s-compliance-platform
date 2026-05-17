@@ -102,6 +102,10 @@ def auth_configured() -> bool:
     return bool(os.getenv("GOOGLE_CLIENT_ID", "").strip() and os.getenv("GOOGLE_CLIENT_SECRET", "").strip())
 
 
+def dev_auth_enabled() -> bool:
+    return os.getenv("DEV_AUTH_ENABLED", "").strip().lower() in {"true", "1", "yes"}
+
+
 def public_base_url(request: Request) -> str:
     configured = os.getenv("PUBLIC_BASE_URL", "").strip()
     if configured:
@@ -204,6 +208,7 @@ def me(compliance_ai_session: str | None = Cookie(default=None)) -> dict:
         "user": _public_user(user) if user else None,
         "auth": {
             "google_configured": auth_configured(),
+            "dev_enabled": dev_auth_enabled(),
         },
     }
 
@@ -308,6 +313,28 @@ def logout(request: Request, compliance_ai_session: str | None = Cookie(default=
     storage.delete_session(compliance_ai_session or "")
     response = JSONResponse({"status": "logged_out"})
     clear_session_cookie(response, request)
+    return response
+
+
+@app.get("/auth/dev-login")
+def dev_login(request: Request):
+    # Google OAuth 설정 전 개발/시연용 로그인. 운영에서는 DEV_AUTH_ENABLED를 끈다.
+    if not dev_auth_enabled():
+        return JSONResponse(status_code=503, content={"error": "dev auth is disabled"})
+    email = os.getenv("DEV_AUTH_EMAIL", "demo@school.test").strip().lower()
+    name = os.getenv("DEV_AUTH_NAME", "Demo User").strip()
+    try:
+        user = storage.upsert_user(
+            provider="dev",
+            provider_subject=email,
+            email=email,
+            name=name,
+        )
+    except ValueError as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+    session_token = storage.create_session(user["id"])
+    response = RedirectResponse("/ui", status_code=302)
+    set_session_cookie(response, request, session_token)
     return response
 
 

@@ -614,15 +614,20 @@ async function loadAuthStatus() {
 function renderAuthStatus() {
   const status = $("#authStatus");
   const loginLink = $("#loginLink");
+  const devLoginLink = $("#devLoginLink");
   const logoutButton = $("#logoutButton");
   if (authState.authenticated) {
     status.textContent = authState.user?.email || "로그인됨";
     loginLink.hidden = true;
+    devLoginLink.hidden = true;
     logoutButton.hidden = false;
     return;
   }
-  status.textContent = authState.auth?.google_configured ? "로그인 필요" : "OAuth 미설정";
+  const googleConfigured = Boolean(authState.auth?.google_configured);
+  const devEnabled = Boolean(authState.auth?.dev_enabled);
+  status.textContent = googleConfigured || devEnabled ? "로그인 필요" : "로그인 미설정";
   loginLink.hidden = !authState.auth?.google_configured;
+  devLoginLink.hidden = !authState.auth?.dev_enabled;
   logoutButton.hidden = true;
 }
 

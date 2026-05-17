@@ -117,6 +117,10 @@ spec:
               value: "/data/compliance-ai-server.sqlite3"
             - name: DEMO_CLUSTER_NAMES
               value: "school-cloud,boanlab-cloud"
+            - name: DEV_AUTH_ENABLED
+              value: "false"
+            - name: DEV_AUTH_EMAIL
+              value: "demo@school.test"
             - name: SESSION_COOKIE_SECURE
               value: "true"
             - name: ADMIN_TOKEN

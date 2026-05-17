@@ -57,6 +57,7 @@ def test_ui_is_served():
     assert "xAI (Grok)" in response.text
     assert "Use my own API key" in response.text
     assert "Google 로그인" in response.text
+    assert "개발 로그인" in response.text
     assert "Your API key is used only for requests in this session" in response.text
     assert "Policy Generation Request" in response.text
     assert '<label id="policyPromptField" hidden>' in response.text
@@ -92,6 +93,7 @@ def test_me_reports_anonymous_user():
     assert body["authenticated"] is False
     assert body["user"] is None
     assert body["auth"]["google_configured"] is False
+    assert body["auth"]["dev_enabled"] is False
 
 
 def test_me_reports_authenticated_session():
@@ -117,6 +119,34 @@ def test_google_login_requires_oauth_configuration():
 
     assert response.status_code == 503
     assert response.json()["error"] == "Google OAuth is not configured"
+
+
+def test_dev_login_requires_explicit_enable():
+    response = client.get("/auth/dev-login", follow_redirects=False)
+
+    assert response.status_code == 503
+    assert response.json()["error"] == "dev auth is disabled"
+
+
+def test_dev_login_creates_session(monkeypatch):
+    monkeypatch.setenv("DEV_AUTH_ENABLED", "true")
+    monkeypatch.setenv("DEV_AUTH_EMAIL", "dev-user@example.test")
+    monkeypatch.setenv("DEV_AUTH_NAME", "Dev User")
+
+    login_response = client.get("/auth/dev-login", follow_redirects=False)
+
+    assert login_response.status_code == 302
+    assert login_response.headers["location"] == "/ui"
+    session_cookie = login_response.cookies.get("compliance_ai_session")
+    assert session_cookie
+
+    me_response = client.get("/me", cookies={"compliance_ai_session": session_cookie})
+    body = me_response.json()
+
+    assert me_response.status_code == 200
+    assert body["authenticated"] is True
+    assert body["user"]["email"] == "dev-user@example.test"
+    assert body["user"]["provider"] == "dev"
 
 
 def test_classify_contract():
