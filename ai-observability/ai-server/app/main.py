@@ -168,9 +168,21 @@ def analyze(
 
 
 @app.get("/runtime-events")
-def runtime_events(limit: int = 50, cluster: str = "", cluster_kind: str = "") -> dict:
+def runtime_events(
+    limit: int = 50,
+    cluster: str = "",
+    cluster_kind: str = "",
+    source: str = "",
+    include_legacy: bool = False,
+) -> dict:
     # Falco/Gatekeeper 최근 위반 이벤트 목록
-    return list_runtime_events(limit=limit, cluster=cluster, cluster_kind=cluster_kind)
+    return list_runtime_events(
+        limit=limit,
+        cluster=cluster,
+        cluster_kind=cluster_kind,
+        source=source,
+        include_legacy=include_legacy,
+    )
 
 
 @app.get("/runtime-events/{event_id}")
@@ -346,9 +358,9 @@ def gatekeeper_events(payload: dict) -> dict:
 
 
 @app.get("/compliance-report")
-def compliance_report() -> dict:
+def compliance_report(cluster_kind: str = "", include_legacy: bool = False) -> dict:
     # AI 리포트 탭용 JSON 리포트
-    return build_report()
+    return build_report(cluster_kind=cluster_kind, include_legacy=include_legacy)
 
 
 def _sidekick_install_command(request: Request, token: str) -> str:

@@ -246,7 +246,12 @@ def mark_cluster_seen(cluster_id: str, timestamp: str) -> None:
         )
 
 
-def list_events(limit: int = 50, cluster: str = "", cluster_kind: str = "") -> list[dict[str, Any]]:
+def list_events(
+    limit: int = 50,
+    cluster: str = "",
+    cluster_kind: str = "",
+    source: str = "",
+) -> list[dict[str, Any]]:
     init_db()
     limit = max(1, min(int(limit or 50), 500))
     query = "SELECT * FROM events"
@@ -258,6 +263,9 @@ def list_events(limit: int = 50, cluster: str = "", cluster_kind: str = "") -> l
     if cluster_kind:
         filters.append("cluster_kind = ?")
         params.append(_normalize_cluster_kind(cluster_kind))
+    if source:
+        filters.append("source = ?")
+        params.append(source)
     if filters:
         query += " WHERE " + " AND ".join(filters)
     query += " ORDER BY COALESCE(timestamp, created_at) DESC, created_at DESC LIMIT ?"

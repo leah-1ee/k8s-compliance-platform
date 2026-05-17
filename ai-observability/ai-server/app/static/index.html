@@ -175,6 +175,28 @@
             <button id="refreshRuntimeEvents">최근 위반 새로고침</button>
             <button id="loadSelectedManifest">선택 이벤트 매니페스트 조회</button>
           </div>
+          <div class="runtime-filters" aria-label="runtime event filters">
+            <label>
+              클러스터 구분
+              <select id="runtimeClusterKind">
+                <option value="">전체</option>
+                <option value="customer">사용자 클러스터</option>
+                <option value="demo">데모/테스트 클러스터</option>
+              </select>
+            </label>
+            <label>
+              이벤트 소스
+              <select id="runtimeSource">
+                <option value="">전체 저장 이벤트</option>
+                <option value="sidekick">Falco Sidekick</option>
+                <option value="gatekeeper">Gatekeeper</option>
+              </select>
+            </label>
+            <label class="checkbox-row">
+              <input id="includeLegacyEvents" type="checkbox" />
+              레거시 response-server 이벤트 포함
+            </label>
+          </div>
           <div class="runtime-events" id="runtimeEvents" aria-label="recent runtime violations">
             <article class="event-row">
               <h2>최근 위반 이벤트</h2>

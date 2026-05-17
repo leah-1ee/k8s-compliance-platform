@@ -66,6 +66,8 @@ def test_ui_is_served():
     assert "Resource Manifest" in response.text
     assert "LLM으로 원인/수정 YAML 생성" in response.text
     assert "최근 위반 새로고침" in response.text
+    assert "클러스터 구분" in response.text
+    assert "레거시 response-server 이벤트 포함" in response.text
     assert "AI Report" in response.text
     assert 'data-copy-target="templateOutput"' in response.text
     assert 'aria-label="ConstraintTemplate 복사"' in response.text
@@ -344,6 +346,11 @@ def test_gatekeeper_event_is_collected_and_reported():
     assert list_response.status_code == 200
     assert any(event["id"] == event_id for event in list_body["events"])
 
+    demo_list_response = client.get("/runtime-events?limit=20&cluster_kind=demo")
+    demo_list_body = demo_list_response.json()
+    assert demo_list_response.status_code == 200
+    assert any(event["id"] == event_id for event in demo_list_body["events"])
+
     detail_response = client.get(f"/runtime-events/{event_id}")
     detail_body = detail_response.json()
 
@@ -402,6 +409,16 @@ def test_ingested_falco_event_is_listed_with_manifest_snapshot():
     assert list_response.status_code == 200
     assert any(event["id"] == event_id for event in list_body["events"])
 
+    customer_list_response = client.get("/runtime-events?limit=20&cluster_kind=customer")
+    customer_list_body = customer_list_response.json()
+    assert customer_list_response.status_code == 200
+    assert any(event["id"] == event_id for event in customer_list_body["events"])
+
+    demo_list_response = client.get("/runtime-events?limit=20&cluster_kind=demo")
+    demo_list_body = demo_list_response.json()
+    assert demo_list_response.status_code == 200
+    assert all(event["id"] != event_id for event in demo_list_body["events"])
+
     detail_response = client.get(f"/runtime-events/{event_id}")
     detail_body = detail_response.json()
 
@@ -412,6 +429,23 @@ def test_ingested_falco_event_is_listed_with_manifest_snapshot():
     assert detail_body["cluster_kind"] == "customer"
     assert detail_body["namespace"] == "prod"
     assert detail_body["resource_manifest"].startswith("apiVersion: v1")
+
+
+def test_runtime_events_skip_legacy_response_server_by_default(monkeypatch):
+    calls = []
+
+    def fake_get(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AssertionError("legacy response-server should be opt-in")
+
+    monkeypatch.setattr("app.runtime_client.httpx.get", fake_get)
+
+    response = client.get("/runtime-events?limit=1")
+    body = response.json()
+
+    assert response.status_code == 200
+    assert calls == []
+    assert body["source_status"]["response_server"] == "skipped"
 
 
 def test_ingest_rejects_missing_cluster_token():

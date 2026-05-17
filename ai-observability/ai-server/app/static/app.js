@@ -333,21 +333,27 @@ async function analyzeViolation() {
 
 async function refreshRuntimeEvents() {
   const container = $("#runtimeEvents");
+  const query = new URLSearchParams({
+    limit: "20",
+    cluster_kind: $("#runtimeClusterKind").value,
+    source: $("#runtimeSource").value,
+    include_legacy: $("#includeLegacyEvents").checked ? "true" : "false",
+  });
   container.innerHTML = `
     <article class="event-row">
       <span class="badge loading">loading</span>
       <h2>최근 위반 이벤트 로딩 중</h2>
-      <p>response-server와 Gatekeeper 수집 버퍼를 확인하고 있습니다.</p>
+      <p>저장된 Sidekick/Gatekeeper 이벤트를 확인하고 있습니다.</p>
     </article>
   `;
-  const response = await fetch("/runtime-events?limit=20");
+  const response = await fetch(`/runtime-events?${query.toString()}`);
   const body = await response.json();
   if (!body.events || body.events.length === 0) {
     container.innerHTML = `
       <article class="event-row">
         <span class="badge ready">empty</span>
         <h2>최근 위반 이벤트 없음</h2>
-        <p>${escapeHtml(body.source_status?.response_server_error || "수집된 이벤트가 없습니다.")}</p>
+        <p>${escapeHtml(body.source_status?.response_server_error || "현재 필터에 맞는 저장 이벤트가 없습니다.")}</p>
       </article>
     `;
     return;
@@ -476,6 +482,15 @@ $("#refreshRuntimeEvents").addEventListener("click", () => {
   refreshRuntimeEvents().catch((error) => {
     showInlineAlert(error.message);
     showToast("위반 목록 로드 실패");
+  });
+});
+
+["#runtimeClusterKind", "#runtimeSource", "#includeLegacyEvents"].forEach((selector) => {
+  $(selector).addEventListener("change", () => {
+    refreshRuntimeEvents().catch((error) => {
+      showInlineAlert(error.message);
+      showToast("위반 목록 로드 실패");
+    });
   });
 });
 

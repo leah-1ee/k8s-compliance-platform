@@ -14,19 +14,27 @@ KUBE_API_PORT = os.getenv("KUBERNETES_SERVICE_PORT", "443")
 SERVICEACCOUNT_DIR = "/var/run/secrets/kubernetes.io/serviceaccount"
 
 
-def list_runtime_events(limit: int = 50, cluster: str = "", cluster_kind: str = "") -> dict[str, Any]:
+def list_runtime_events(
+    limit: int = 50,
+    cluster: str = "",
+    cluster_kind: str = "",
+    source: str = "",
+    include_legacy: bool = False,
+) -> dict[str, Any]:
     # SQLite 저장 이벤트와 레거시 response-server 이벤트를 통합
     events: list[dict[str, Any]] = storage.list_events(
         limit=limit,
         cluster=cluster,
         cluster_kind=cluster_kind,
+        source=source,
     )
     source_status = {
-        "response_server": "unavailable",
+        "response_server": "skipped",
         "sqlite": "ok",
     }
 
-    if not cluster and cluster_kind in {"", "demo"}:
+    if include_legacy and not cluster and not source and cluster_kind in {"", "demo"}:
+        source_status["response_server"] = "unavailable"
         try:
             response = httpx.get(
                 f"{RESPONSE_SERVER_URL}/api/v1/events",
@@ -198,9 +206,13 @@ def fetch_resource_manifest(namespace: str, pod_name: str) -> dict[str, str]:
         return {"manifest": "", "error": f"Kubernetes API 조회 실패: {error}"}
 
 
-def build_report(cluster_kind: str = "") -> dict[str, Any]:
+def build_report(cluster_kind: str = "", include_legacy: bool = False) -> dict[str, Any]:
     summary = get_runtime_summary()
-    events = list_runtime_events(limit=100, cluster_kind=cluster_kind)["events"]
+    events = list_runtime_events(
+        limit=100,
+        cluster_kind=cluster_kind,
+        include_legacy=include_legacy,
+    )["events"]
     top_rules = sorted(summary.get("by_rule", {}).items(), key=lambda item: item[1], reverse=True)[:5]
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),

@@ -384,6 +384,18 @@ pre[data-empty="true"] {
   margin-bottom: 18px;
 }
 
+.runtime-filters {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) minmax(180px, 260px) minmax(220px, 1fr);
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 14px;
+}
+
+.runtime-filters label {
+  min-width: 0;
+}
+
 .event-row {
   display: grid;
   width: 100%;
