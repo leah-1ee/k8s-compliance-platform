@@ -457,11 +457,30 @@ spec:
     assert response.status_code == 200
     assert body["severity"] in {"low", "medium", "high"}
     assert "school-cloud" in body["summary"]
+    assert body["severity_explanation"]
     assert body["recommended_actions"]
     assert body["root_cause"]
+    assert "Compliance - Shell Spawned in Container" in body["root_cause"]
+    assert body["recommended_fix"]
     assert body["remediation"]
     assert body["yaml_snippet"]
     assert body["llm_used"] is False
+
+
+def test_analyze_violation_falls_back_without_llm_key():
+    payload = _analysis_payload()
+    payload["use_llm"] = True
+
+    response = client.post("/analyze-violation", json=payload)
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["llm_used"] is False
+    assert "LLM API key" in body["llm_error"]
+    assert "Falco priority" in body["severity_explanation"]
+    assert "기본 분석" in body["llm_error"]
+    assert body["recommended_fix"]
+    assert body["yaml_snippet"]
 
 
 def test_analyze_violation_uses_llm_when_enabled(monkeypatch):
@@ -490,6 +509,7 @@ def test_analyze_violation_uses_llm_when_enabled(monkeypatch):
     assert response.status_code == 200
     assert body["llm_used"] is True
     assert "허용되지 않은 shell" in body["root_cause"]
+    assert "불필요한 shell" in body["recommended_fix"]
     assert "runAsNonRoot" in body["yaml_snippet"]
 
 
@@ -886,7 +906,9 @@ def test_parse_llm_incident_json_accepts_code_fence():
     )
 
     assert parsed == {
+        "severity_explanation": "",
         "root_cause": "원인",
+        "recommended_fix": "수정",
         "remediation": "수정",
         "yaml_snippet": "kind: Pod",
     }

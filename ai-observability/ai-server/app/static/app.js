@@ -184,10 +184,10 @@ function setOutput(selector, value) {
 
 function eventToAnalysisPayload(event) {
   return {
-    cluster: "current-cluster",
+    cluster: event.cluster || "current-cluster",
     rule: event.rule || "",
     priority: event.priority || "",
-    output: event.classification_reason || event.output || "",
+    output: event.output || event.classification_reason || "",
     time: event.timestamp || event.time || "",
     output_fields: {
       "k8s.ns.name": event.namespace || "",
@@ -195,10 +195,89 @@ function eventToAnalysisPayload(event) {
       "container.name": event.container_name || "",
       "container.image.repository": event.image || "",
       "user.name": event.user || "",
+      "proc.name": event.command || "",
       "proc.cmdline": event.command || "",
     },
     tags: [event.source || "runtime"],
   };
+}
+
+function fieldValue(payload, key) {
+  return payload.output_fields?.[key] || "unknown";
+}
+
+function analysisContextRows(payload) {
+  const rows = [
+    ["Rule", payload.rule || "unknown rule"],
+    ["Cluster", payload.cluster || "current-cluster"],
+    ["Namespace", fieldValue(payload, "k8s.ns.name")],
+    ["Pod", fieldValue(payload, "k8s.pod.name")],
+    ["Container", fieldValue(payload, "container.name")],
+  ];
+  return rows
+    .map(
+      ([label, value]) => `
+        <div>
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function renderYamlSnippet(yamlSnippet) {
+  if (!yamlSnippet) {
+    return `
+      <div class="analysis-code-block">
+        <h3>수정 YAML 스니펫</h3>
+        <p>이 이벤트에는 바로 적용할 수 있는 YAML 스니펫이 없습니다.</p>
+      </div>
+    `;
+  }
+  return `
+    <div class="analysis-code-block">
+      <div class="card-heading">
+        <button class="copy-section copy-yaml-snippet" aria-label="수정 YAML 스니펫 복사" title="복사">
+          <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+            <path d="M5 15V6a2 2 0 0 1 2-2h9"></path>
+          </svg>
+          <svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 6 9 17l-5-5"></path>
+          </svg>
+        </button>
+        <h3>수정 YAML 스니펫</h3>
+      </div>
+      <pre><code id="analysisYamlOutput">${escapeHtml(yamlSnippet)}</code></pre>
+    </div>
+  `;
+}
+
+function renderViolationAnalysis(result, payload) {
+  const actions = (result.recommended_actions || [])
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
+  latestYamlSnippet = result.yaml_snippet || "";
+  $("#analysisResult").innerHTML = `
+    <div class="analysis-meta">
+      <span class="badge ${escapeHtml(result.severity)}">${escapeHtml(result.severity)}</span>
+      <span class="badge ${result.llm_used ? "ready" : "loading"}">${result.llm_used ? "LLM 분석" : "기본 분석"}</span>
+    </div>
+    <h2>${escapeHtml(payload.rule || result.summary)}</h2>
+    <div class="analysis-meta">${analysisContextRows(payload)}</div>
+    <h3>심각도 설명</h3>
+    <p>${escapeHtml(result.severity_explanation || result.reason)}</p>
+    <h3>원인 요약</h3>
+    <p>${escapeHtml(result.root_cause)}</p>
+    <h3>권장 수정</h3>
+    <p>${escapeHtml(result.recommended_fix || result.remediation)}</p>
+    <h3>구체적 조치</h3>
+    <p>${escapeHtml(result.remediation)}</p>
+    ${renderYamlSnippet(latestYamlSnippet)}
+    ${actions ? `<h3>체크리스트</h3><ul>${actions}</ul>` : ""}
+    ${result.llm_error ? `<p>${escapeHtml(result.llm_error)}</p>` : ""}
+  `;
 }
 
 function setPolicyLoading(isLoading) {
@@ -311,40 +390,7 @@ async function analyzeViolation() {
     payload.resource_manifest = $("#resourceManifest").value;
     payload.use_llm = $("#useViolationLlm").checked;
     const result = await postJson("/analyze-violation", payload);
-    const actions = result.recommended_actions
-      .map((item) => `<li>${escapeHtml(item)}</li>`)
-      .join("");
-    latestYamlSnippet = result.yaml_snippet || "";
-    $("#analysisResult").innerHTML = `
-      <div class="analysis-meta">
-        <span class="badge ${result.severity}">${escapeHtml(result.severity)}</span>
-        <span class="badge ${result.llm_used ? "ready" : "loading"}">${result.llm_used ? "LLM 분석" : "기본 분석"}</span>
-      </div>
-      <h2>${escapeHtml(result.summary)}</h2>
-      <p>confidence: ${escapeHtml(result.confidence)}</p>
-      <p>${escapeHtml(result.reason)}</p>
-      <h3>원인 설명</h3>
-      <p>${escapeHtml(result.root_cause)}</p>
-      <h3>수정 방법</h3>
-      <p>${escapeHtml(result.remediation)}</p>
-      <div class="analysis-code-block">
-        <div class="card-heading">
-          <button class="copy-section copy-yaml-snippet" aria-label="수정 YAML 스니펫 복사" title="복사">
-            <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="9" y="9" width="11" height="11" rx="2"></rect>
-              <path d="M5 15V6a2 2 0 0 1 2-2h9"></path>
-            </svg>
-            <svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M20 6 9 17l-5-5"></path>
-            </svg>
-          </button>
-          <h3>수정 YAML 스니펫</h3>
-        </div>
-        <pre><code id="analysisYamlOutput">${escapeHtml(latestYamlSnippet)}</code></pre>
-      </div>
-      ${result.llm_error ? `<p>${escapeHtml(result.llm_error)}</p>` : ""}
-      <ul>${actions}</ul>
-    `;
+    renderViolationAnalysis(result, payload);
     latestAnalysisText = JSON.stringify(result, null, 2);
     showToast("분석 완료");
   } finally {

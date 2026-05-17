@@ -114,8 +114,10 @@ class ViolationAnalysisRequest(ClassificationRequest):
 
 class ViolationAnalysisResponse(ClassificationResponse):
     summary: str = Field(min_length=1, max_length=1000)
+    severity_explanation: str = Field(default="", max_length=1200)
     recommended_actions: list[str] = Field(default_factory=list, max_length=8)
     root_cause: str = Field(default="", max_length=1200)
+    recommended_fix: str = Field(default="", max_length=1600)
     remediation: str = Field(default="", max_length=1600)
     yaml_snippet: str = Field(default="", max_length=4000)
     llm_used: bool = False
