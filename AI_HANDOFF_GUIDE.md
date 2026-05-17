@@ -29,6 +29,41 @@
 - Google OAuth 실연동은 카드/Google Cloud 문제 해결 후 dev-login 비활성화와 함께 마무리한다.
 - zrok 수동 실행 안정화 스크립트, 이미지 태그/배포 절차 문서화, SQLite 백업/초기화 방법, 데모 데이터 정리 명령이 필요하다.
 
+## 현재 인증 상태
+
+- Google OAuth 코드는 구현되어 있지만 실제 Google Client ID/Secret은 아직 설정하지 않는다.
+- Google Cloud Console 설정 중 카드 정보 입력이 요구되어 실연동은 보류한다.
+- 현재 개발/시연은 `DEV_AUTH_ENABLED=true` 기반 개발 로그인을 사용한다.
+- 운영 배포 시에는 `DEV_AUTH_ENABLED=false`로 끄고 Google OAuth 또는 학교 SSO로 전환한다.
+
+VM에서 개발 로그인을 활성화할 때는 아래 명령을 사용한다.
+
+```bash
+kubectl set env deploy/ai-classifier -n compliance-system \
+  DEV_AUTH_ENABLED=true \
+  DEV_AUTH_EMAIL=demo@school.test \
+  DEV_AUTH_NAME="Demo User"
+
+kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s
+```
+
+확인 명령:
+
+```bash
+curl -s http://127.0.0.1:18000/me | python3 -m json.tool
+
+kubectl exec -n compliance-system deploy/ai-classifier -- \
+  python -c "from app.main import app; print([r.path for r in app.routes if 'auth' in r.path or r.path == '/me'])"
+```
+
+정상 라우트 예시:
+
+```text
+['/me', '/auth/google/login', '/auth/google/callback', '/auth/dev-login']
+```
+
+`/me`가 404이면 코드 문제가 아니라 대개 새 이미지가 아직 VM에 배포되지 않은 상태다.
+
 ## Git 작업 규칙
 
 코드 수정 후에는 사용자에게 아래 정보를 반드시 보여준다.
@@ -92,6 +127,66 @@ kubectl get pods -n compliance-system -l app=ai-classifier
 kubectl logs -n compliance-system deploy/ai-classifier --tail=100
 ```
 
+배포 후에는 현재 Pod 이미지와 라우트를 반드시 확인한다.
+
+```bash
+kubectl get deploy -n compliance-system ai-classifier \
+  -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
+
+kubectl exec -n compliance-system deploy/ai-classifier -- \
+  python -c "from app.main import app; print([r.path for r in app.routes])"
+
+curl -s http://127.0.0.1:18000/healthz
+curl -s http://127.0.0.1:18000/me | python3 -m json.tool
+```
+
+## 터널/포트포워딩 운영 메모
+
+데모 환경은 아래 로컬 포트가 살아 있어야 한다.
+
+- AI Console: `127.0.0.1:18000 -> ai-classifier:8000`
+- Response Server: `127.0.0.1:5000 -> response-server:5000`
+- Grafana: `127.0.0.1:3001 -> monitoring-grafana:80`
+
+zrok 공개 주소:
+
+- AI Console: `https://compliance-ai-console.shares.zrok.io/ui`
+- Admin: `https://compliance-ai-console.shares.zrok.io/admin`
+- Grafana: `https://compliance-grafana.shares.zrok.io`
+
+`zrok`에서 `connect: connection refused`가 뜨면 zrok 문제가 아니라 해당 로컬 포트포워딩이 죽은 것이다.
+`502`가 뜨면 stale zrok share일 가능성이 높으므로 share 삭제 후 재실행한다.
+
+상태 확인:
+
+```bash
+sudo lsof -iTCP:18000 -sTCP:LISTEN -n -P
+sudo lsof -iTCP:3001 -sTCP:LISTEN -n -P
+sudo lsof -iTCP:5000 -sTCP:LISTEN -n -P
+ps aux | grep -E "port-forward|zrok2 share public"
+
+curl -o /dev/null -s -w "%{http_code}\n" http://127.0.0.1:18000/ui
+curl -o /dev/null -s -w "%{http_code}\n" https://compliance-ai-console.shares.zrok.io/ui
+curl -o /dev/null -s -w "%{http_code}\n" https://compliance-ai-console.shares.zrok.io/admin
+```
+
+정상 기대값은 `200`, `200`, `200`이다.
+
+## Gatekeeper 관련 주의점
+
+- `allow-registries` 정책 때문에 `docker.io/leeon3345/`가 허용되어 있어야 ai-classifier 이미지 롤아웃이 된다.
+- local-path provisioner 설치 시 `local-path-storage` namespace가 Gatekeeper 예외에 포함되어 있어야 한다.
+- rollout이 멈추면 먼저 admission webhook 또는 PVC 이벤트를 확인한다.
+
+확인 명령:
+
+```bash
+kubectl get events -A --sort-by=.lastTimestamp | tail -40
+kubectl describe pod -n compliance-system -l app=ai-classifier
+kubectl get constraints
+kubectl get k8sallowedrepos.constraints.gatekeeper.sh allow-registries -o yaml | grep -A20 repos
+```
+
 ## 최근 수정 파일
 
 사용자별 클러스터 귀속과 Cluster Setup 작업에서 수정한 파일은 다음과 같다.
@@ -103,18 +198,22 @@ ai-observability/ai-server/app/main.py
 ai-observability/ai-server/app/static/index.html
 ai-observability/ai-server/app/static/app.js
 ai-observability/ai-server/app/static/styles.css
+ai-observability/ai-server/tests/conftest.py
 ai-observability/ai-server/tests/test_api.py
+ai-observability/k8s/ai-server.yaml
+cloud-deploy/ai-server.yaml
 AI_HANDOFF_GUIDE.md
 ```
 
 검증 명령:
 
 ```bash
-.venv/bin/python -m pytest ai-observability/ai-server/tests/test_api.py
+cd /Users/leeon/Documents/k8s-compliance-platform/ai-observability/ai-server
+/Users/leeon/Documents/k8s-compliance-platform/.venv/bin/python -m pytest
 ```
 
 최근 검증 결과:
 
 ```text
-35 passed
+41 passed, 14 warnings
 ```
