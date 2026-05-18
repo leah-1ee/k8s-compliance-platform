@@ -1,6 +1,7 @@
 const $ = (selector) => document.querySelector(selector);
 
 let latestPolicyText = "";
+let latestPolicyManifestText = "";
 let latestAnalysisText = "";
 let latestYamlSnippet = "";
 let latestReportText = "";
@@ -537,6 +538,123 @@ function setPolicyLoading(isLoading) {
   $("#generatePolicy").textContent = isLoading ? "생성 중..." : "정책 생성";
 }
 
+function buildGeneratedPolicyManifest(result) {
+  return [result.constraint_template, result.constraint]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join("\n---\n");
+}
+
+function ensurePolicyApplyPanel() {
+  if ($("#policyApplyPanel")) {
+    return;
+  }
+  const anchor = $("#constraintOutput")?.closest(".result-grid") || $("#policyPanel");
+  if (!anchor || !anchor.parentElement) {
+    return;
+  }
+  const panel = document.createElement("section");
+  panel.id = "policyApplyPanel";
+  panel.className = "policy-apply-panel";
+  panel.hidden = true;
+  panel.innerHTML = `
+    <div class="policy-apply-heading">
+      <div>
+        <h2>클러스터에 적용</h2>
+        <p>생성된 YAML을 선택한 활성 클러스터에 dry-run 검증 후 적용합니다.</p>
+      </div>
+      <span id="policyApplyStatusBadge" class="badge compact">대기</span>
+    </div>
+    <div class="policy-apply-controls">
+      <label>
+        대상 클러스터
+        <select id="policyApplyCluster"></select>
+      </label>
+      <button id="applyGeneratedPolicy" class="primary" type="button">클러스터에 적용</button>
+    </div>
+    <div id="policyApplyHint" class="policy-apply-hint"></div>
+    <div id="policyApplyResult" class="policy-apply-result" hidden></div>
+  `;
+  anchor.insertAdjacentElement("afterend", panel);
+  renderPolicyApplyPanel();
+}
+
+function renderPolicyApplyPanel() {
+  const panel = $("#policyApplyPanel");
+  if (!panel) {
+    return;
+  }
+  const isAuthenticated = Boolean(authState.authenticated);
+  panel.hidden = !isAuthenticated;
+  if (!isAuthenticated) {
+    return;
+  }
+  const activeClusters = userClusters.filter((cluster) => cluster.status === "active");
+  const select = $("#policyApplyCluster");
+  const selected = select.value;
+  select.innerHTML = [
+    '<option value="">클러스터 선택</option>',
+    ...activeClusters.map(
+      (cluster) =>
+        `<option value="${escapeHtml(cluster.id || "")}">${escapeHtml(cluster.name || "unknown-cluster")}</option>`,
+    ),
+  ].join("");
+  if (activeClusters.some((cluster) => cluster.id === selected)) {
+    select.value = selected;
+  }
+  const hasPolicy = Boolean(latestPolicyManifestText.trim());
+  const hasCluster = activeClusters.length > 0;
+  $("#applyGeneratedPolicy").disabled = !hasPolicy || !hasCluster;
+  $("#policyApplyHint").textContent = hasPolicy
+    ? hasCluster
+      ? "Gatekeeper validation constraint만 Live Gatekeeper constraints 지표에 반영됩니다."
+      : "활성 클러스터가 없습니다. Cluster Setup에서 클러스터를 등록하거나 복원 후 토큰을 재발급하세요."
+    : "정책을 생성하면 적용 대상을 선택할 수 있습니다.";
+}
+
+function renderPolicyApplyResult(result) {
+  const container = $("#policyApplyResult");
+  const badge = $("#policyApplyStatusBadge");
+  if (!container || !badge) {
+    return;
+  }
+  const status = result?.status || "unknown";
+  badge.textContent = status;
+  badge.className = `badge compact ${status === "applied" ? "ready" : status === "not_configured" ? "medium" : "error"}`;
+  const rows = (result.resources || [])
+    .map(
+      (item) => `
+        <div class="policy-apply-resource">
+          <strong>${escapeHtml(item.order || "-")}. ${escapeHtml(item.kind || "Unknown")} / ${escapeHtml(item.name || "-")}</strong>
+          <p>
+            dry-run=${escapeHtml(item.dry_run_status || "skipped")} ·
+            apply=${escapeHtml(item.apply_status || "skipped")}
+            ${item.namespace ? ` · ns=${escapeHtml(item.namespace)}` : ""}
+          </p>
+          ${item.error ? `<pre>${escapeHtml(item.error)}</pre>` : ""}
+        </div>
+      `,
+    )
+    .join("");
+  const fallback = result.fallback?.combined_command
+    ? `
+      <div class="policy-apply-fallback">
+        <div class="policy-apply-fallback-heading">
+          <strong>kubectl fallback</strong>
+          <button class="secondary" data-copy-policy-fallback type="button">복사</button>
+        </div>
+        <pre id="policyApplyFallbackCommand">${escapeHtml(result.fallback.combined_command)}</pre>
+      </div>
+    `
+    : "";
+  container.hidden = false;
+  container.innerHTML = `
+    ${result.error ? `<p class="policy-apply-error">${escapeHtml(result.error)}</p>` : ""}
+    ${rows || '<p class="muted">리소스 결과가 없습니다.</p>'}
+    ${fallback}
+  `;
+}
+
 function setAnalysisLoading(isLoading) {
   $("#analysisLoading").hidden = !isLoading;
   $("#analysisLoadingText").textContent = $("#useViolationLlm").checked
@@ -578,6 +696,7 @@ async function generatePolicy() {
     if (result.llm_error) {
       showInlineAlert(result.llm_error);
     }
+    latestPolicyManifestText = buildGeneratedPolicyManifest(result);
     latestPolicyText = [
       "# ConstraintTemplate",
       result.constraint_template,
@@ -594,6 +713,7 @@ async function generatePolicy() {
       "# LLM review",
       llmText,
     ].join("\n");
+    renderPolicyApplyPanel();
     showToast("정책 생성 완료");
   } finally {
     setPolicyLoading(false);
@@ -774,6 +894,7 @@ function renderAuthGates() {
   $("#reportContent").hidden = !isAuthenticated;
   renderLandingIntro();
   renderSlackSettings();
+  renderPolicyApplyPanel();
 }
 
 function renderLandingIntro() {
@@ -885,6 +1006,7 @@ async function loadUserClusters() {
     renderRuntimeClusterFilter();
     renderUserClusters();
     renderSlackClusterToggles();
+    renderPolicyApplyPanel();
     return;
   }
   const includeDeleted = $("#showDeletedClusters")?.checked ? "true" : "false";
@@ -892,6 +1014,46 @@ async function loadUserClusters() {
   userClusters = body.clusters || [];
   renderRuntimeClusterFilter();
   renderUserClusters();
+  renderPolicyApplyPanel();
+}
+
+async function applyGeneratedPolicy() {
+  if (!latestPolicyManifestText.trim()) {
+    showToast("먼저 정책을 생성해 주세요");
+    return;
+  }
+  const clusterId = $("#policyApplyCluster")?.value || "";
+  if (!clusterId) {
+    showToast("적용할 클러스터를 선택해 주세요");
+    return;
+  }
+  const cluster = userClusters.find((item) => item.id === clusterId);
+  const clusterName = cluster?.name || "selected cluster";
+  if (!window.confirm(`${clusterName} 클러스터에 생성된 정책을 dry-run 검증 후 적용할까요?`)) {
+    return;
+  }
+  const button = $("#applyGeneratedPolicy");
+  const previousText = button.textContent;
+  button.disabled = true;
+  button.textContent = "적용 중...";
+  try {
+    const result = await apiJson(`/api/clusters/${encodeURIComponent(clusterId)}/policy-applies`, {
+      method: "POST",
+      body: JSON.stringify({ manifest: latestPolicyManifestText }),
+    });
+    renderPolicyApplyResult(result);
+    if (result.status === "applied") {
+      await refreshDashboardSummary();
+      showToast("정책 적용 완료");
+    } else if (result.status === "not_configured") {
+      showToast("kubectl fallback 사용 필요");
+    } else {
+      showToast("정책 적용 결과 확인 필요");
+    }
+  } finally {
+    button.textContent = previousText;
+    renderPolicyApplyPanel();
+  }
 }
 
 function ensureSlackSettingsPanel() {
@@ -1269,12 +1431,36 @@ document.querySelectorAll(".tab").forEach((tab) => {
 });
 
 ensureSlackSettingsPanel();
+ensurePolicyApplyPanel();
 
 $("#generatePolicy").addEventListener("click", () => {
   generatePolicy().catch((error) => {
     showInlineAlert(error.message);
     showToast(error.message);
   });
+});
+
+document.addEventListener("click", (event) => {
+  const applyButton = event.target.closest("#applyGeneratedPolicy");
+  if (!applyButton) {
+    return;
+  }
+  applyGeneratedPolicy().catch((error) => {
+    renderPolicyApplyResult({ status: "error", error: error.message, resources: [] });
+    showInlineAlert(error.message);
+    showToast("정책 적용 실패");
+  });
+});
+
+document.addEventListener("click", (event) => {
+  const copyButton = event.target.closest("[data-copy-policy-fallback]");
+  if (!copyButton) {
+    return;
+  }
+  const target = $("#policyApplyFallbackCommand");
+  copyText(target?.textContent || "")
+    .then(() => showToast("fallback 명령 복사 완료"))
+    .catch((error) => showToast(error.message));
 });
 
 $("#analyzeViolation").addEventListener("click", () => {
@@ -1581,6 +1767,7 @@ async function logout() {
   renderAuthStatus();
   renderUserClusters();
   renderSlackSettings();
+  renderPolicyApplyPanel();
   renderDashboardSummary({});
   selectedRuntimeEvent = null;
   renderSelectedRuntimeEventState("ready");

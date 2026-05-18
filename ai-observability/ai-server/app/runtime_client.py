@@ -2,8 +2,10 @@ import json
 import os
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
+import yaml
 
 from app import storage
 from app.llm_client import LLMClient
@@ -28,6 +30,278 @@ INFRA_NAMESPACES = {
     "kube-flannel",
     "tigera-operator",
 }
+POLICY_APPLY_FIELD_MANAGER = "kubeowl-policy-apply"
+
+
+def apply_policy_manifest(manifest: str, cluster: dict[str, Any]) -> dict[str, Any]:
+    resources = _parse_policy_manifest(manifest)
+    if not resources:
+        return {
+            "status": "invalid_manifest",
+            "error": "적용할 Kubernetes 리소스가 없습니다.",
+            "resources": [],
+            "fallback": _policy_apply_fallback(manifest),
+        }
+    ordered = _order_policy_resources(resources)
+    resource_results = [_resource_result(resource, order=index + 1) for index, resource in enumerate(ordered)]
+    policy_type, policy_name = _policy_identity(resource_results)
+
+    if not _policy_apply_enabled():
+        return {
+            "status": "not_configured",
+            "error": (
+                "AI 서버에 사용자 클러스터 Kubernetes API 적용 권한이 설정되어 있지 않습니다. "
+                "아래 kubectl dry-run/apply 명령을 해당 클러스터 context에서 실행하세요."
+            ),
+            "cluster_id": cluster.get("id", ""),
+            "cluster_name": cluster.get("name", ""),
+            "policy_type": policy_type,
+            "policy_name": policy_name,
+            "resources": resource_results,
+            "fallback": _policy_apply_fallback(manifest),
+        }
+
+    if not _kube_apply_configured():
+        for result in resource_results:
+            result["dry_run_status"] = "skipped"
+            result["apply_status"] = "skipped"
+            result["error"] = "Kubernetes ServiceAccount is not available"
+        return {
+            "status": "not_configured",
+            "error": "Kubernetes API 또는 ServiceAccount token을 사용할 수 없습니다.",
+            "cluster_id": cluster.get("id", ""),
+            "cluster_name": cluster.get("name", ""),
+            "policy_type": policy_type,
+            "policy_name": policy_name,
+            "resources": resource_results,
+            "fallback": _policy_apply_fallback(manifest),
+        }
+
+    dry_run_failed = False
+    for resource, result in zip(ordered, resource_results, strict=True):
+        error = _server_side_apply(resource, dry_run=True)
+        if error:
+            result["dry_run_status"] = "failed"
+            result["apply_status"] = "skipped"
+            result["error"] = error
+            dry_run_failed = True
+        else:
+            result["dry_run_status"] = "success"
+            result["apply_status"] = "pending"
+    if dry_run_failed:
+        for result in resource_results:
+            if result["apply_status"] == "pending":
+                result["apply_status"] = "skipped"
+        return {
+            "status": "dry_run_failed",
+            "error": "dry-run 검증 실패로 실제 apply를 실행하지 않았습니다.",
+            "cluster_id": cluster.get("id", ""),
+            "cluster_name": cluster.get("name", ""),
+            "policy_type": policy_type,
+            "policy_name": policy_name,
+            "resources": resource_results,
+            "fallback": _policy_apply_fallback(manifest),
+        }
+
+    apply_failed = False
+    for resource, result in zip(ordered, resource_results, strict=True):
+        error = _server_side_apply(resource, dry_run=False)
+        if error:
+            result["apply_status"] = "failed"
+            result["error"] = error
+            apply_failed = True
+        else:
+            result["apply_status"] = "success"
+    return {
+        "status": "apply_failed" if apply_failed else "applied",
+        "error": "일부 리소스 apply가 실패했습니다." if apply_failed else "",
+        "cluster_id": cluster.get("id", ""),
+        "cluster_name": cluster.get("name", ""),
+        "policy_type": policy_type,
+        "policy_name": policy_name,
+        "resources": resource_results,
+        "fallback": _policy_apply_fallback(manifest) if apply_failed else {},
+    }
+
+
+def _parse_policy_manifest(manifest: str) -> list[dict[str, Any]]:
+    try:
+        docs = yaml.safe_load_all(str(manifest or ""))
+        return [doc for doc in docs if isinstance(doc, dict) and doc.get("kind") and doc.get("apiVersion")]
+    except yaml.YAMLError as error:
+        raise ValueError(f"YAML parsing failed: {error}") from error
+
+
+def _order_policy_resources(resources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def priority(resource: dict[str, Any]) -> tuple[int, str]:
+        api_version = str(resource.get("apiVersion", ""))
+        kind = str(resource.get("kind", ""))
+        if kind == "ConstraintTemplate":
+            return (0, kind)
+        if api_version.startswith("constraints.gatekeeper.sh/"):
+            return (1, kind)
+        if api_version.startswith("mutations.gatekeeper.sh/") or kind == "NetworkPolicy":
+            return (2, kind)
+        return (3, kind)
+
+    return sorted(resources, key=priority)
+
+
+def _resource_result(resource: dict[str, Any], order: int) -> dict[str, Any]:
+    metadata = resource.get("metadata", {}) if isinstance(resource.get("metadata"), dict) else {}
+    return {
+        "order": order,
+        "api_version": str(resource.get("apiVersion", "")),
+        "kind": str(resource.get("kind", "")),
+        "name": str(metadata.get("name", "")),
+        "namespace": str(metadata.get("namespace", "")),
+        "dry_run_status": "skipped",
+        "apply_status": "skipped",
+        "error": "",
+    }
+
+
+def _policy_identity(resource_results: list[dict[str, Any]]) -> tuple[str, str]:
+    for result in resource_results:
+        if result["api_version"].startswith("constraints.gatekeeper.sh/"):
+            return "gatekeeper_constraint", result.get("name") or result.get("kind") or "unknown"
+    for result in resource_results:
+        if result["kind"] == "NetworkPolicy":
+            return "network_policy", result.get("name") or "unknown"
+        if result["api_version"].startswith("mutations.gatekeeper.sh/"):
+            return "gatekeeper_mutation", result.get("name") or result.get("kind") or "unknown"
+    first = resource_results[0] if resource_results else {}
+    return first.get("kind", "unknown"), first.get("name", "unknown")
+
+
+def _policy_apply_enabled() -> bool:
+    return os.getenv("POLICY_APPLY_ENABLED", "").strip().lower() in {"true", "1", "yes"}
+
+
+def _kube_apply_configured() -> bool:
+    host = os.getenv("KUBERNETES_SERVICE_HOST", KUBE_API_URL).strip()
+    token_path = f"{SERVICEACCOUNT_DIR}/token"
+    return bool(host and os.path.exists(token_path))
+
+
+def _server_side_apply(resource: dict[str, Any], dry_run: bool) -> str:
+    path = _resource_apply_path(resource)
+    if not path:
+        return f"지원하지 않는 리소스입니다: {resource.get('apiVersion', '')} {resource.get('kind', '')}"
+    query = {
+        "fieldManager": POLICY_APPLY_FIELD_MANAGER,
+        "force": "true",
+    }
+    if dry_run:
+        query["dryRun"] = "All"
+    suffix = f"?{urlencode(query)}"
+    body = yaml.safe_dump(resource, sort_keys=False)
+    response = _kube_patch(f"{path}{suffix}", body)
+    return response.get("error", "")
+
+
+def _resource_apply_path(resource: dict[str, Any]) -> str:
+    api_version = str(resource.get("apiVersion", ""))
+    kind = str(resource.get("kind", ""))
+    metadata = resource.get("metadata", {}) if isinstance(resource.get("metadata"), dict) else {}
+    name = str(metadata.get("name", "")).strip()
+    namespace = str(metadata.get("namespace", "")).strip()
+    if not name:
+        return ""
+    api_resource = _lookup_api_resource(api_version, kind)
+    resource_name = api_resource.get("name", "")
+    namespaced = bool(api_resource.get("namespaced", False))
+    if not resource_name:
+        fallback = _fallback_api_resource(api_version, kind)
+        resource_name = fallback.get("name", "")
+        namespaced = bool(fallback.get("namespaced", False))
+    if not resource_name:
+        return ""
+    if "/" in api_version:
+        group, version = api_version.split("/", 1)
+        base = f"/apis/{group}/{version}"
+    else:
+        base = f"/api/{api_version}"
+    if namespaced:
+        namespace = namespace or "default"
+        return f"{base}/namespaces/{namespace}/{resource_name}/{name}"
+    return f"{base}/{resource_name}/{name}"
+
+
+def _lookup_api_resource(api_version: str, kind: str) -> dict[str, Any]:
+    if not _kube_apply_configured():
+        return {}
+    if "/" in api_version:
+        group, version = api_version.split("/", 1)
+        discovery_path = f"/apis/{group}/{version}"
+    else:
+        discovery_path = f"/api/{api_version}"
+    discovery = _kube_get(discovery_path)
+    if discovery.get("error"):
+        return {}
+    for resource in discovery.get("body", {}).get("resources", []):
+        if not isinstance(resource, dict) or "/" in str(resource.get("name", "")):
+            continue
+        if resource.get("kind") == kind and "patch" in resource.get("verbs", []):
+            return resource
+    return {}
+
+
+def _fallback_api_resource(api_version: str, kind: str) -> dict[str, Any]:
+    if api_version == "templates.gatekeeper.sh/v1beta1" and kind == "ConstraintTemplate":
+        return {"name": "constrainttemplates", "namespaced": False}
+    if api_version.startswith("constraints.gatekeeper.sh/"):
+        return {"name": kind.lower(), "namespaced": False}
+    if api_version.startswith("mutations.gatekeeper.sh/") and kind == "Assign":
+        return {"name": "assign", "namespaced": False}
+    if api_version == "networking.k8s.io/v1" and kind == "NetworkPolicy":
+        return {"name": "networkpolicies", "namespaced": True}
+    return {}
+
+
+def _kube_patch(path: str, yaml_body: str, timeout: float = 10) -> dict[str, Any]:
+    token_path = f"{SERVICEACCOUNT_DIR}/token"
+    ca_path = f"{SERVICEACCOUNT_DIR}/ca.crt"
+    host = os.getenv("KUBERNETES_SERVICE_HOST", KUBE_API_URL).strip()
+    port = os.getenv("KUBERNETES_SERVICE_PORT", KUBE_API_PORT).strip() or "443"
+    try:
+        with open(token_path, encoding="utf-8") as token_file:
+            token = token_file.read().strip()
+    except OSError as error:
+        return {"body": {}, "error": f"ServiceAccount token read failed: {error}"}
+    url = f"https://{host}:{port}{path}"
+    try:
+        response = httpx.patch(
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/apply-patch+yaml",
+            },
+            content=yaml_body.encode("utf-8"),
+            verify=ca_path,
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        return {"body": response.json(), "error": ""}
+    except httpx.HTTPStatusError as error:
+        detail = error.response.text[:1000]
+        return {"body": {}, "error": f"{error.response.status_code}: {detail}"}
+    except httpx.HTTPError as error:
+        return {"body": {}, "error": str(error)}
+
+
+def _policy_apply_fallback(manifest: str) -> dict[str, str]:
+    marker = "KUBEOWL_POLICY_EOF"
+    if marker in str(manifest or ""):
+        marker = "KUBEOWL_POLICY_EOF_2"
+    clean_manifest = str(manifest or "").strip()
+    dry_run = f"kubectl apply --dry-run=server -f - <<'{marker}'\n{clean_manifest}\n{marker}"
+    apply = f"kubectl apply -f - <<'{marker}'\n{clean_manifest}\n{marker}"
+    return {
+        "dry_run_command": dry_run,
+        "apply_command": apply,
+        "combined_command": f"{dry_run}\n\n{apply}",
+    }
 
 
 def list_runtime_events(
@@ -284,12 +558,16 @@ def fetch_resource_manifest(namespace: str, pod_name: str) -> dict[str, str]:
 def _kube_get(path: str, timeout: float = 5) -> dict[str, Any]:
     token_path = f"{SERVICEACCOUNT_DIR}/token"
     ca_path = f"{SERVICEACCOUNT_DIR}/ca.crt"
+    host = os.getenv("KUBERNETES_SERVICE_HOST", KUBE_API_URL).strip()
+    port = os.getenv("KUBERNETES_SERVICE_PORT", KUBE_API_PORT).strip() or "443"
+    if not host:
+        return {"body": {}, "error": "Kubernetes API unavailable"}
     try:
         with open(token_path, encoding="utf-8") as token_file:
             token = token_file.read().strip()
     except OSError as error:
         return {"body": {}, "error": f"ServiceAccount token read failed: {error}"}
-    url = f"https://{KUBE_API_URL}:{KUBE_API_PORT}{path}"
+    url = f"https://{host}:{port}{path}"
     try:
         response = httpx.get(
             url,

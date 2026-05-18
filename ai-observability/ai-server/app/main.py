@@ -20,6 +20,7 @@ from app.policy_generator import generate_policy
 from app.policy_generator import SUPPORTED_POLICY_EXAMPLES, UnsupportedPolicyError
 from app import storage
 from app.runtime_client import (
+    apply_policy_manifest,
     build_dashboard_summary,
     build_report,
     get_runtime_event,
@@ -669,6 +670,56 @@ def set_cluster_slack(
     if cluster is None:
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
     return {"cluster": cluster}
+
+
+@app.post("/api/clusters/{cluster_id}/policy-applies")
+def apply_generated_policy_to_cluster(
+    cluster_id: str,
+    payload: dict,
+    compliance_ai_session: str | None = Cookie(default=None),
+) -> dict:
+    # 로그인 사용자의 생성 정책을 소유 클러스터에 적용하거나 안전한 kubectl fallback을 반환한다.
+    user, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
+    assert user is not None
+    cluster = storage.get_cluster(cluster_id)
+    if cluster is None or cluster.get("user_id") != user["id"]:
+        return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    if cluster.get("status") != "active":
+        return JSONResponse(status_code=409, content={"error": "cluster must be active before applying policies"})
+    manifest = str(payload.get("manifest", "")).strip()
+    if not manifest:
+        return JSONResponse(status_code=400, content={"error": "manifest is required"})
+    try:
+        result = apply_policy_manifest(manifest, cluster)
+    except ValueError as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+    status = str(result.get("status", "unknown"))
+    history = storage.save_policy_apply_history(
+        user_id=user["id"],
+        cluster_id=cluster["id"],
+        policy_type=str(result.get("policy_type") or payload.get("policy_type") or "unknown"),
+        policy_name=str(result.get("policy_name") or payload.get("policy_name") or "unknown"),
+        manifest=manifest,
+        status=status,
+        error=str(result.get("error", "")),
+        result=result,
+    )
+    response = {
+        "status": status,
+        "cluster": {
+            "id": cluster["id"],
+            "name": cluster["name"],
+            "kind": cluster["kind"],
+            "status": cluster["status"],
+        },
+        "history": history,
+        **result,
+    }
+    if status == "invalid_manifest":
+        return JSONResponse(status_code=400, content=response)
+    return response
 
 
 @app.get("/admin", response_class=FileResponse)

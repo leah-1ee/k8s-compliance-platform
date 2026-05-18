@@ -4,6 +4,7 @@ import secrets
 import sqlite3
 import threading
 import uuid
+import hashlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -92,6 +93,21 @@ def init_db() -> None:
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
 
+                CREATE TABLE IF NOT EXISTS policy_apply_history (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    cluster_id TEXT NOT NULL,
+                    policy_type TEXT NOT NULL,
+                    policy_name TEXT NOT NULL,
+                    manifest_hash TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    error TEXT NOT NULL DEFAULT '',
+                    result_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(user_id) REFERENCES users(id),
+                    FOREIGN KEY(cluster_id) REFERENCES clusters(id)
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp DESC);
                 CREATE INDEX IF NOT EXISTS idx_events_cluster ON events(cluster);
                 CREATE INDEX IF NOT EXISTS idx_events_namespace ON events(namespace);
@@ -111,6 +127,8 @@ def init_db() -> None:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_events_cluster_kind ON events(cluster_kind)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_policy_apply_history_user ON policy_apply_history(user_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_policy_apply_history_cluster ON policy_apply_history(cluster_id)")
             _mark_env_demo_clusters(conn)
         _INITIALIZED = True
 
@@ -342,6 +360,98 @@ def save_event(event: dict[str, Any]) -> dict[str, Any]:
             ),
         )
     return stored
+
+
+def save_policy_apply_history(
+    user_id: str,
+    cluster_id: str,
+    policy_type: str,
+    policy_name: str,
+    manifest: str,
+    status: str,
+    error: str = "",
+    result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    init_db()
+    row = {
+        "id": f"policy-apply-{uuid.uuid4().hex[:12]}",
+        "user_id": str(user_id or "").strip(),
+        "cluster_id": str(cluster_id or "").strip(),
+        "policy_type": str(policy_type or "unknown").strip()[:120] or "unknown",
+        "policy_name": str(policy_name or "unknown").strip()[:240] or "unknown",
+        "manifest_hash": hashlib.sha256(str(manifest or "").encode("utf-8")).hexdigest(),
+        "status": str(status or "unknown").strip()[:80] or "unknown",
+        "error": str(error or "").strip()[:2000],
+        "result_json": json.dumps(result or {}, ensure_ascii=False),
+    }
+    if not row["user_id"] or not row["cluster_id"]:
+        raise ValueError("user_id and cluster_id are required")
+    with _LOCK, _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO policy_apply_history (
+                id, user_id, cluster_id, policy_type, policy_name,
+                manifest_hash, status, error, result_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row["id"],
+                row["user_id"],
+                row["cluster_id"],
+                row["policy_type"],
+                row["policy_name"],
+                row["manifest_hash"],
+                row["status"],
+                row["error"],
+                row["result_json"],
+            ),
+        )
+    return get_policy_apply_history(row["id"]) or row
+
+
+def get_policy_apply_history(history_id: str) -> dict[str, Any] | None:
+    init_db()
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT id, user_id, cluster_id, policy_type, policy_name,
+                   manifest_hash, status, error, result_json, created_at
+            FROM policy_apply_history
+            WHERE id = ?
+            """,
+            (history_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    return _row_to_policy_apply_history(row)
+
+
+def list_policy_apply_history(user_id: str = "", cluster_id: str = "", limit: int = 50) -> list[dict[str, Any]]:
+    init_db()
+    filters = []
+    params: list[Any] = []
+    if user_id:
+        filters.append("user_id = ?")
+        params.append(user_id)
+    if cluster_id:
+        filters.append("cluster_id = ?")
+        params.append(cluster_id)
+    where = f"WHERE {' AND '.join(filters)}" if filters else ""
+    params.append(max(1, min(int(limit or 50), 200)))
+    with _connect() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT id, user_id, cluster_id, policy_type, policy_name,
+                   manifest_hash, status, error, result_json, created_at
+            FROM policy_apply_history
+            {where}
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            params,
+        ).fetchall()
+    return [_row_to_policy_apply_history(row) for row in rows]
 
 
 def create_cluster(name: str, kind: str = "customer", user_id: str = "") -> dict[str, Any]:
@@ -731,6 +841,26 @@ def _row_to_event(row: sqlite3.Row) -> dict[str, Any]:
         "action_taken": row["action_taken"],
         "resource_manifest": row["resource_manifest"],
         "raw_event": raw_event,
+    }
+
+
+def _row_to_policy_apply_history(row: sqlite3.Row) -> dict[str, Any]:
+    result = {}
+    try:
+        result = json.loads(row["result_json"] or "{}")
+    except json.JSONDecodeError:
+        result = {}
+    return {
+        "id": row["id"],
+        "user_id": row["user_id"],
+        "cluster_id": row["cluster_id"],
+        "policy_type": row["policy_type"],
+        "policy_name": row["policy_name"],
+        "manifest_hash": row["manifest_hash"],
+        "status": row["status"],
+        "error": row["error"],
+        "result": result,
+        "created_at": row["created_at"],
     }
 
 

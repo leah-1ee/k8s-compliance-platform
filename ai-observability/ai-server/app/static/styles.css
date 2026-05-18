@@ -1234,6 +1234,69 @@ select:focus {
   border-bottom: 0;
 }
 
+.policy-apply-panel {
+  display: grid;
+  gap: 14px;
+  padding: var(--card-padding-sm);
+  border-top: 1px solid var(--line);
+  background: var(--card);
+}
+
+.policy-apply-heading,
+.policy-apply-controls,
+.policy-apply-fallback-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.policy-apply-heading h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.policy-apply-heading p,
+.policy-apply-hint,
+.policy-apply-resource p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.policy-apply-controls label {
+  flex: 1 1 260px;
+}
+
+.policy-apply-result {
+  display: grid;
+  gap: 10px;
+}
+
+.policy-apply-resource,
+.policy-apply-fallback {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card-soft);
+}
+
+.policy-apply-resource pre,
+.policy-apply-fallback pre {
+  margin: 0;
+  max-height: 260px;
+  border-radius: 8px;
+}
+
+.policy-apply-error {
+  margin: 0;
+  color: var(--danger);
+  font-weight: 720;
+}
+
 .card-heading {
   position: relative;
   min-height: 38px;

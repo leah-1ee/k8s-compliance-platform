@@ -1233,6 +1233,7 @@ def test_runtime_features_require_login():
     assert client.post("/analyze-runtime-event/missing-event").status_code == 401
     assert client.get("/dashboard-summary").status_code == 401
     assert client.get("/compliance-report").status_code == 401
+    assert client.post("/api/clusters/missing-cluster/policy-applies", json={"manifest": "kind: Pod"}).status_code == 401
 
 
 def test_dashboard_summary_uses_live_counts(monkeypatch):
@@ -1269,6 +1270,207 @@ def test_dashboard_summary_uses_live_counts(monkeypatch):
     assert body["runtime_events"] >= 1
     assert body["recent_violations"] >= 1
     assert body["last_sync"] == "2026-05-18T10:00:00Z"
+
+
+def test_policy_apply_rejects_cluster_owned_by_other_user():
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="policy-apply-owner@example.test",
+        email="policy-apply-owner@example.test",
+    )
+    other = storage.upsert_user(
+        provider="dev",
+        provider_subject="policy-apply-other@example.test",
+        email="policy-apply-other@example.test",
+    )
+    other_session = storage.create_session(other["id"])
+    cluster = storage.create_cluster("policy-apply-owned", user_id=owner["id"])
+
+    response = client.post(
+        f"/api/clusters/{cluster['id']}/policy-applies",
+        cookies={"compliance_ai_session": other_session},
+        json={"manifest": "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: blocked\n"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"] == "cluster not found"
+
+
+def test_policy_apply_rejects_disabled_and_deleted_clusters():
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="policy-apply-status@example.test",
+        email="policy-apply-status@example.test",
+    )
+    session = storage.create_session(owner["id"])
+    disabled = storage.create_cluster("policy-apply-disabled", user_id=owner["id"])
+    deleted = storage.create_cluster("policy-apply-deleted", user_id=owner["id"])
+    storage.disable_cluster(disabled["id"])
+    storage.trash_cluster(deleted["id"], owner["id"])
+
+    disabled_response = client.post(
+        f"/api/clusters/{disabled['id']}/policy-applies",
+        cookies={"compliance_ai_session": session},
+        json={"manifest": "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: disabled\n"},
+    )
+    deleted_response = client.post(
+        f"/api/clusters/{deleted['id']}/policy-applies",
+        cookies={"compliance_ai_session": session},
+        json={"manifest": "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: deleted\n"},
+    )
+
+    assert disabled_response.status_code == 409
+    assert deleted_response.status_code == 409
+
+
+def test_policy_apply_orders_multi_document_yaml_with_fallback(monkeypatch):
+    monkeypatch.delenv("POLICY_APPLY_ENABLED", raising=False)
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="policy-apply-order@example.test",
+        email="policy-apply-order@example.test",
+    )
+    session = storage.create_session(owner["id"])
+    cluster = storage.create_cluster("policy-apply-order", user_id=owner["id"])
+    manifest = """
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: default
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredLabels
+metadata:
+  name: require-owner
+---
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequiredlabels
+"""
+
+    response = client.post(
+        f"/api/clusters/{cluster['id']}/policy-applies",
+        cookies={"compliance_ai_session": session},
+        json={"manifest": manifest},
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["status"] == "not_configured"
+    assert [item["kind"] for item in body["resources"]] == [
+        "ConstraintTemplate",
+        "K8sRequiredLabels",
+        "NetworkPolicy",
+    ]
+    assert "kubectl apply --dry-run=server" in body["fallback"]["combined_command"]
+    assert body["history"]["status"] == "not_configured"
+
+
+def test_policy_apply_dry_run_failure_prevents_apply_and_records_history(monkeypatch):
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="policy-apply-dryrun@example.test",
+        email="policy-apply-dryrun@example.test",
+    )
+    session = storage.create_session(owner["id"])
+    cluster = storage.create_cluster("policy-apply-dryrun", user_id=owner["id"])
+
+    def fake_apply(manifest, cluster):
+        return {
+            "status": "dry_run_failed",
+            "error": "dry-run 검증 실패로 실제 apply를 실행하지 않았습니다.",
+            "policy_type": "gatekeeper_constraint",
+            "policy_name": "require-owner",
+            "resources": [
+                {
+                    "order": 1,
+                    "api_version": "constraints.gatekeeper.sh/v1beta1",
+                    "kind": "K8sRequiredLabels",
+                    "name": "require-owner",
+                    "namespace": "",
+                    "dry_run_status": "failed",
+                    "apply_status": "skipped",
+                    "error": "spec.match is required",
+                }
+            ],
+            "fallback": {},
+        }
+
+    monkeypatch.setattr("app.main.apply_policy_manifest", fake_apply)
+
+    response = client.post(
+        f"/api/clusters/{cluster['id']}/policy-applies",
+        cookies={"compliance_ai_session": session},
+        json={"manifest": "apiVersion: constraints.gatekeeper.sh/v1beta1\nkind: K8sRequiredLabels\nmetadata:\n  name: require-owner\n"},
+    )
+    body = response.json()
+    history = storage.list_policy_apply_history(user_id=owner["id"], cluster_id=cluster["id"], limit=1)[0]
+
+    assert response.status_code == 200
+    assert body["resources"][0]["apply_status"] == "skipped"
+    assert body["history"]["status"] == "dry_run_failed"
+    assert history["status"] == "dry_run_failed"
+    assert history["policy_name"] == "require-owner"
+
+
+def test_successful_gatekeeper_policy_apply_is_recorded(monkeypatch):
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="policy-apply-success@example.test",
+        email="policy-apply-success@example.test",
+    )
+    session = storage.create_session(owner["id"])
+    cluster = storage.create_cluster("policy-apply-success", user_id=owner["id"])
+
+    def fake_apply(manifest, cluster):
+        return {
+            "status": "applied",
+            "error": "",
+            "policy_type": "gatekeeper_constraint",
+            "policy_name": "require-owner",
+            "resources": [
+                {
+                    "order": 1,
+                    "api_version": "templates.gatekeeper.sh/v1beta1",
+                    "kind": "ConstraintTemplate",
+                    "name": "k8srequiredlabels",
+                    "namespace": "",
+                    "dry_run_status": "success",
+                    "apply_status": "success",
+                    "error": "",
+                },
+                {
+                    "order": 2,
+                    "api_version": "constraints.gatekeeper.sh/v1beta1",
+                    "kind": "K8sRequiredLabels",
+                    "name": "require-owner",
+                    "namespace": "",
+                    "dry_run_status": "success",
+                    "apply_status": "success",
+                    "error": "",
+                },
+            ],
+            "fallback": {},
+        }
+
+    monkeypatch.setattr("app.main.apply_policy_manifest", fake_apply)
+
+    response = client.post(
+        f"/api/clusters/{cluster['id']}/policy-applies",
+        cookies={"compliance_ai_session": session},
+        json={"manifest": "apiVersion: constraints.gatekeeper.sh/v1beta1\nkind: K8sRequiredLabels\nmetadata:\n  name: require-owner\n"},
+    )
+    body = response.json()
+    history = storage.list_policy_apply_history(user_id=owner["id"], cluster_id=cluster["id"], limit=1)[0]
+
+    assert response.status_code == 200
+    assert body["status"] == "applied"
+    assert body["history"]["status"] == "applied"
+    assert history["policy_type"] == "gatekeeper_constraint"
+    assert history["policy_name"] == "require-owner"
+    assert history["result"]["resources"][1]["apply_status"] == "success"
 
 
 def test_compliance_report_uses_llm_when_configured(monkeypatch):
