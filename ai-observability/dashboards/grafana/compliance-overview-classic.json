@@ -79,7 +79,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(compliance_ai_requests_total{service=\"response-server\"}[$__range]))",
+          "expr": "sum(increase(compliance_ai_requests_total{service=\"response-server\"}[$__range])) or vector(0)",
           "instant": true,
           "legendFormat": "requests",
           "range": false,
@@ -146,7 +146,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(compliance_ai_errors_total{service=\"response-server\"}[$__range]))",
+          "expr": "sum(increase(compliance_ai_errors_total{service=\"response-server\"}[$__range])) or vector(0)",
           "instant": true,
           "legendFormat": "errors",
           "range": false,
@@ -469,7 +469,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(compliance_ai_requests_total{service=\"response-server\"}[5m])",
+          "expr": "rate(compliance_ai_requests_total{service=\"response-server\"}[5m]) or vector(0)",
           "legendFormat": "requests/sec",
           "range": true,
           "refId": "A"
@@ -480,7 +480,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(compliance_ai_errors_total{service=\"response-server\"}[5m])",
+          "expr": "rate(compliance_ai_errors_total{service=\"response-server\"}[5m]) or vector(0)",
           "legendFormat": "errors/sec",
           "range": true,
           "refId": "B"
@@ -491,7 +491,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(compliance_ai_fallbacks_total{service=\"response-server\"}[5m])",
+          "expr": "rate(compliance_ai_fallbacks_total{service=\"response-server\"}[5m]) or vector(0)",
           "legendFormat": "fallbacks/sec",
           "range": true,
           "refId": "C"

@@ -35,7 +35,7 @@ data:
           },
           "targets": [
             {
-              "expr": "100 - ((sum(compliance_falco_events_total{severity=\"high\"}) / (sum(compliance_falco_events_total) + 1)) * 100)",
+              "expr": "100 - (((sum(compliance_falco_events_total{severity=\"high\"}) or vector(0)) / ((sum(compliance_falco_events_total) or vector(0)) + 1)) * 100)",
               "legendFormat": "Score",
               "datasource": {
                 "type": "prometheus",
@@ -87,7 +87,7 @@ data:
           },
           "targets": [
             {
-              "expr": "sum(compliance_falco_events_total)",
+              "expr": "sum(compliance_falco_events_total) or vector(0)",
               "legendFormat": "Total",
               "datasource": {
                 "type": "prometheus",
@@ -118,7 +118,7 @@ data:
           },
           "targets": [
             {
-              "expr": "sum(compliance_falco_events_total{severity=\"high\"})",
+              "expr": "sum(compliance_falco_events_total{severity=\"high\"}) or vector(0)",
               "legendFormat": "High",
               "datasource": {
                 "type": "prometheus",
@@ -161,7 +161,7 @@ data:
           },
           "targets": [
             {
-              "expr": "sum(compliance_network_isolations_total)",
+              "expr": "sum(compliance_network_isolations_total) or vector(0)",
               "legendFormat": "Isolated",
               "datasource": {
                 "type": "prometheus",
@@ -204,7 +204,7 @@ data:
           },
           "targets": [
             {
-              "expr": "(sum(compliance_ai_fallbacks_total) / (sum(compliance_ai_requests_total) + 1)) * 100",
+              "expr": "((sum(compliance_ai_fallbacks_total) or vector(0)) / ((sum(compliance_ai_requests_total) or vector(0)) + 1)) * 100",
               "legendFormat": "Fallback %",
               "datasource": {
                 "type": "prometheus",
@@ -233,7 +233,7 @@ data:
           },
           "targets": [
             {
-              "expr": "sum(compliance_network_isolation_errors_total)",
+              "expr": "sum(compliance_network_isolation_errors_total) or vector(0)",
               "legendFormat": "Errors",
               "datasource": {
                 "type": "prometheus",
@@ -273,7 +273,7 @@ data:
           },
           "targets": [
             {
-              "expr": "compliance_server_uptime_seconds",
+              "expr": "compliance_server_uptime_seconds or vector(0)",
               "legendFormat": "Uptime",
               "datasource": {
                 "type": "prometheus",
@@ -572,7 +572,7 @@ data:
           },
           "targets": [
             {
-              "expr": "compliance_hmac_mode",
+              "expr": "compliance_hmac_mode or vector(0)",
               "legendFormat": "{{mode}}",
               "datasource": {
                 "type": "prometheus",
@@ -642,7 +642,7 @@ data:
           },
           "targets": [
             {
-              "expr": "sum(compliance_webhook_rejected_by_reason_total)",
+              "expr": "sum(compliance_webhook_rejected_by_reason_total) or vector(0)",
               "legendFormat": "Rejected",
               "datasource": {
                 "type": "prometheus",
@@ -698,7 +698,7 @@ data:
           },
           "targets": [
             {
-              "expr": "compliance_webhook_rejected_by_reason_total{reason=\"hmac_failed\"}",
+              "expr": "sum(compliance_webhook_rejected_by_reason_total{reason=\"hmac_failed\"}) or vector(0)",
               "legendFormat": "HMAC 실패",
               "datasource": {
                 "type": "prometheus",
@@ -750,7 +750,7 @@ data:
           },
           "targets": [
             {
-              "expr": "compliance_webhook_rejected_by_reason_total{reason=\"ip_blocked\"} + compliance_webhook_rejected_by_reason_total{reason=\"rate_limited\"}",
+              "expr": "(sum(compliance_webhook_rejected_by_reason_total{reason=\"ip_blocked\"}) or vector(0)) + (sum(compliance_webhook_rejected_by_reason_total{reason=\"rate_limited\"}) or vector(0))",
               "legendFormat": "IP차단+속도초과",
               "datasource": {
                 "type": "prometheus",
@@ -806,7 +806,7 @@ data:
           },
           "targets": [
             {
-              "expr": "compliance_webhook_rejected_by_reason_total{reason=\"body_too_large\"}",
+              "expr": "sum(compliance_webhook_rejected_by_reason_total{reason=\"body_too_large\"}) or vector(0)",
               "legendFormat": "바디 초과",
               "datasource": {
                 "type": "prometheus",
