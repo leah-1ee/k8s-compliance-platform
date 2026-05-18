@@ -6,8 +6,8 @@ Natural language → Rego policy via LLM, Falco event AI classification, real-ti
 
 ## Current Image Version
 Current deployed image target: `docker.io/leeon3345/compliance-ai-server:0.1.10`
-Next build/deploy tag: `docker.io/leeon3345/compliance-ai-server:0.1.12`
-`0.1.10` was already deployed. `0.1.11` was prepared by TASK-04; TASK-05 changes server/UI code, so publish with a new tag instead of overwriting `0.1.10` or `0.1.11`.
+Next build/deploy tag: `docker.io/leeon3345/compliance-ai-server:0.1.13`
+`0.1.10` was already deployed. `0.1.11` was prepared by TASK-04 and `0.1.12` by TASK-05; TASK-06 changes server code, so publish with a new tag instead of overwriting older tags.
 
 ## Tech Stack
 - Backend: Python (FastAPI), SQLite (WAL mode, PVC persistent)
@@ -50,8 +50,13 @@ Next build/deploy tag: `docker.io/leeon3345/compliance-ai-server:0.1.12`
 - TASK-05 done locally: `/resource-manifest` now returns user-scoped kubectl manifest guidance instead of central-server Kubernetes API fetches
 - TASK-05 done locally: runtime analysis no longer falls back to direct central-server manifest fetch when event snapshots are missing
 - TASK-05 done locally: UI shows copyable kubectl manifest lookup guidance without changing `app/static/index.html`
-- TASK-05 blocked for live OAuth smoke: Google OAuth Client ID/Secret still do not exist because Google Console signup is not complete
-- Tests: `50 passed, 35 warnings` in `ai-observability/ai-server/tests`
+- TASK-05 done locally: focused tests added for manifest guidance auth, user scoping, kubectl command generation, and missing-field degradation
+- TASK-06 done locally: `/ingest/falco-events` accepts `resource_manifest` snapshots from top-level payloads or nested `event` payloads
+- TASK-06 done locally: string snapshots are stored as-is after trimming; structured object snapshots are normalized to JSON text
+- TASK-06 done locally: malformed scalar snapshots and snapshots over 200 KB are ignored safely and fall back to TASK-05 kubectl guidance
+- TASK-06 done locally: event detail and `/analyze-runtime-event/{id}` use the stored snapshot only through the owning user's cluster scope
+- TASK-06 done locally: `app/static/index.html` was not touched; existing `app/static/app.js` behavior already handles stored snapshots and kubectl guidance
+- Tests: `53 passed, 41 warnings` in `ai-observability/ai-server/tests`
 
 ## Deployment Notes
 
@@ -70,6 +75,11 @@ Next build/deploy tag: `docker.io/leeon3345/compliance-ai-server:0.1.12`
   - `SESSION_COOKIE_SECURE=true`
   - `PUBLIC_BASE_URL=https://compliance-ai-console.shares.zrok.io`
   - required secret: `ai-google-oauth` with `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
+- TASK-06 handoff image:
+  - build/push/set `docker.io/leeon3345/compliance-ai-server:0.1.13`
+  - Future collector/agent payload contract: send `resource_manifest` as either a YAML string at the top level or a structured object/string under `event.resource_manifest`
+  - Keep ingest auth as `Authorization: Bearer <ingest_token>`
+  - Do not configure fake Google OAuth credentials; live OAuth smoke remains deferred until real credentials exist
 - Update command:
   - `kubectl set image deploy/ai-classifier -n compliance-system ai-classifier=docker.io/leeon3345/compliance-ai-server:<tag>`
   - `kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s`
@@ -96,17 +106,14 @@ Next build/deploy tag: `docker.io/leeon3345/compliance-ai-server:0.1.12`
 
 ## Remaining Tasks (priority order)
 
-1. **Manifest fetch refactor** — central AI server querying K8s API directly doesn't fit user-cluster model
-   - 1st: provide `kubectl` command for user to run
-   - 2nd: collector/agent sends manifest snapshot with event
-2. **Google OAuth live smoke** — after Google Cloud credentials exist, create real `ai-google-oauth` secret and deploy the next image
-3. **Policy/Falco hygiene** — policy and runtime detection are good enough for current demo, but need cleanup before treating them as stable ops assets
+1. **Policy/Falco hygiene** — policy and runtime detection are good enough for current demo, but need cleanup before treating them as stable ops assets
    - Sync duplicated Gatekeeper policy files between `cloud-deploy/policies` and `k8s-policy-engine`
    - Decide/document the source of truth for deployable constraints and mutations
    - Known drift: `cloud-deploy/policies` includes `local-path-storage` exclusions and `docker.io/leeon3345/` allowed registry updates that are not fully mirrored in `k8s-policy-engine`
    - Falco rules look acceptable for demo; next improvement should be validation/smoke-test docs rather than adding more rules first
-4. **Admin cleanup controls** — optional delete/archive for disabled test clusters; current UI only disables clusters
-5. **Ops docs** — zrok stabilization script, image tag/deploy procedure, SQLite backup/reset, demo data cleanup
+2. **Admin cleanup controls** — optional delete/archive for disabled test clusters; current UI only disables clusters
+3. **Ops docs** — zrok stabilization script, image tag/deploy procedure, SQLite backup/reset, demo data cleanup
+4. **Google OAuth live smoke (final task)** — after Google Console signup and real credentials exist, create real `ai-google-oauth` secret and deploy/smoke-test the current image
 
 ## Do Not Change (fixed decisions)
 
@@ -126,6 +133,7 @@ Next build/deploy tag: `docker.io/leeon3345/compliance-ai-server:0.1.12`
 ```
 ai-observability/ai-server/app/storage.py
 ai-observability/ai-server/app/main.py
+ai-observability/ai-server/app/runtime_client.py
 ai-observability/ai-server/app/static/app.js
 ai-observability/ai-server/tests/test_api.py
 ai-observability/k8s/ai-server.yaml
@@ -133,6 +141,7 @@ cloud-deploy/ai-server.yaml
 .context/CONTEXT.md
 .context/Task4.md
 .context/Task5.md
+.context/Task6.md
 ```
 
-Last test result: `50 passed, 35 warnings`
+Last test result: `53 passed, 41 warnings`

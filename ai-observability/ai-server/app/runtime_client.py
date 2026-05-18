@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime, timezone
 from typing import Any
@@ -12,6 +13,7 @@ DEMO_CLUSTER_NAME = os.getenv("DEMO_CLUSTER_NAME", os.getenv("CLUSTER_NAME", "de
 KUBE_API_URL = os.getenv("KUBERNETES_SERVICE_HOST", "")
 KUBE_API_PORT = os.getenv("KUBERNETES_SERVICE_PORT", "443")
 SERVICEACCOUNT_DIR = "/var/run/secrets/kubernetes.io/serviceaccount"
+MAX_RESOURCE_MANIFEST_BYTES = 200_000
 
 
 def list_runtime_events(
@@ -176,10 +178,24 @@ def record_falco_event(
         "user": payload.get("user") or output_fields.get("user.name", ""),
         "command": payload.get("command") or output_fields.get("proc.cmdline", ""),
         "action_taken": "alert_and_monitor",
-        "resource_manifest": payload.get("resource_manifest", ""),
+        "resource_manifest": _normalize_resource_manifest(
+            payload.get("resource_manifest", raw_event.get("resource_manifest", ""))
+        ),
         "raw_event": raw_event,
     }
     return storage.save_event(event)
+
+
+def _normalize_resource_manifest(value: Any) -> str:
+    if isinstance(value, str):
+        manifest = value.strip()
+    elif isinstance(value, dict):
+        manifest = json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True)
+    else:
+        return ""
+    if len(manifest.encode("utf-8")) > MAX_RESOURCE_MANIFEST_BYTES:
+        return ""
+    return manifest
 
 
 def fetch_resource_manifest(namespace: str, pod_name: str) -> dict[str, str]:

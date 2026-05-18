@@ -1,3 +1,5 @@
+import json
+
 from fastapi.testclient import TestClient
 import httpx
 
@@ -676,7 +678,13 @@ def test_ingested_falco_event_is_listed_with_manifest_snapshot():
         provider_subject="customer-a-owner@example.test",
         email="customer-a-owner@example.test",
     )
+    other_owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="customer-a-other@example.test",
+        email="customer-a-other@example.test",
+    )
     session = storage.create_session(owner["id"])
+    other_session = storage.create_session(other_owner["id"])
     cluster = storage.create_cluster("customer-a", user_id=owner["id"])
 
     response = client.post(
@@ -742,6 +750,156 @@ def test_ingested_falco_event_is_listed_with_manifest_snapshot():
     assert detail_body["cluster_kind"] == "customer"
     assert detail_body["namespace"] == "prod"
     assert detail_body["resource_manifest"].startswith("apiVersion: v1")
+
+    hidden_detail = client.get(
+        f"/runtime-events/{event_id}",
+        cookies={"compliance_ai_session": other_session},
+    )
+    assert hidden_detail.status_code == 404
+
+
+def test_ingested_manifest_snapshot_accepts_structured_payload():
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="structured-manifest-owner@example.test",
+        email="structured-manifest-owner@example.test",
+    )
+    session = storage.create_session(owner["id"])
+    cluster = storage.create_cluster("structured-manifest-cluster", user_id=owner["id"])
+
+    response = client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster['token']}"},
+        json={
+            "event": {
+                "time": "2026-05-12T02:00:00Z",
+                "rule": "Structured Manifest Event",
+                "priority": "Warning",
+                "output_fields": {
+                    "k8s.ns.name": "prod",
+                    "k8s.pod.name": "structured-pod",
+                },
+                "resource_manifest": {
+                    "apiVersion": "v1",
+                    "kind": "Pod",
+                    "metadata": {"name": "structured-pod", "namespace": "prod"},
+                },
+            },
+        },
+    )
+    event = response.json()["event"]
+
+    assert response.status_code == 200
+    stored = client.get(
+        f"/runtime-events/{event['id']}",
+        cookies={"compliance_ai_session": session},
+    ).json()
+
+    manifest = json.loads(stored["resource_manifest"])
+    assert manifest["apiVersion"] == "v1"
+    assert manifest["kind"] == "Pod"
+    assert manifest["metadata"]["name"] == "structured-pod"
+
+
+def test_runtime_analysis_uses_stored_manifest_snapshot():
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="analysis-manifest-owner@example.test",
+        email="analysis-manifest-owner@example.test",
+    )
+    session = storage.create_session(owner["id"])
+    cluster = storage.create_cluster("analysis-manifest-cluster", user_id=owner["id"])
+
+    event = client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster['token']}"},
+        json={
+            "resource_manifest": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: analysis-pod\n  namespace: prod\n",
+            "event": {
+                "time": "2026-05-12T02:05:00Z",
+                "rule": "Analysis Manifest Event",
+                "priority": "Warning",
+                "output": "shell spawned",
+                "output_fields": {
+                    "k8s.ns.name": "prod",
+                    "k8s.pod.name": "analysis-pod",
+                    "container.name": "app",
+                },
+            },
+        },
+    ).json()["event"]
+
+    response = client.post(
+        f"/analyze-runtime-event/{event['id']}",
+        cookies={"compliance_ai_session": session},
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["llm_used"] is False
+    assert body["llm_error"] == ""
+    assert body["yaml_snippet"]
+
+
+def test_malformed_and_oversized_manifest_payloads_are_ignored_safely():
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="bad-manifest-owner@example.test",
+        email="bad-manifest-owner@example.test",
+    )
+    session = storage.create_session(owner["id"])
+    cluster = storage.create_cluster("bad-manifest-cluster", user_id=owner["id"])
+
+    malformed_event = client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster['token']}"},
+        json={
+            "resource_manifest": 12345,
+            "event": {
+                "time": "2026-05-12T02:10:00Z",
+                "rule": "Malformed Manifest Event",
+                "priority": "Warning",
+                "output_fields": {
+                    "k8s.ns.name": "prod",
+                    "k8s.pod.name": "malformed-pod",
+                },
+            },
+        },
+    ).json()["event"]
+    oversized_event = client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster['token']}"},
+        json={
+            "resource_manifest": "x" * 210_000,
+            "event": {
+                "time": "2026-05-12T02:11:00Z",
+                "rule": "Oversized Manifest Event",
+                "priority": "Warning",
+                "output_fields": {
+                    "k8s.ns.name": "prod",
+                    "k8s.pod.name": "oversized-pod",
+                },
+            },
+        },
+    ).json()["event"]
+
+    malformed_detail = client.get(
+        f"/runtime-events/{malformed_event['id']}",
+        cookies={"compliance_ai_session": session},
+    ).json()
+    oversized_detail = client.get(
+        f"/runtime-events/{oversized_event['id']}",
+        cookies={"compliance_ai_session": session},
+    ).json()
+    guidance = client.get(
+        f"/resource-manifest?event_id={oversized_event['id']}",
+        cookies={"compliance_ai_session": session},
+    ).json()
+
+    assert malformed_detail["resource_manifest"] == ""
+    assert oversized_detail["resource_manifest"] == ""
+    assert guidance["manifest"] == ""
+    assert guidance["kubectl_command"] == "kubectl get pod oversized-pod -n prod -o yaml"
 
 
 def test_ingested_demo_cluster_event_is_tagged_and_filterable(monkeypatch):
