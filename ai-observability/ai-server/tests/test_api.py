@@ -1365,6 +1365,9 @@ metadata:
         "NetworkPolicy",
     ]
     assert "kubectl apply --dry-run=server" in body["fallback"]["combined_command"]
+    assert "KUBEOWL_TEMPLATE_EOF" in body["fallback"]["combined_command"]
+    assert "kubectl wait --for=condition=Established crd" in body["fallback"]["combined_command"]
+    assert "KUBEOWL_CONSTRAINT_EOF" in body["fallback"]["combined_command"]
     assert body["history"]["status"] == "not_configured"
 
 

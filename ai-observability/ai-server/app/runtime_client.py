@@ -291,17 +291,51 @@ def _kube_patch(path: str, yaml_body: str, timeout: float = 10) -> dict[str, Any
 
 
 def _policy_apply_fallback(manifest: str) -> dict[str, str]:
-    marker = "KUBEOWL_POLICY_EOF"
-    if marker in str(manifest or ""):
-        marker = "KUBEOWL_POLICY_EOF_2"
     clean_manifest = str(manifest or "").strip()
-    dry_run = f"kubectl apply --dry-run=server -f - <<'{marker}'\n{clean_manifest}\n{marker}"
-    apply = f"kubectl apply -f - <<'{marker}'\n{clean_manifest}\n{marker}"
+    dry_run = _fallback_commands(clean_manifest, dry_run=True)
+    apply = _fallback_commands(clean_manifest, dry_run=False)
     return {
         "dry_run_command": dry_run,
         "apply_command": apply,
         "combined_command": f"{dry_run}\n\n{apply}",
     }
+
+
+def _fallback_commands(manifest: str, dry_run: bool) -> str:
+    verb = "kubectl apply --dry-run=server -f -" if dry_run else "kubectl apply -f -"
+    try:
+        ordered = _order_policy_resources(_parse_policy_manifest(manifest))
+    except ValueError:
+        ordered = []
+    if not ordered:
+        return _heredoc_command(verb, manifest, "KUBEOWL_POLICY_EOF")
+
+    templates = [resource for resource in ordered if resource.get("kind") == "ConstraintTemplate"]
+    others = [resource for resource in ordered if resource.get("kind") != "ConstraintTemplate"]
+    if not templates or not others:
+        return _heredoc_command(
+            verb,
+            _dump_manifest_docs(ordered),
+            "KUBEOWL_POLICY_EOF",
+        )
+
+    commands = [
+        _heredoc_command(verb, _dump_manifest_docs(templates), "KUBEOWL_TEMPLATE_EOF"),
+        "kubectl wait --for=condition=Established crd -l gatekeeper.sh/constraint=true --timeout=60s",
+        _heredoc_command(verb, _dump_manifest_docs(others), "KUBEOWL_CONSTRAINT_EOF"),
+    ]
+    return "\n\n".join(commands)
+
+
+def _dump_manifest_docs(resources: list[dict[str, Any]]) -> str:
+    return "\n---\n".join(yaml.safe_dump(resource, sort_keys=False).strip() for resource in resources)
+
+
+def _heredoc_command(verb: str, manifest: str, marker: str) -> str:
+    safe_marker = marker
+    if safe_marker in str(manifest or ""):
+        safe_marker = f"{marker}_2"
+    return f"{verb} <<'{safe_marker}'\n{str(manifest or '').strip()}\n{safe_marker}"
 
 
 def list_runtime_events(
