@@ -6,6 +6,8 @@ from typing import Any
 import httpx
 
 from app import storage
+from app.llm_client import LLMClient
+from app.policy_generator import _format_llm_http_error
 
 
 RESPONSE_SERVER_URL = os.getenv("RESPONSE_SERVER_URL", "http://response-server:8080").rstrip("/")
@@ -14,6 +16,18 @@ KUBE_API_URL = os.getenv("KUBERNETES_SERVICE_HOST", "")
 KUBE_API_PORT = os.getenv("KUBERNETES_SERVICE_PORT", "443")
 SERVICEACCOUNT_DIR = "/var/run/secrets/kubernetes.io/serviceaccount"
 MAX_RESOURCE_MANIFEST_BYTES = 200_000
+INFRA_NAMESPACES = {
+    "kube-system",
+    "monitoring",
+    "gatekeeper-system",
+    "falco",
+    "local-path-storage",
+    "calico-system",
+    "cilium",
+    "cilium-system",
+    "kube-flannel",
+    "tigera-operator",
+}
 
 
 def list_runtime_events(
@@ -23,6 +37,7 @@ def list_runtime_events(
     source: str = "",
     include_legacy: bool = False,
     user_id: str = "",
+    exclude_infra: bool = False,
 ) -> dict[str, Any]:
     # SQLite 저장 이벤트와 레거시 response-server 이벤트를 통합
     events: list[dict[str, Any]] = storage.list_events(
@@ -31,6 +46,7 @@ def list_runtime_events(
         cluster_kind=cluster_kind,
         source=source,
         user_id=user_id,
+        exclude_namespaces=INFRA_NAMESPACES if exclude_infra else None,
     )
     source_status = {
         "response_server": "skipped",
@@ -40,14 +56,15 @@ def list_runtime_events(
     if not user_id and include_legacy and not cluster and not source and cluster_kind in {"", "demo"}:
         source_status["response_server"] = "unavailable"
         try:
+            request_limit = min(max(limit * 3 if exclude_infra else limit, limit), 500)
             response = httpx.get(
                 f"{RESPONSE_SERVER_URL}/api/v1/events",
-                params={"limit": limit},
+                params={"limit": request_limit},
                 timeout=3,
             )
             response.raise_for_status()
             body = response.json()
-            events.extend(
+            legacy_events = [
                 _normalize_event(
                     item,
                     source="falco",
@@ -55,7 +72,12 @@ def list_runtime_events(
                     cluster_kind="demo",
                 )
                 for item in body.get("events", [])
-            )
+            ]
+            if exclude_infra:
+                legacy_events = [
+                    event for event in legacy_events if event.get("namespace") not in INFRA_NAMESPACES
+                ]
+            events.extend(legacy_events)
             source_status["response_server"] = "ok"
         except httpx.HTTPError as error:
             source_status["response_server_error"] = str(error)
@@ -92,6 +114,37 @@ def get_runtime_summary(user_id: str = "") -> dict[str, Any]:
     except httpx.HTTPError as error:
         summary["source_error"] = str(error)
     return summary
+
+
+def build_dashboard_summary(user_id: str = "") -> dict[str, Any]:
+    summary = get_runtime_summary(user_id=user_id)
+    last_sync = summary.get("last_seen_at") or summary.get("latest_event_at") or ""
+    active_policies = _count_gatekeeper_constraints()
+    return {
+        "active_policies": active_policies.get("count"),
+        "active_policies_source": active_policies.get("source", "unknown"),
+        "active_policies_error": active_policies.get("error", ""),
+        "recent_violations": int(summary.get("recent_24h", 0) or 0),
+        "runtime_events": int(summary.get("total_events", 0) or 0),
+        "last_sync": last_sync,
+    }
+
+
+def _count_gatekeeper_constraints() -> dict[str, Any]:
+    if not KUBE_API_URL:
+        return {"count": None, "source": "unavailable", "error": "Kubernetes API unavailable"}
+    discovery = _kube_get("/apis/constraints.gatekeeper.sh/v1beta1")
+    if discovery.get("error"):
+        return {"count": None, "source": "unavailable", "error": discovery["error"]}
+    count = 0
+    for resource in discovery.get("body", {}).get("resources", []):
+        if not isinstance(resource, dict) or "/" in str(resource.get("name", "")):
+            continue
+        if not resource.get("namespaced", False) and "list" in resource.get("verbs", []):
+            body = _kube_get(f"/apis/constraints.gatekeeper.sh/v1beta1/{resource['name']}")
+            if not body.get("error"):
+                count += len(body.get("body", {}).get("items", []))
+    return {"count": count, "source": "kubernetes", "error": ""}
 
 
 def record_gatekeeper_event(payload: dict[str, Any]) -> dict[str, Any]:
@@ -228,7 +281,35 @@ def fetch_resource_manifest(namespace: str, pod_name: str) -> dict[str, str]:
         return {"manifest": "", "error": f"Kubernetes API 조회 실패: {error}"}
 
 
-def build_report(cluster_kind: str = "", include_legacy: bool = False, user_id: str = "") -> dict[str, Any]:
+def _kube_get(path: str, timeout: float = 5) -> dict[str, Any]:
+    token_path = f"{SERVICEACCOUNT_DIR}/token"
+    ca_path = f"{SERVICEACCOUNT_DIR}/ca.crt"
+    try:
+        with open(token_path, encoding="utf-8") as token_file:
+            token = token_file.read().strip()
+    except OSError as error:
+        return {"body": {}, "error": f"ServiceAccount token read failed: {error}"}
+    url = f"https://{KUBE_API_URL}:{KUBE_API_PORT}{path}"
+    try:
+        response = httpx.get(
+            url,
+            headers={"Authorization": f"Bearer {token}"},
+            verify=ca_path,
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        return {"body": response.json(), "error": ""}
+    except httpx.HTTPError as error:
+        return {"body": {}, "error": str(error)}
+
+
+def build_report(
+    cluster_kind: str = "",
+    include_legacy: bool = False,
+    user_id: str = "",
+    llm_provider: str | None = None,
+    llm_api_key: str | None = None,
+) -> dict[str, Any]:
     summary = get_runtime_summary(user_id=user_id)
     events = list_runtime_events(
         limit=100,
@@ -237,13 +318,67 @@ def build_report(cluster_kind: str = "", include_legacy: bool = False, user_id: 
         user_id=user_id,
     )["events"]
     top_rules = sorted(summary.get("by_rule", {}).items(), key=lambda item: item[1], reverse=True)[:5]
-    return {
+    report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "summary": summary,
         "top_rules": [{"rule": rule, "count": count} for rule, count in top_rules],
         "recommendations": _report_recommendations(summary, events),
         "events": events[:20],
+        "llm_used": False,
+        "llm_summary": "",
+        "llm_error": "",
     }
+    llm_summary, llm_error = _safe_llm_report_summary(report, llm_provider, llm_api_key)
+    report["llm_summary"] = llm_summary
+    report["llm_error"] = llm_error
+    report["llm_used"] = bool(llm_summary)
+    return report
+
+
+def _safe_llm_report_summary(
+    report: dict[str, Any],
+    llm_provider: str | None,
+    llm_api_key: str | None,
+) -> tuple[str, str]:
+    client = LLMClient(provider=llm_provider, api_key=llm_api_key)
+    if not client.configured:
+        return "", "LLM API key가 설정되어 있지 않아 규칙 기반 리포트만 표시합니다."
+    try:
+        return (
+            client.complete_text(
+                _build_report_prompt(report),
+                (
+                    "You are a Kubernetes compliance analyst. "
+                    "Write a concise Korean executive summary for operators. "
+                    "Mention risk level, top causes, and the next actions. "
+                    "Do not invent events that are not in the JSON."
+                ),
+                max_tokens=900,
+            ).strip(),
+            "",
+        )
+    except httpx.HTTPStatusError as error:
+        return "", f"{_format_llm_http_error(error)} 규칙 기반 리포트만 표시합니다."
+    except httpx.TimeoutException:
+        return "", "LLM 연결 시간 초과로 규칙 기반 리포트만 표시합니다."
+    except httpx.RequestError:
+        return "", "LLM 연결 실패로 규칙 기반 리포트만 표시합니다."
+    except Exception:
+        return "", "LLM 처리 실패로 규칙 기반 리포트만 표시합니다."
+
+
+def _build_report_prompt(report: dict[str, Any]) -> str:
+    compact_report = {
+        "summary": report.get("summary", {}),
+        "top_rules": report.get("top_rules", []),
+        "recommendations": report.get("recommendations", []),
+        "events": report.get("events", [])[:10],
+    }
+    return (
+        "다음 Kubernetes 컴플라이언스 리포트 JSON을 운영자용으로 요약하세요.\n"
+        "출력은 한국어 4~6문장으로 작성하고, 조치 우선순위를 포함하세요.\n\n"
+        f"{json.dumps(compact_report, ensure_ascii=False)}"
+    )
 
 
 def _report_recommendations(summary: dict[str, Any], events: list[dict[str, Any]]) -> list[str]:

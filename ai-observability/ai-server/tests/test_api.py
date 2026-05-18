@@ -68,6 +68,7 @@ def test_ui_is_served():
     assert "xAI (Grok)" in response.text
     assert "Use my own API key" in response.text
     assert "Google 로그인" in response.text
+    assert "PDF 다운로드" in response.text
     assert "개발 로그인" in response.text
     assert "Your API key is used only for requests in this session" in response.text
     assert "Cluster Setup" in response.text
@@ -251,6 +252,49 @@ def test_cluster_names_are_scoped_per_user():
     assert first.json()["cluster"]["user_id"] == owner_a["id"]
     assert second.json()["cluster"]["user_id"] == owner_b["id"]
     assert duplicate.status_code == 409
+
+
+def test_user_cluster_trash_and_restore():
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="trash-owner@example.test",
+        email="trash-owner@example.test",
+    )
+    other = storage.upsert_user(
+        provider="dev",
+        provider_subject="trash-other@example.test",
+        email="trash-other@example.test",
+    )
+    session = storage.create_session(owner["id"])
+    other_session = storage.create_session(other["id"])
+    cluster = storage.create_cluster("trashable-cluster", user_id=owner["id"])
+
+    forbidden = client.delete(
+        f"/api/clusters/{cluster['id']}",
+        cookies={"compliance_ai_session": other_session},
+    )
+    trash_response = client.delete(
+        f"/api/clusters/{cluster['id']}",
+        cookies={"compliance_ai_session": session},
+    )
+    hidden_list = client.get("/api/clusters", cookies={"compliance_ai_session": session}).json()
+    trash_list = client.get(
+        "/api/clusters?include_deleted=true",
+        cookies={"compliance_ai_session": session},
+    ).json()
+    restore_response = client.post(
+        f"/api/clusters/{cluster['id']}/restore",
+        cookies={"compliance_ai_session": session},
+    )
+
+    assert forbidden.status_code == 404
+    assert trash_response.status_code == 200
+    assert trash_response.json()["cluster"]["status"] == "deleted"
+    assert trash_response.json()["cluster"]["deleted_at"]
+    assert all(item["id"] != cluster["id"] for item in hidden_list["clusters"])
+    assert any(item["id"] == cluster["id"] for item in trash_list["clusters"])
+    assert restore_response.status_code == 200
+    assert restore_response.json()["cluster"]["status"] == "disabled"
 
 
 def test_slack_settings_require_login():
@@ -801,6 +845,63 @@ def test_ingested_manifest_snapshot_accepts_structured_payload():
     assert manifest["metadata"]["name"] == "structured-pod"
 
 
+def test_runtime_events_exclude_infra_before_limit():
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="runtime-filter-owner@example.test",
+        email="runtime-filter-owner@example.test",
+    )
+    session = storage.create_session(owner["id"])
+    cluster = storage.create_cluster("runtime-filter-cluster", user_id=owner["id"])
+
+    client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster['token']}"},
+        json={
+            "event": {
+                "time": "2026-05-18T10:00:00Z",
+                "rule": "Newest Infra Event",
+                "priority": "Warning",
+                "output_fields": {
+                    "k8s.ns.name": "kube-system",
+                    "k8s.pod.name": "infra-pod",
+                },
+            },
+        },
+    )
+    client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster['token']}"},
+        json={
+            "event": {
+                "time": "2026-05-18T09:00:00Z",
+                "rule": "Older Workload Event",
+                "priority": "Warning",
+                "output_fields": {
+                    "k8s.ns.name": "default",
+                    "k8s.pod.name": "workload-pod",
+                },
+            },
+        },
+    )
+
+    unfiltered = client.get(
+        "/runtime-events?limit=1",
+        cookies={"compliance_ai_session": session},
+    ).json()
+    filtered_response = client.get(
+        "/runtime-events?limit=1&exclude_infra=true",
+        cookies={"compliance_ai_session": session},
+    )
+    filtered = filtered_response.json()
+
+    assert unfiltered["events"][0]["rule"] == "Newest Infra Event"
+    assert filtered_response.status_code == 200
+    assert len(filtered["events"]) == 1
+    assert filtered["events"][0]["rule"] == "Older Workload Event"
+    assert filtered["events"][0]["namespace"] == "default"
+
+
 def test_runtime_analysis_uses_stored_manifest_snapshot():
     owner = storage.upsert_user(
         provider="dev",
@@ -1130,7 +1231,77 @@ def test_runtime_features_require_login():
     assert client.get("/runtime-events/missing-event").status_code == 401
     assert client.get("/resource-manifest?namespace=default&pod=test-pod").status_code == 401
     assert client.post("/analyze-runtime-event/missing-event").status_code == 401
+    assert client.get("/dashboard-summary").status_code == 401
     assert client.get("/compliance-report").status_code == 401
+
+
+def test_dashboard_summary_uses_live_counts(monkeypatch):
+    monkeypatch.setattr(
+        "app.runtime_client._count_gatekeeper_constraints",
+        lambda: {"count": 7, "source": "kubernetes", "error": ""},
+    )
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="dashboard-summary-owner@example.test",
+        email="dashboard-summary-owner@example.test",
+    )
+    session = storage.create_session(owner["id"])
+    cluster = storage.create_cluster("dashboard-summary-cluster", user_id=owner["id"])
+    storage.mark_cluster_seen(cluster["id"], "2026-05-18T10:00:00Z")
+    client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster['token']}"},
+        json={
+            "event": {
+                "time": "2026-05-18T09:30:00Z",
+                "rule": "Dashboard Summary Event",
+                "priority": "Warning",
+            },
+        },
+    )
+
+    response = client.get("/dashboard-summary", cookies={"compliance_ai_session": session})
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["active_policies"] == 7
+    assert body["active_policies_source"] == "kubernetes"
+    assert body["runtime_events"] >= 1
+    assert body["recent_violations"] >= 1
+    assert body["last_sync"] == "2026-05-18T10:00:00Z"
+
+
+def test_compliance_report_uses_llm_when_configured(monkeypatch):
+    calls = []
+
+    def fake_complete_text(self, prompt, system_prompt, max_tokens=1200):
+        calls.append(
+            {
+                "provider": self.provider,
+                "prompt": prompt,
+                "system_prompt": system_prompt,
+                "max_tokens": max_tokens,
+            }
+        )
+        return "High 이벤트를 우선 확인하고 namespace별 반복 위반을 줄이세요."
+
+    monkeypatch.setattr(LLMClient, "complete_text", fake_complete_text)
+    session = _session_for("report-llm@example.test")
+
+    response = client.get(
+        "/compliance-report",
+        cookies={"compliance_ai_session": session},
+        headers={"X-LLM-Provider": "google", "X-LLM-API-Key": "session-key-123"},
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["llm_used"] is True
+    assert "High 이벤트" in body["llm_summary"]
+    assert body["llm_error"] == ""
+    assert calls[0]["provider"] == "google"
+    assert "컴플라이언스 리포트" in calls[0]["prompt"]
+    assert calls[0]["max_tokens"] == 900
 
 
 def test_ingest_rejects_missing_cluster_token():

@@ -101,6 +101,7 @@ def init_db() -> None:
             _ensure_column(conn, "clusters", "user_id", "TEXT")
             _ensure_column(conn, "clusters", "kind", "TEXT NOT NULL DEFAULT 'customer'")
             _ensure_column(conn, "clusters", "slack_enabled", "INTEGER NOT NULL DEFAULT 1")
+            _ensure_column(conn, "clusters", "deleted_at", "TEXT")
             _ensure_column(conn, "events", "cluster_id", "TEXT")
             _ensure_column(conn, "events", "cluster_kind", "TEXT NOT NULL DEFAULT 'customer'")
             _ensure_cluster_name_scope(conn)
@@ -364,7 +365,7 @@ def create_cluster(name: str, kind: str = "customer", user_id: str = "") -> dict
     return cluster
 
 
-def list_clusters(user_id: str = "") -> list[dict[str, Any]]:
+def list_clusters(user_id: str = "", include_deleted: bool = False) -> list[dict[str, Any]]:
     init_db()
     normalized_user_id = str(user_id or "").strip()
     params: list[Any] = []
@@ -372,11 +373,15 @@ def list_clusters(user_id: str = "") -> list[dict[str, Any]]:
     if normalized_user_id:
         where = "WHERE clusters.user_id = ?"
         params.append(normalized_user_id)
+    if not include_deleted:
+        deleted_filter = "clusters.status != 'deleted'"
+        where = f"{where} AND {deleted_filter}" if where else f"WHERE {deleted_filter}"
     with _connect() as conn:
         rows = conn.execute(
             f"""
             SELECT clusters.id, clusters.user_id, clusters.name, clusters.kind, clusters.status,
-                   clusters.slack_enabled, clusters.last_seen_at, clusters.created_at, users.email AS user_email,
+                   clusters.slack_enabled, clusters.last_seen_at, clusters.deleted_at,
+                   clusters.created_at, users.email AS user_email,
                    users.name AS user_name,
                    (
                        SELECT COUNT(*)
@@ -401,7 +406,7 @@ def get_cluster(cluster_id: str) -> dict[str, Any] | None:
     with _connect() as conn:
         row = conn.execute(
             """
-            SELECT id, user_id, name, kind, status, slack_enabled, last_seen_at, created_at
+            SELECT id, user_id, name, kind, status, slack_enabled, last_seen_at, deleted_at, created_at
             FROM clusters
             WHERE id = ?
             """,
@@ -463,7 +468,7 @@ def rotate_cluster_token(cluster_id: str) -> dict[str, Any] | None:
         cursor = conn.execute(
             """
             UPDATE clusters
-            SET token_hash = ?, status = 'active'
+            SET token_hash = ?, status = 'active', deleted_at = NULL
             WHERE id = ?
             """,
             (_token_hash(token), cluster_id),
@@ -482,6 +487,39 @@ def disable_cluster(cluster_id: str) -> dict[str, Any] | None:
         cursor = conn.execute(
             "UPDATE clusters SET status = 'disabled' WHERE id = ?",
             (cluster_id,),
+        )
+    if cursor.rowcount == 0:
+        return None
+    return get_cluster(cluster_id)
+
+
+def trash_cluster(cluster_id: str, user_id: str) -> dict[str, Any] | None:
+    init_db()
+    now = datetime.now(timezone.utc).isoformat()
+    with _LOCK, _connect() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE clusters
+            SET status = 'deleted', deleted_at = ?, token_hash = ''
+            WHERE id = ? AND user_id = ?
+            """,
+            (now, cluster_id, user_id),
+        )
+    if cursor.rowcount == 0:
+        return None
+    return get_cluster(cluster_id)
+
+
+def restore_cluster(cluster_id: str, user_id: str) -> dict[str, Any] | None:
+    init_db()
+    with _LOCK, _connect() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE clusters
+            SET status = 'disabled', deleted_at = NULL
+            WHERE id = ? AND user_id = ? AND status = 'deleted'
+            """,
+            (cluster_id, user_id),
         )
     if cursor.rowcount == 0:
         return None
@@ -511,7 +549,19 @@ def mark_cluster_seen(cluster_id: str, timestamp: str) -> None:
     init_db()
     with _LOCK, _connect() as conn:
         conn.execute(
-            "UPDATE clusters SET last_seen_at = ? WHERE id = ?",
+            """
+            UPDATE clusters
+            SET last_seen_at = ?
+            WHERE id = ? AND (last_seen_at IS NULL OR last_seen_at = '' OR last_seen_at <= ?)
+            """,
+            (timestamp, cluster_id, timestamp),
+        )
+        conn.execute(
+            """
+            UPDATE clusters
+            SET last_seen_at = COALESCE(last_seen_at, ?)
+            WHERE id = ? AND (last_seen_at IS NULL OR last_seen_at = '')
+            """,
             (timestamp, cluster_id),
         )
 
@@ -522,6 +572,7 @@ def list_events(
     cluster_kind: str = "",
     source: str = "",
     user_id: str = "",
+    exclude_namespaces: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     init_db()
     limit = max(1, min(int(limit or 50), 500))
@@ -540,6 +591,11 @@ def list_events(
     if user_id:
         filters.append("cluster_id IN (SELECT id FROM clusters WHERE user_id = ?)")
         params.append(user_id)
+    if exclude_namespaces:
+        namespaces = sorted(namespace for namespace in exclude_namespaces if namespace)
+        placeholders = ", ".join("?" for _ in namespaces)
+        filters.append(f"(namespace IS NULL OR namespace = '' OR namespace NOT IN ({placeholders}))")
+        params.extend(namespaces)
     if filters:
         query += " WHERE " + " AND ".join(filters)
     query += " ORDER BY COALESCE(timestamp, created_at) DESC, created_at DESC LIMIT ?"
@@ -578,6 +634,25 @@ def event_summary(user_id: str = "") -> dict[str, Any]:
         high_params.append(user_id)
     with _connect() as conn:
         total = conn.execute(f"SELECT COUNT(*) AS count FROM events {where}", params).fetchone()["count"]
+        recent_24h = conn.execute(
+            f"""
+            SELECT COUNT(*) AS count
+            FROM events
+            {where}
+            {"AND" if where else "WHERE"} strftime('%s', COALESCE(timestamp, created_at)) >= strftime('%s', 'now', '-1 day')
+            """,
+            params,
+        ).fetchone()["count"]
+        latest_event_at = conn.execute(
+            f"SELECT MAX(COALESCE(timestamp, created_at)) AS value FROM events {where}",
+            params,
+        ).fetchone()["value"]
+        cluster_where = "WHERE user_id = ? AND status != 'deleted'" if user_id else "WHERE status != 'deleted'"
+        cluster_params = [user_id] if user_id else []
+        last_seen_at = conn.execute(
+            f"SELECT MAX(last_seen_at) AS value FROM clusters {cluster_where}",
+            cluster_params,
+        ).fetchone()["value"]
         by_severity = _count_by(conn, "severity", user_id=user_id)
         by_rule = _count_by(conn, "rule", user_id=user_id)
         by_namespace = _count_by(conn, "namespace", user_id=user_id)
@@ -593,6 +668,9 @@ def event_summary(user_id: str = "") -> dict[str, Any]:
         ).fetchall()
     return {
         "total_events": total,
+        "recent_24h": recent_24h,
+        "latest_event_at": latest_event_at or "",
+        "last_seen_at": last_seen_at or "",
         "by_severity": by_severity,
         "by_rule": by_rule,
         "by_namespace": by_namespace,
@@ -689,6 +767,7 @@ def _ensure_cluster_name_scope(conn: sqlite3.Connection) -> None:
                 status TEXT NOT NULL DEFAULT 'active',
                 slack_enabled INTEGER NOT NULL DEFAULT 1,
                 last_seen_at TEXT,
+                deleted_at TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(user_id) REFERENCES users(id)
             )
@@ -696,8 +775,8 @@ def _ensure_cluster_name_scope(conn: sqlite3.Connection) -> None:
         )
         conn.execute(
             """
-            INSERT INTO clusters (id, user_id, name, kind, token_hash, status, slack_enabled, last_seen_at, created_at)
-            SELECT id, user_id, name, kind, token_hash, status, 1, last_seen_at, created_at
+            INSERT INTO clusters (id, user_id, name, kind, token_hash, status, slack_enabled, last_seen_at, deleted_at, created_at)
+            SELECT id, user_id, name, kind, token_hash, status, 1, last_seen_at, NULL, created_at
             FROM clusters_legacy_unique_name
             """
         )

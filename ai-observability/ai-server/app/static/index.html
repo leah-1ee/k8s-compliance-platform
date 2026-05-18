@@ -152,23 +152,23 @@
         <section class="metric-grid" aria-label="Compliance summary">
           <article class="metric-card">
             <span>Active Policies</span>
-            <strong>12</strong>
-            <p>Gatekeeper constraints</p>
+            <strong id="activePoliciesMetric">-</strong>
+            <p id="activePoliciesMetricDetail">Gatekeeper constraints</p>
           </article>
           <article class="metric-card">
             <span>Recent Violations</span>
-            <strong>3</strong>
+            <strong id="recentViolationsMetric">-</strong>
             <p>Last 24 hours</p>
           </article>
           <article class="metric-card">
             <span>Runtime Events</span>
-            <strong>50</strong>
-            <p>Default event window</p>
+            <strong id="runtimeEventsMetric">-</strong>
+            <p>Total stored events</p>
           </article>
           <article class="metric-card">
             <span>Last Sync</span>
-            <strong>10m</strong>
-            <p>Cluster telemetry</p>
+            <strong id="lastSyncMetric">-</strong>
+            <p id="lastSyncMetricDetail">Cluster telemetry</p>
           </article>
         </section>
 
@@ -374,6 +374,11 @@
               <div class="actions setup-actions">
                 <button class="primary" id="registerUserCluster">등록</button>
                 <button class="secondary" id="refreshUserClusters">새로고침</button>
+                <label class="toggle-row cluster-trash-toggle">
+                  <input id="showDeletedClusters" type="checkbox" />
+                  <span class="toggle-control" aria-hidden="true"></span>
+                  <span>휴지통 보기</span>
+                </label>
               </div>
               <div class="setup-grid">
                 <article class="result-card">
@@ -510,6 +515,7 @@ spec:
               <div class="actions report-actions">
                 <button class="primary" id="generateReport">리포트 생성</button>
                 <button class="secondary" id="copyReport">리포트 복사</button>
+                <button class="secondary" id="downloadReportPdf">PDF 다운로드</button>
               </div>
               <div class="analysis-card" id="reportResult">
                 <span class="badge ready">● 준비됨</span>

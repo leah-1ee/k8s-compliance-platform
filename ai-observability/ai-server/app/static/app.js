@@ -4,6 +4,7 @@ let latestPolicyText = "";
 let latestAnalysisText = "";
 let latestYamlSnippet = "";
 let latestReportText = "";
+let latestReportHtml = "";
 let latestManifestCommand = "";
 let selectedRuntimeEvent = null;
 let grafanaUrl = "";
@@ -235,6 +236,32 @@ function formatEventTime(event) {
   });
 }
 
+function formatRelativeTime(value) {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 0) {
+    return "방금";
+  }
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) {
+    return "방금";
+  }
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours}h`;
+  }
+  return `${Math.floor(hours / 24)}d`;
+}
+
 function eventImage(event) {
   const image = event?.image || event?.image_repository || event?.container_image || "";
   const tag = event?.image_tag || "";
@@ -260,6 +287,30 @@ function eventClusterLine(event) {
     · ${escapeHtml(event?.source || "runtime")}
     · ${escapeHtml(event?.action_taken || "event")}
   `;
+}
+
+function renderDashboardSummary(summary = {}) {
+  $("#activePoliciesMetric").textContent =
+    summary.active_policies === null || summary.active_policies === undefined
+      ? "-"
+      : String(summary.active_policies);
+  $("#activePoliciesMetricDetail").textContent =
+    summary.active_policies_source === "kubernetes"
+      ? "Live Gatekeeper constraints"
+      : "Gatekeeper API unavailable";
+  $("#recentViolationsMetric").textContent = String(summary.recent_violations ?? 0);
+  $("#runtimeEventsMetric").textContent = String(summary.runtime_events ?? 0);
+  $("#lastSyncMetric").textContent = formatRelativeTime(summary.last_sync || "");
+  $("#lastSyncMetricDetail").textContent = summary.last_sync ? "Cluster telemetry" : "No cluster sync yet";
+}
+
+async function refreshDashboardSummary() {
+  if (!authState.authenticated) {
+    renderDashboardSummary({});
+    return;
+  }
+  const summary = await apiJson("/dashboard-summary");
+  renderDashboardSummary(summary);
 }
 
 function runtimeEventLabel(event) {
@@ -416,9 +467,9 @@ function analysisContextRows(payload) {
   return rows
     .map(
       ([label, value]) => `
-        <div>
-          <span>${escapeHtml(label)}</span>
-          <strong>${escapeHtml(value)}</strong>
+        <div class="analysis-context-item">
+          <span class="analysis-context-label">${escapeHtml(label)}</span>
+          <strong class="analysis-context-value">${escapeHtml(value)}</strong>
         </div>
       `,
     )
@@ -464,7 +515,7 @@ function renderViolationAnalysis(result, payload) {
       <span class="badge ${result.llm_used ? "ready" : "loading"}">${result.llm_used ? "LLM 분석" : "기본 분석"}</span>
     </div>
     <h2>${escapeHtml(payload.rule || result.summary)}</h2>
-    <div class="analysis-meta">${analysisContextRows(payload)}</div>
+    <div class="analysis-context-grid" aria-label="analysis target context">${analysisContextRows(payload)}</div>
     <h3>심각도 설명</h3>
     <p>${escapeHtml(result.severity_explanation || result.reason)}</p>
     <h3>원인 요약</h3>
@@ -620,6 +671,7 @@ async function refreshRuntimeEvents() {
     cluster_kind: $("#runtimeClusterKind").value,
     source: $("#runtimeSource").value,
     include_legacy: $("#includeLegacyEvents").checked ? "true" : "false",
+    exclude_infra: hideInfra ? "true" : "false",
   });
   container.innerHTML = `
     <article class="event-row">
@@ -633,14 +685,9 @@ async function refreshRuntimeEvents() {
   if (!response.ok) {
     throw new Error(formatErrorMessage(body.error || body.detail || `HTTP ${response.status}`));
   }
-  const rawEvents = body.events || [];
-  const visibleEvents = hideInfra ? rawEvents.filter((event) => !isInfraRuntimeEvent(event)) : rawEvents;
-  const hiddenInfraCount = rawEvents.length - visibleEvents.length;
-  if (rawEvents.length === 0 || visibleEvents.length === 0) {
-    const emptyMessage =
-      rawEvents.length > 0 && hiddenInfraCount > 0
-        ? `현재 ${hiddenInfraCount}개 이벤트가 infra namespace 숨김 설정으로 제외되었습니다.`
-        : body.source_status?.response_server_error || "현재 필터에 맞는 저장 이벤트가 없습니다.";
+  const visibleEvents = body.events || [];
+  if (visibleEvents.length === 0) {
+    const emptyMessage = body.source_status?.response_server_error || "현재 필터에 맞는 저장 이벤트가 없습니다.";
     container.innerHTML = `
       <article class="event-row">
         <span class="badge ready">empty</span>
@@ -650,10 +697,9 @@ async function refreshRuntimeEvents() {
     `;
     return;
   }
-  const hiddenSummary =
-    hiddenInfraCount > 0
-      ? `<article class="event-row"><span class="badge ready">filtered</span><p>infra namespace 이벤트 ${escapeHtml(hiddenInfraCount)}개 숨김</p></article>`
-      : "";
+  const hiddenSummary = hideInfra
+    ? `<article class="event-row event-row-note"><span class="badge ready">filtered</span><p>infra namespace 숨김 활성화</p></article>`
+    : "";
   container.innerHTML =
     hiddenSummary +
     visibleEvents
@@ -661,13 +707,13 @@ async function refreshRuntimeEvents() {
       (event) => `
         <button class="event-row runtime-event-button" data-event-id="${escapeHtml(event.id || "")}">
           <span class="badge ${escapeHtml(event.severity || "medium")}">${escapeHtml(event.severity || "medium")}</span>
-          <h2>${escapeHtml(event.rule || "unknown rule")}</h2>
-          <p>${escapeHtml(formatEventTime(event))} · #${escapeHtml(shortEventId(event))}</p>
-          <p>
-            ${eventClusterLine(event)}
-          </p>
-          <p>${escapeHtml(eventContextLine(event))}</p>
-          <p>${escapeHtml(eventImage(event))}</p>
+          <div class="event-row-content">
+            <h2>${escapeHtml(event.rule || "unknown rule")}</h2>
+            <p class="event-row-meta">${escapeHtml(formatEventTime(event))} · #${escapeHtml(shortEventId(event))}</p>
+            <p class="event-row-meta">${eventClusterLine(event)}</p>
+            <p class="event-row-meta">${escapeHtml(eventContextLine(event))}</p>
+            <p class="event-row-meta">${escapeHtml(eventImage(event))}</p>
+          </div>
         </button>
       `,
     )
@@ -802,18 +848,31 @@ function renderUserClusters() {
   }
   container.innerHTML = userClusters
     .map(
-      (cluster) => `
+      (cluster) => {
+        const isDeleted = cluster.status === "deleted";
+        return `
         <div class="cluster-row">
           <div>
             <strong>${escapeHtml(cluster.name || "unknown-cluster")}</strong>
             <p>
               status=${escapeHtml(cluster.status || "active")} ·
               last_seen=${escapeHtml(cluster.last_seen_at || "-")}
+              ${isDeleted ? ` · deleted_at=${escapeHtml(cluster.deleted_at || "-")}` : ""}
             </p>
           </div>
-          <button data-user-rotate="${escapeHtml(cluster.id || "")}">토큰 재발급</button>
+          <div class="cluster-row-actions">
+            ${
+              isDeleted
+                ? `<button class="secondary" data-user-restore="${escapeHtml(cluster.id || "")}">복원</button>`
+                : `
+                  <button data-user-rotate="${escapeHtml(cluster.id || "")}">토큰 재발급</button>
+                  <button class="secondary" data-user-delete="${escapeHtml(cluster.id || "")}">휴지통</button>
+                `
+            }
+          </div>
         </div>
-      `,
+      `;
+      },
     )
     .join("");
   renderSlackClusterToggles();
@@ -828,7 +887,8 @@ async function loadUserClusters() {
     renderSlackClusterToggles();
     return;
   }
-  const body = await apiJson("/api/clusters");
+  const includeDeleted = $("#showDeletedClusters")?.checked ? "true" : "false";
+  const body = await apiJson(`/api/clusters?include_deleted=${includeDeleted}`);
   userClusters = body.clusters || [];
   renderRuntimeClusterFilter();
   renderUserClusters();
@@ -994,6 +1054,24 @@ async function rotateUserClusterToken(clusterId) {
   showToast("토큰 재발급 완료");
 }
 
+async function trashUserCluster(clusterId) {
+  await apiJson(`/api/clusters/${encodeURIComponent(clusterId)}`, {
+    method: "DELETE",
+  });
+  await loadUserClusters();
+  await refreshDashboardSummary();
+  showToast("클러스터를 휴지통으로 이동했습니다");
+}
+
+async function restoreUserCluster(clusterId) {
+  await apiJson(`/api/clusters/${encodeURIComponent(clusterId)}/restore`, {
+    method: "POST",
+  });
+  await loadUserClusters();
+  await refreshDashboardSummary();
+  showToast("클러스터를 복원했습니다. 사용 전 토큰을 재발급하세요");
+}
+
 async function loadRuntimeEvent(eventId) {
   if (!authState.authenticated) {
     showToast("로그인 후 사용할 수 있습니다");
@@ -1051,9 +1129,11 @@ async function generateReport() {
   $("#reportResult").innerHTML = `
     <span class="badge loading">loading</span>
     <h2>리포트 생성 중</h2>
-    <p>최근 Falco/Gatekeeper 이벤트를 집계하고 있습니다.</p>
+    <p>최근 Falco/Gatekeeper 이벤트를 집계하고 LLM 요약을 생성하고 있습니다.</p>
   `;
-  const response = await fetch("/compliance-report");
+  const response = await fetch("/compliance-report", {
+    headers: llmHeaders(),
+  });
   const report = await response.json();
   if (!response.ok) {
     throw new Error(formatErrorMessage(report.error || report.detail || `HTTP ${response.status}`));
@@ -1065,10 +1145,15 @@ async function generateReport() {
   const topRules = (report.top_rules || [])
     .map((item) => `<li>${escapeHtml(item.rule)}: ${escapeHtml(item.count)}</li>`)
     .join("");
+  const llmSummary = report.llm_summary
+    ? `<div class="analysis-code-block"><p>${escapeHtml(report.llm_summary)}</p></div>`
+    : `<p>${escapeHtml(report.llm_error || "LLM 요약을 생성하지 못해 규칙 기반 리포트만 표시합니다.")}</p>`;
   $("#reportResult").innerHTML = `
-    <span class="badge ready">generated</span>
+    <span class="badge ${report.llm_used ? "ready" : "loading"}">${report.llm_used ? "LLM report" : "rule report"}</span>
     <h2>AI 컴플라이언스 리포트</h2>
     <p>generated_at: ${escapeHtml(report.generated_at || "")}</p>
+    <h3>LLM 요약</h3>
+    ${llmSummary}
     <h3>상위 위반 Rule</h3>
     <ul>${topRules || "<li>수집된 rule 없음</li>"}</ul>
     <h3>권장 조치</h3>
@@ -1077,6 +1162,88 @@ async function generateReport() {
       <pre><code>${escapeHtml(latestReportText)}</code></pre>
     </div>
   `;
+  latestReportHtml = $("#reportResult").innerHTML;
+}
+
+function downloadReportPdf() {
+  if (!latestReportText || !latestReportHtml) {
+    showToast("먼저 리포트를 생성해 주세요");
+    return;
+  }
+  const generatedAt = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  const printWindow = window.open("", "kubeowl-report-pdf", "width=960,height=720");
+  if (!printWindow) {
+    showInlineAlert("팝업이 차단되어 PDF 창을 열 수 없습니다. 브라우저 팝업 허용 후 다시 시도해 주세요.");
+    return;
+  }
+  printWindow.document.write(`
+    <!doctype html>
+    <html lang="ko">
+      <head>
+        <meta charset="utf-8" />
+        <title>KubeOwl AI Report ${generatedAt}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            padding: 32px;
+            color: #111827;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            line-height: 1.55;
+          }
+          .report-print {
+            max-width: 860px;
+            margin: 0 auto;
+          }
+          .badge {
+            display: inline-block;
+            margin-bottom: 12px;
+            padding: 4px 10px;
+            border: 1px solid #bbf7d0;
+            border-radius: 999px;
+            background: #f0fdf4;
+            color: #15803d;
+            font-size: 12px;
+            font-weight: 800;
+          }
+          h1, h2, h3 { margin: 0 0 10px; line-height: 1.2; }
+          h1 { margin-bottom: 24px; font-size: 28px; }
+          h2 { font-size: 22px; }
+          h3 { margin-top: 22px; font-size: 15px; color: #374151; }
+          p, li { font-size: 13px; }
+          ul { padding-left: 18px; }
+          .analysis-code-block {
+            margin-top: 10px;
+            padding: 14px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: #f9fafb;
+          }
+          pre {
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin: 0;
+            font-size: 10px;
+          }
+          @page { margin: 16mm; }
+          @media print {
+            body { padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <main class="report-print">
+          <h1>KubeOwl AI Report</h1>
+          ${latestReportHtml}
+        </main>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  window.setTimeout(() => {
+    printWindow.print();
+  }, 250);
 }
 
 async function copyText(value) {
@@ -1151,14 +1318,37 @@ $("#refreshUserClusters").addEventListener("click", () => {
     });
 });
 
+$("#showDeletedClusters").addEventListener("change", () => {
+  loadUserClusters().catch((error) => {
+    showInlineAlert(error.message);
+    showToast("클러스터 목록 로드 실패");
+  });
+});
+
 $("#userClusters").addEventListener("click", (event) => {
-  const button = event.target.closest("[data-user-rotate]");
-  if (!button) {
+  const rotateButton = event.target.closest("[data-user-rotate]");
+  const deleteButton = event.target.closest("[data-user-delete]");
+  const restoreButton = event.target.closest("[data-user-restore]");
+  if (rotateButton) {
+    rotateUserClusterToken(rotateButton.dataset.userRotate).catch((error) => {
+      showInlineAlert(error.message);
+      showToast("토큰 재발급 실패");
+    });
     return;
   }
-  rotateUserClusterToken(button.dataset.userRotate).catch((error) => {
+  if (deleteButton) {
+    trashUserCluster(deleteButton.dataset.userDelete).catch((error) => {
+      showInlineAlert(error.message);
+      showToast("클러스터 삭제 실패");
+    });
+    return;
+  }
+  if (!restoreButton) {
+    return;
+  }
+  restoreUserCluster(restoreButton.dataset.userRestore).catch((error) => {
     showInlineAlert(error.message);
-    showToast("토큰 재발급 실패");
+    showToast("클러스터 복원 실패");
   });
 });
 
@@ -1225,6 +1415,10 @@ $("#generateReport").addEventListener("click", () => {
 
 $("#copyReport").addEventListener("click", () => {
   copyText(latestReportText).catch((error) => showToast(error.message));
+});
+
+$("#downloadReportPdf").addEventListener("click", () => {
+  downloadReportPdf();
 });
 
 $("#analysisResult").addEventListener("click", (event) => {
@@ -1387,6 +1581,7 @@ async function logout() {
   renderAuthStatus();
   renderUserClusters();
   renderSlackSettings();
+  renderDashboardSummary({});
   selectedRuntimeEvent = null;
   renderSelectedRuntimeEventState("ready");
   $("#runtimeEvents").innerHTML = "";
@@ -1409,6 +1604,7 @@ syncPolicyPromptMode();
 window.setInterval(() => {
   if (authState.authenticated) {
     refreshRuntimeEvents().catch(() => {});
+    refreshDashboardSummary().catch(() => {});
   }
 }, 30000);
 loadConfig().catch(() => showToast("설정 로드 실패"));
@@ -1417,6 +1613,7 @@ loadAuthStatus()
     Promise.all([
       loadUserClusters(),
       loadSlackSettings(),
+      authState.authenticated ? refreshDashboardSummary() : Promise.resolve(renderDashboardSummary({})),
       authState.authenticated ? refreshRuntimeEvents() : Promise.resolve(),
     ]),
   )

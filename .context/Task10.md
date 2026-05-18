@@ -15,6 +15,15 @@ Rename the AI server UI brand from `ComplianceOps` to `KubeOwl`, use the uploade
   - `공개 Policy Generator 열기` opens the public Policy Generator view
   - Falco rich hover card keeps the replaceable screenshot placeholder at `./assets/screenshot-falco.png`
 - Swapped Grafana and Slack icons to CSS data-URL icon classes.
+- Replaced hard-coded dashboard metrics with `/dashboard-summary`:
+  - Active Policies: live Gatekeeper constraint count from Kubernetes API discovery
+  - Recent Violations: stored user events in the last 24 hours
+  - Runtime Events: total stored user events
+  - Last Sync: latest cluster `last_seen_at`
+- Added user cluster trash/restore flow:
+  - `DELETE /api/clusters/{cluster_id}` moves an owned cluster to `status=deleted`
+  - `POST /api/clusters/{cluster_id}/restore` restores it as `status=disabled`
+  - Cluster Setup UI has a `휴지통 보기` toggle and restore action
 - Updated deploy manifests to reference `docker.io/leeon3345/compliance-ai-server:0.1.15`.
 
 ## Validation
@@ -29,7 +38,7 @@ node --check ai-observability/ai-server/app/static/app.js
 Latest local result:
 
 ```text
-53 passed, 41 warnings
+57 passed, 50 warnings
 ```
 
 ## Image

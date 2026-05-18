@@ -23,6 +23,7 @@ Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance
 - SQLite: WAL mode, PVC persistent
 - `/admin`: cluster register, token issue/rotate/disable
 - `/admin`: full user list, per-user cluster list, active/disabled status, last seen, event count
+- `/api/clusters/{cluster_id}` supports user-owned soft delete (`status=deleted`) and restore from trash (`status=disabled`)
 - Falco Sidekick: POST `/ingest/falco-events`, verified by ingest token
 - `cluster_id`, `cluster_kind` stored; demo/customer/source/legacy filter exists
 - TASK-01 done: `/ingest/falco-events` tags clusters in `DEMO_CLUSTER_NAMES` as `kind=demo` on ingest
@@ -71,6 +72,8 @@ Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance
 - UI refactor done locally: fixed left sidebar navigation, responsive summary metric cards, Policy Generator split-view, dark/light theme toggle, polished code output panels
 - UI refactor done locally: Runtime Event cards now show id/time/context, default limit is 50, display limit control exists, and infra namespace hiding is available
 - UI refactor done locally: Slack Notifications, Cluster Setup, Violation Detail, and AI Report spacing/badge/toggle polish completed
+- TASK-10 update done locally: dashboard metrics are no longer hard-coded; `/dashboard-summary` drives Active Policies, Recent Violations, Runtime Events, and Last Sync
+- TASK-10 update done locally: Cluster Setup supports trash/restore for user-owned clusters
 - TASK-08 preserved: Runtime Event UI usability follow-up remains the previous task context
 - TASK-09 done locally: pre-login landing/intro and user login UX for the console
 - TASK-10 done locally: brand renamed to `KubeOwl`, uploaded owl/Kubernetes logo added, Grafana/Slack CSS data-URL icons applied, and deploy manifests prepared for image `docker.io/leeon3345/compliance-ai-server:0.1.15`
@@ -110,7 +113,7 @@ Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance
   - `kubectl set image deploy/ai-classifier -n compliance-system ai-classifier=docker.io/leeon3345/compliance-ai-server:<tag>`
   - `kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s`
 - Runtime event verification requires Falco + Falco Sidekick installed in the user's cluster. If `kubectl get pods -A | grep -Ei 'falco|sidekick'` shows no running Falco/Sidekick pods, the UI will correctly show no recent runtime events.
-- Cluster cleanup UI currently supports disable only. There is no delete button yet.
+- User Cluster Setup cleanup supports trash/restore. Admin cleanup/refactor still needs a first-class archive/restore/delete UX.
 - TASK-10 VM rollout target image:
   - `docker.io/leeon3345/compliance-ai-server:0.1.15`
   - `kubectl set image deploy/ai-classifier -n compliance-system ai-classifier=docker.io/leeon3345/compliance-ai-server:0.1.15`
@@ -136,7 +139,7 @@ Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance
 
 ## Remaining Tasks (priority order)
 
-1. **Admin cleanup controls** — optional delete/archive for disabled test clusters; current UI only disables clusters
+1. **Admin page cleanup/refactor** — add first-class archive/restore/delete UX for test clusters, improve table filtering/search, and separate user/cluster/event operations
 2. **Ops docs** — zrok stabilization script, image tag/deploy procedure, SQLite backup/reset, demo data cleanup
 3. **Google OAuth live smoke (final task)** — after Google Console signup and real credentials exist, create real `ai-google-oauth` secret and deploy/smoke-test the current image
 
@@ -184,4 +187,4 @@ cloud-deploy/ai-server.yaml
 .context/Task10.md
 ```
 
-Last AI server test result: `53 passed, 41 warnings` after local KubeOwl branding and pre-login UI polish
+Last AI server test result: `57 passed, 50 warnings` after dynamic dashboard metrics, AI Report LLM summary, PDF print export, runtime event filtering, and cluster trash/restore updates

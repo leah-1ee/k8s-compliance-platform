@@ -20,6 +20,7 @@ from app.policy_generator import generate_policy
 from app.policy_generator import SUPPORTED_POLICY_EXAMPLES, UnsupportedPolicyError
 from app import storage
 from app.runtime_client import (
+    build_dashboard_summary,
     build_report,
     get_runtime_event,
     list_runtime_events,
@@ -439,6 +440,7 @@ def runtime_events(
     cluster_kind: str = "",
     source: str = "",
     include_legacy: bool = False,
+    exclude_infra: bool = False,
     compliance_ai_session: str | None = Cookie(default=None),
 ) -> dict:
     # Falco/Gatekeeper 최근 위반 이벤트 목록
@@ -453,7 +455,17 @@ def runtime_events(
         source=source,
         include_legacy=include_legacy,
         user_id=user["id"],
+        exclude_infra=exclude_infra,
     )
+
+
+@app.get("/dashboard-summary")
+def dashboard_summary(compliance_ai_session: str | None = Cookie(default=None)) -> dict:
+    user, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
+    assert user is not None
+    return build_dashboard_summary(user_id=user["id"])
 
 
 @app.get("/runtime-events/{event_id}")
@@ -493,13 +505,16 @@ def ingest_falco_events(payload: dict, authorization: str | None = Header(defaul
 
 
 @app.get("/api/clusters")
-def user_list_clusters(compliance_ai_session: str | None = Cookie(default=None)) -> dict:
+def user_list_clusters(
+    include_deleted: bool = False,
+    compliance_ai_session: str | None = Cookie(default=None),
+) -> dict:
     # 로그인 사용자의 클러스터 목록
     user, auth_error = require_user(compliance_ai_session)
     if auth_error:
         return auth_error
     assert user is not None
-    return {"clusters": storage.list_clusters(user_id=user["id"])}
+    return {"clusters": storage.list_clusters(user_id=user["id"], include_deleted=include_deleted)}
 
 
 @app.post("/api/clusters")
@@ -548,6 +563,36 @@ def user_rotate_cluster_token(
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
     rotated["install_command"] = _sidekick_install_command(request, rotated["token"])
     return {"cluster": rotated}
+
+
+@app.delete("/api/clusters/{cluster_id}")
+def user_trash_cluster(
+    cluster_id: str,
+    compliance_ai_session: str | None = Cookie(default=None),
+) -> dict:
+    user, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
+    assert user is not None
+    cluster = storage.trash_cluster(cluster_id, user["id"])
+    if cluster is None:
+        return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    return {"cluster": cluster}
+
+
+@app.post("/api/clusters/{cluster_id}/restore")
+def user_restore_cluster(
+    cluster_id: str,
+    compliance_ai_session: str | None = Cookie(default=None),
+) -> dict:
+    user, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
+    assert user is not None
+    cluster = storage.restore_cluster(cluster_id, user["id"])
+    if cluster is None:
+        return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    return {"cluster": cluster}
 
 
 @app.get("/api/slack-settings")
@@ -828,6 +873,8 @@ def gatekeeper_events(payload: dict) -> dict:
 def compliance_report(
     cluster_kind: str = "",
     include_legacy: bool = False,
+    x_llm_provider: str | None = Header(default=None),
+    x_llm_api_key: str | None = Header(default=None),
     compliance_ai_session: str | None = Cookie(default=None),
 ) -> dict:
     # AI 리포트 탭용 JSON 리포트
@@ -839,6 +886,8 @@ def compliance_report(
         cluster_kind=cluster_kind,
         include_legacy=include_legacy,
         user_id=user["id"],
+        llm_provider=sanitize_llm_provider(x_llm_provider),
+        llm_api_key=sanitize_llm_api_key(x_llm_api_key),
     )
 
 

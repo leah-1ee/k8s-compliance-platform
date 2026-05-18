@@ -1373,6 +1373,17 @@ pre[data-empty="true"] {
   background: var(--card-soft);
 }
 
+.cluster-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.cluster-trash-toggle {
+  min-height: var(--control-height);
+}
+
 .slack-settings-card {
   margin-top: 32px;
   padding: var(--card-padding-sm);
@@ -1604,6 +1615,39 @@ pre[data-empty="true"] {
   margin-bottom: 14px;
 }
 
+.analysis-context-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin: 18px 0 24px;
+}
+
+.analysis-context-item {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.analysis-context-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.analysis-context-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.25;
+}
+
 .analysis-code-block {
   position: relative;
   margin-top: 10px;
@@ -1627,11 +1671,30 @@ pre[data-empty="true"] {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--card);
+  align-items: start;
+  justify-items: start;
 }
 
 .event-row .badge {
   width: fit-content;
   justify-self: start;
+}
+
+.event-row-content {
+  display: grid;
+  width: 100%;
+  gap: 6px;
+  justify-items: start;
+}
+
+.event-row-meta {
+  width: 100%;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.event-row-note {
+  min-height: 0;
 }
 
 .runtime-events {
@@ -1640,6 +1703,8 @@ pre[data-empty="true"] {
 
 button.event-row {
   cursor: pointer;
+  align-items: start;
+  justify-content: stretch;
 }
 
 button.event-row:hover,
@@ -1704,11 +1769,19 @@ button.event-row:focus-visible {
   .setup-grid {
     grid-template-columns: 1fr;
   }
+
+  .analysis-context-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 1024px) {
   .landing-signal-panel,
   .landing-feature-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .analysis-context-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -1818,7 +1891,8 @@ button.event-row:focus-visible {
 
   .metric-grid,
   .llm-key-grid,
-  .runtime-filters {
+  .runtime-filters,
+  .analysis-context-grid {
     grid-template-columns: 1fr;
   }
 }
