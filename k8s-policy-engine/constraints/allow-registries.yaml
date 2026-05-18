@@ -17,9 +17,11 @@ spec:
       # 관측성 네임스페이스 제외
       # Prometheus/Grafana 이미지 허용
       - monitoring
+      - local-path-storage
   parameters:
     repos:
       - "docker.io/library/"
+      - "docker.io/leeon3345/"
       - "gcr.io/"
       - "ghcr.io/"
       - "registry.k8s.io/"

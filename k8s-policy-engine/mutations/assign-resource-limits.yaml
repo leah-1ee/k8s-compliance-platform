@@ -18,6 +18,7 @@ spec:
     # 관측성 네임스페이스 제외
     # Grafana 스케줄링 보장
     - monitoring
+    - local-path-storage
   location: "spec.containers[name:*].resources.limits.cpu"
   parameters:
     assign:
@@ -46,6 +47,7 @@ spec:
     # 관측성 네임스페이스 제외
     # Grafana 스케줄링 보장
     - monitoring
+    - local-path-storage
   location: "spec.containers[name:*].resources.limits.memory"
   parameters:
     assign:
@@ -74,6 +76,7 @@ spec:
     # 관측성 네임스페이스 제외
     # Grafana 스케줄링 보장
     - monitoring
+    - local-path-storage
   location: "spec.initContainers[name:*].resources.limits.cpu"
   parameters:
     assign:
@@ -102,6 +105,7 @@ spec:
     # 관측성 네임스페이스 제외
     # Grafana 스케줄링 보장
     - monitoring
+    - local-path-storage
   location: "spec.initContainers[name:*].resources.limits.memory"
   parameters:
     assign:

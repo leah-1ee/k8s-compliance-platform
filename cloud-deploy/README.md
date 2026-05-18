@@ -56,6 +56,10 @@ kubectl get pods -n gatekeeper-system
 
 학교 클라우드 서버에서 실행한다.
 
+정책 개발/검증 기준 트리는 `k8s-policy-engine/`이고, 이 디렉터리의
+`policies/`는 VM에서 바로 적용하기 위한 배포 사본이다. 정책을 수정했다면
+배포 전에 두 트리의 `templates/`, `constraints/`, `mutations/`를 동기화한다.
+
 ```bash
 cd ~/vscode/<레포폴더>/cloud-deploy
 chmod +x apply-policies.sh
@@ -68,6 +72,35 @@ kubectl get constraints
 ```
 
 `monitoring` namespace는 Prometheus/Grafana 설치를 위해 Validate 및 Mutation 정책 적용 대상에서 제외한다.
+`local-path-storage` namespace는 SQLite PVC용 local-path provisioner 설치를 위해 제외한다.
+`docker.io/leeon3345/` 이미지는 demo/ops 이미지 롤아웃을 위해 allow-registries에 포함한다.
+
+배포 전 dry-run:
+
+```bash
+kubectl apply --dry-run=server -f policies/templates/
+kubectl apply --dry-run=server -f policies/constraints/
+kubectl apply --dry-run=server -f policies/mutations/
+```
+
+정책 smoke:
+
+```bash
+kubectl run allowed-leeon-image \
+  --image=docker.io/leeon3345/compliance-ai-server:0.1.13 \
+  --restart=Never \
+  --dry-run=server
+```
+
+```bash
+kubectl run denied-latest-image \
+  --image=nginx:latest \
+  --restart=Never \
+  --dry-run=server
+```
+
+첫 명령은 통과해야 하고, 두 번째 명령은 `block-latest-tag` 또는
+`allow-registries`에 의해 거부되어야 한다.
 
 ## AI 서버와 response-server 배포
 

@@ -418,6 +418,38 @@ curl localhost:5000/api/v1/events?severity=high
 curl localhost:5000/api/v1/falco/status   # Falco 생존 상태 확인
 ```
 
+## Falco Smoke Validation
+
+TASK-07 기준으로는 Falco 룰을 새로 확장하지 않는다. 배포 후 아래 smoke로
+현재 룰과 이벤트 파이프라인이 살아 있는지만 확인한다.
+
+Falco 룰 문법 검증:
+
+```bash
+sudo /usr/bin/falco -o engine.kind=modern_ebpf --dry-run
+```
+
+Canary/heartbeat 확인:
+
+```bash
+kubectl apply -f manifests/falco-watchdog.yaml
+kubectl port-forward -n compliance-system svc/response-server 5000:5000
+curl -s localhost:5000/api/v1/falco/status
+```
+
+컨테이너 이벤트 smoke:
+
+```bash
+kubectl apply -f manifests/runtime-ui-demo-workload.yaml
+kubectl exec -n runtime-demo runtime-demo-target -- sh -lc 'whoami; id; cat /etc/passwd >/dev/null'
+kubectl port-forward -n compliance-system svc/response-server 5000:5000
+curl -s localhost:5000/api/v1/events/summary
+```
+
+정상이라면 `Shell Spawned`, `Container Reconnaissance`, `Read Sensitive File`
+계열 이벤트 중 하나 이상이 response-server 이벤트 API 또는 AI Console runtime
+화면에서 확인되어야 한다.
+
 ---
 
 ## Tests

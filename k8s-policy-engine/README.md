@@ -21,7 +21,25 @@ ConstraintTemplate(Rego 정책 정의), Constraint(정책 적용), Assign(자동
 | assign-security-context | Mutation | Pod containers / initContainers | - | 2.9.1 시스템 및 서비스 운영관리 |
 | assign-resource-limits | Mutation | Pod containers / initContainers | - | 2.9.1 시스템 및 서비스 운영관리 |
 
-> 모든 정책은 `kube-system`, `gatekeeper-system`, `kube-flannel` 네임스페이스에 적용되지 않습니다.
+> 모든 정책은 `kube-system`, `gatekeeper-system`, `kube-flannel`, `monitoring`, `local-path-storage` 네임스페이스에 적용되지 않습니다.
+
+## 운영 소스 오브 트루스
+
+`k8s-policy-engine/`은 Gatekeeper 정책의 개발/검증 기준 트리입니다. Rego 테스트,
+Mutation E2E, 적용 스크립트가 이 디렉터리를 기준으로 동작합니다.
+
+학교 클라우드 VM에서 바로 적용하는 배포 사본은 `cloud-deploy/policies/`입니다.
+배포 전에는 두 트리의 `templates/`, `constraints/`, `mutations/`가 동기화되어야 합니다.
+
+```bash
+diff -rq -x README.md -x Makefile -x scripts -x tests -x helm -x .gitkeep \
+  cloud-deploy/policies k8s-policy-engine
+```
+
+현재 demo/ops 요구사항으로 유지하는 예외는 다음과 같습니다.
+
+- `local-path-storage`: SQLite PVC용 local-path provisioner가 정책에 막히지 않도록 제외
+- `docker.io/leeon3345/`: 직접 빌드/푸시한 demo 이미지를 allow-registries에 허용
 
 ---
 
@@ -36,6 +54,7 @@ prefix 끝에 `/`를 포함해야 prefix 우회를 방지할 수 있습니다.
 parameters:
   repos:
     - "docker.io/library/"   # Docker Hub 공식 이미지
+    - "docker.io/leeon3345/" # demo/ops 이미지
     - "gcr.io/"              # Google Container Registry
     - "ghcr.io/"             # GitHub Container Registry
     - "registry.k8s.io/"    # Kubernetes 공식 이미지
@@ -149,6 +168,37 @@ make apply
 # Mutation E2E 테스트 (클러스터 + Gatekeeper 설치 필요)
 bash tests/mutation-e2e-test.sh
 ```
+
+## 배포 전 검증
+
+클러스터와 Gatekeeper CRD가 있는 환경에서 실행합니다.
+
+```bash
+kubectl apply --dry-run=server -f templates/
+kubectl apply --dry-run=server -f constraints/
+kubectl apply --dry-run=server -f mutations/
+```
+
+허용 이미지 smoke:
+
+```bash
+kubectl run allowed-leeon-image \
+  --image=docker.io/leeon3345/compliance-ai-server:0.1.13 \
+  --restart=Never \
+  --dry-run=server
+```
+
+거부 이미지 smoke:
+
+```bash
+kubectl run denied-latest-image \
+  --image=nginx:latest \
+  --restart=Never \
+  --dry-run=server
+```
+
+`allowed-leeon-image`는 admission을 통과해야 하고, `denied-latest-image`는
+`block-latest-tag` 또는 `allow-registries` 정책에 의해 거부되어야 합니다.
 
 **디렉토리 구조**
 ```

@@ -5,9 +5,9 @@ Policy-as-Code based Kubernetes compliance automation platform.
 Natural language → Rego policy via LLM, Falco event AI classification, real-time dashboard.
 
 ## Current Image Version
-Current deployed image target: `docker.io/leeon3345/compliance-ai-server:0.1.10`
-Next build/deploy tag: `docker.io/leeon3345/compliance-ai-server:0.1.13`
-`0.1.10` was already deployed. `0.1.11` was prepared by TASK-04 and `0.1.12` by TASK-05; TASK-06 changes server code, so publish with a new tag instead of overwriting older tags.
+Current deployed image target: `docker.io/leeon3345/compliance-ai-server:0.1.13`
+Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance-ai-server:0.1.14`
+`0.1.10` was the older deployed image. `0.1.11` was prepared by TASK-04, `0.1.12` by TASK-05, and `0.1.13` by TASK-06; do not overwrite or reuse older tags.
 
 ## Tech Stack
 - Backend: Python (FastAPI), SQLite (WAL mode, PVC persistent)
@@ -56,16 +56,24 @@ Next build/deploy tag: `docker.io/leeon3345/compliance-ai-server:0.1.13`
 - TASK-06 done locally: malformed scalar snapshots and snapshots over 200 KB are ignored safely and fall back to TASK-05 kubectl guidance
 - TASK-06 done locally: event detail and `/analyze-runtime-event/{id}` use the stored snapshot only through the owning user's cluster scope
 - TASK-06 done locally: `app/static/index.html` was not touched; existing `app/static/app.js` behavior already handles stored snapshots and kubectl guidance
+- TASK-06 deployed/smoke-tested on VM with image `docker.io/leeon3345/compliance-ai-server:0.1.13`
+- TASK-06 VM smoke used the `school-cloud` demo cluster and verified `TASK-06 Manifest Snapshot Smoke`
+- TASK-06 screenshot evidence stored under `ai-observability/docs/ai-server-test/task6-manifest-snapshot/`
+- TASK-07 done locally: Gatekeeper policy drift between `cloud-deploy/policies` and `k8s-policy-engine` was compared and synchronized
+- TASK-07 done locally: `k8s-policy-engine` is documented as the development/validation source of truth; `cloud-deploy/policies` is the VM deployable copy
+- TASK-07 done locally: `local-path-storage` exclusions and `docker.io/leeon3345/` registry allowlist are mirrored in both policy trees
+- TASK-07 done locally: policy dry-run/smoke commands and Falco validation/smoke commands are documented
+- TASK-07 note: no AI server code or UI changed; no new AI server image tag is required; VM Gatekeeper/Falco validation remains for the user to run
 - Tests: `53 passed, 41 warnings` in `ai-observability/ai-server/tests`
 
 ## Deployment Notes
 
-- Deployed image target: `docker.io/leeon3345/compliance-ai-server:0.1.10`
+- Deployed image target: `docker.io/leeon3345/compliance-ai-server:0.1.13`
 - Active deployment in cluster: `deploy/ai-classifier -n compliance-system`
 - Deployment env:
   - `CLUSTER_NAME=school-cloud`
   - `DEMO_CLUSTER_NAMES=school-cloud`
-  - `DEV_AUTH_ENABLED=true` on currently deployed `0.1.10`
+  - `DEV_AUTH_ENABLED=true`
   - `DEV_AUTH_EMAIL=demo@school.test`
 - TASK-04 prepared deployment env in manifests:
   - `image=docker.io/leeon3345/compliance-ai-server:0.1.11`
@@ -80,6 +88,11 @@ Next build/deploy tag: `docker.io/leeon3345/compliance-ai-server:0.1.13`
   - Future collector/agent payload contract: send `resource_manifest` as either a YAML string at the top level or a structured object/string under `event.resource_manifest`
   - Keep ingest auth as `Authorization: Bearer <ingest_token>`
   - Do not configure fake Google OAuth credentials; live OAuth smoke remains deferred until real credentials exist
+- TASK-07 note:
+  - Policy/Falco hygiene changed only policy/docs assets; no new AI server image is required
+  - If future AI server code changes, use `docker.io/leeon3345/compliance-ai-server:0.1.14`
+  - Gatekeeper policy source of truth: `k8s-policy-engine/`
+  - VM deployable policy copy: `cloud-deploy/policies/`
 - Update command:
   - `kubectl set image deploy/ai-classifier -n compliance-system ai-classifier=docker.io/leeon3345/compliance-ai-server:<tag>`
   - `kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s`
@@ -106,14 +119,9 @@ Next build/deploy tag: `docker.io/leeon3345/compliance-ai-server:0.1.13`
 
 ## Remaining Tasks (priority order)
 
-1. **Policy/Falco hygiene** — policy and runtime detection are good enough for current demo, but need cleanup before treating them as stable ops assets
-   - Sync duplicated Gatekeeper policy files between `cloud-deploy/policies` and `k8s-policy-engine`
-   - Decide/document the source of truth for deployable constraints and mutations
-   - Known drift: `cloud-deploy/policies` includes `local-path-storage` exclusions and `docker.io/leeon3345/` allowed registry updates that are not fully mirrored in `k8s-policy-engine`
-   - Falco rules look acceptable for demo; next improvement should be validation/smoke-test docs rather than adding more rules first
-2. **Admin cleanup controls** — optional delete/archive for disabled test clusters; current UI only disables clusters
-3. **Ops docs** — zrok stabilization script, image tag/deploy procedure, SQLite backup/reset, demo data cleanup
-4. **Google OAuth live smoke (final task)** — after Google Console signup and real credentials exist, create real `ai-google-oauth` secret and deploy/smoke-test the current image
+1. **Admin cleanup controls** — optional delete/archive for disabled test clusters; current UI only disables clusters
+2. **Ops docs** — zrok stabilization script, image tag/deploy procedure, SQLite backup/reset, demo data cleanup
+3. **Google OAuth live smoke (final task)** — after Google Console signup and real credentials exist, create real `ai-google-oauth` secret and deploy/smoke-test the current image
 
 ## Do Not Change (fixed decisions)
 
@@ -137,11 +145,19 @@ ai-observability/ai-server/app/runtime_client.py
 ai-observability/ai-server/app/static/app.js
 ai-observability/ai-server/tests/test_api.py
 ai-observability/k8s/ai-server.yaml
+ai-observability/docs/ai-server-test/task6-manifest-snapshot/
+cloud-deploy/README.md
+cloud-deploy/policies/
+k8s-policy-engine/README.md
+k8s-policy-engine/constraints/
+k8s-policy-engine/mutations/
+runtime-detection/README.md
 cloud-deploy/ai-server.yaml
 .context/CONTEXT.md
 .context/Task4.md
 .context/Task5.md
 .context/Task6.md
+.context/Task7.md
 ```
 
-Last test result: `53 passed, 41 warnings`
+Last AI server test result: `53 passed, 41 warnings` (unchanged from TASK-06; TASK-07 did not change AI server code)
