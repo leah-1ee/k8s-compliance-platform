@@ -11,6 +11,19 @@ let authState = { authenticated: false, user: null, auth: { google_configured: f
 let userClusters = [];
 let slackSettings = { webhook_url: "", configured: false };
 const SESSION_KEY = "complianceAiLlmApiKey";
+const DEFAULT_RUNTIME_LIMIT = "50";
+const INFRA_NAMESPACES = new Set([
+  "kube-system",
+  "monitoring",
+  "gatekeeper-system",
+  "falco",
+  "local-path-storage",
+  "calico-system",
+  "cilium",
+  "cilium-system",
+  "kube-flannel",
+  "tigera-operator",
+]);
 const POLICY_PROMPTS = {
   "latest-tag": "latest 태그를 사용하는 컨테이너 이미지를 금지하는 Gatekeeper 정책을 만들어줘",
   "non-root": "non-root 실행을 강제하는 Gatekeeper 정책을 만들어줘",
@@ -165,6 +178,69 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function shortEventId(event) {
+  const id = String(event?.id || "");
+  return id ? id.slice(0, 8) : "no-id";
+}
+
+function eventTimestamp(event) {
+  return event?.timestamp || event?.time || event?.created_at || "";
+}
+
+function formatEventTime(event) {
+  const value = eventTimestamp(event);
+  if (!value) {
+    return "time unknown";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString(undefined, {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function eventImage(event) {
+  const image = event?.image || event?.image_repository || event?.container_image || "";
+  const tag = event?.image_tag || "";
+  if (image && tag && !image.includes(":")) {
+    return `${image}:${tag}`;
+  }
+  return image || "image unknown";
+}
+
+function eventContextLine(event) {
+  return [
+    event?.namespace || "namespace unknown",
+    event?.pod_name || "pod unknown",
+    event?.container_name || "container unknown",
+  ].join(" / ");
+}
+
+function eventClusterLine(event) {
+  const clusterKind = event?.cluster_kind || "customer";
+  return `
+    ${escapeHtml(event?.cluster || "unknown-cluster")}
+    <span class="badge compact ${escapeHtml(clusterKind)}">${escapeHtml(clusterKind)}</span>
+    · ${escapeHtml(event?.source || "runtime")}
+    · ${escapeHtml(event?.action_taken || "event")}
+  `;
+}
+
+function runtimeEventLabel(event) {
+  return `#${shortEventId(event)} · ${formatEventTime(event)} · ${event?.rule || "unknown rule"}`;
+}
+
+function isInfraRuntimeEvent(event) {
+  const namespace = String(event?.namespace || "").trim();
+  return INFRA_NAMESPACES.has(namespace);
+}
+
 function setAnalysisState(status, title, detail = "") {
   const badgeByStatus = {
     ready: "● 준비됨",
@@ -248,6 +324,51 @@ function eventToAnalysisPayload(event) {
     },
     tags: [event.source || "runtime"],
   };
+}
+
+function ensureSelectedRuntimeEventPanel() {
+  let panel = $("#selectedRuntimeEventSummary");
+  if (panel) {
+    return panel;
+  }
+  const anchor = $("#eventPayload");
+  if (!anchor) {
+    return null;
+  }
+  anchor.insertAdjacentHTML("beforebegin", '<div id="selectedRuntimeEventSummary" class="analysis-code-block" hidden></div>');
+  return $("#selectedRuntimeEventSummary");
+}
+
+function renderSelectedRuntimeEventState(status, event = null, detail = "") {
+  const panel = ensureSelectedRuntimeEventPanel();
+  if (!panel) {
+    return;
+  }
+  if (!event && !detail) {
+    panel.hidden = true;
+    panel.innerHTML = "";
+    return;
+  }
+  const badgeByStatus = {
+    ready: "selected",
+    loading: "loading",
+    error: "error",
+  };
+  const title = event ? runtimeEventLabel(event) : "선택된 이벤트 없음";
+  const context = event
+    ? [
+        eventClusterLine(event).replace(/\s+/g, " ").trim(),
+        escapeHtml(eventContextLine(event)),
+        escapeHtml(eventImage(event)),
+      ].join(" · ")
+    : "";
+  panel.hidden = false;
+  panel.innerHTML = `
+    <span class="badge ${escapeHtml(status)}">${escapeHtml(badgeByStatus[status] || status)}</span>
+    <h3>${escapeHtml(title)}</h3>
+    ${context ? `<p>${context}</p>` : ""}
+    ${detail ? `<p>${escapeHtml(detail)}</p>` : ""}
+  `;
 }
 
 function fieldValue(payload, key) {
@@ -452,8 +573,11 @@ async function refreshRuntimeEvents() {
     container.innerHTML = "";
     return;
   }
+  ensureRuntimeUsabilityControls();
+  const hideInfra = $("#hideInfraRuntimeNamespaces")?.checked ?? false;
+  const limit = $("#runtimeEventLimit")?.value || DEFAULT_RUNTIME_LIMIT;
   const query = new URLSearchParams({
-    limit: "20",
+    limit,
     cluster: $("#runtimeCluster").value,
     cluster_kind: $("#runtimeClusterKind").value,
     source: $("#runtimeSource").value,
@@ -471,32 +595,81 @@ async function refreshRuntimeEvents() {
   if (!response.ok) {
     throw new Error(formatErrorMessage(body.error || body.detail || `HTTP ${response.status}`));
   }
-  if (!body.events || body.events.length === 0) {
+  const rawEvents = body.events || [];
+  const visibleEvents = hideInfra ? rawEvents.filter((event) => !isInfraRuntimeEvent(event)) : rawEvents;
+  const hiddenInfraCount = rawEvents.length - visibleEvents.length;
+  if (rawEvents.length === 0 || visibleEvents.length === 0) {
+    const emptyMessage =
+      rawEvents.length > 0 && hiddenInfraCount > 0
+        ? `현재 ${hiddenInfraCount}개 이벤트가 infra namespace 숨김 설정으로 제외되었습니다.`
+        : body.source_status?.response_server_error || "현재 필터에 맞는 저장 이벤트가 없습니다.";
     container.innerHTML = `
       <article class="event-row">
         <span class="badge ready">empty</span>
         <h2>최근 위반 이벤트 없음</h2>
-        <p>${escapeHtml(body.source_status?.response_server_error || "현재 필터에 맞는 저장 이벤트가 없습니다.")}</p>
+        <p>${escapeHtml(emptyMessage)}</p>
       </article>
     `;
     return;
   }
-  container.innerHTML = body.events
+  const hiddenSummary =
+    hiddenInfraCount > 0
+      ? `<article class="event-row"><span class="badge ready">filtered</span><p>infra namespace 이벤트 ${escapeHtml(hiddenInfraCount)}개 숨김</p></article>`
+      : "";
+  container.innerHTML =
+    hiddenSummary +
+    visibleEvents
     .map(
       (event) => `
         <button class="event-row runtime-event-button" data-event-id="${escapeHtml(event.id || "")}">
           <span class="badge ${escapeHtml(event.severity || "medium")}">${escapeHtml(event.severity || "medium")}</span>
           <h2>${escapeHtml(event.rule || "unknown rule")}</h2>
+          <p>${escapeHtml(formatEventTime(event))} · #${escapeHtml(shortEventId(event))}</p>
           <p>
-            ${escapeHtml(event.cluster || "unknown-cluster")}
-            <span class="badge compact ${escapeHtml(event.cluster_kind || "customer")}">${escapeHtml(event.cluster_kind || "customer")}</span>
-            · ${escapeHtml(event.namespace || "unknown")}/${escapeHtml(event.pod_name || "unknown")}
-            · ${escapeHtml(event.action_taken || event.source || "event")}
+            ${eventClusterLine(event)}
           </p>
+          <p>${escapeHtml(eventContextLine(event))}</p>
+          <p>${escapeHtml(eventImage(event))}</p>
         </button>
       `,
     )
     .join("");
+}
+
+function ensureRuntimeUsabilityControls() {
+  if ($("#runtimeEventLimit") && $("#hideInfraRuntimeNamespaces")) {
+    return;
+  }
+  const anchor = $("#includeLegacyEvents");
+  if (!anchor) {
+    return;
+  }
+  const wrapper = anchor.closest("label") || anchor;
+  wrapper.insertAdjacentHTML(
+    "afterend",
+    `
+      <label>
+        표시 개수
+        <select id="runtimeEventLimit">
+          <option value="20">20</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+        </select>
+      </label>
+      <label>
+        <input id="hideInfraRuntimeNamespaces" type="checkbox" checked />
+        infra namespace 숨김
+      </label>
+    `,
+  );
+  ["#runtimeEventLimit", "#hideInfraRuntimeNamespaces"].forEach((selector) => {
+    $(selector).addEventListener("change", () => {
+      refreshRuntimeEvents().catch((error) => {
+        showInlineAlert(error.message);
+        showToast("위반 목록 로드 실패");
+      });
+    });
+  });
 }
 
 function renderClusterSetupGate() {
@@ -587,22 +760,30 @@ function ensureSlackSettingsPanel() {
   }
   const panel = document.createElement("section");
   panel.id = "slackSettingsPanel";
-  panel.className = "card";
+  panel.className = "card slack-settings-card";
   panel.innerHTML = `
     <div class="card-heading">
       <h2>Slack Notifications</h2>
     </div>
     <p id="slackSettingsAuthMessage" class="muted">로그인 후 Slack 알림을 설정할 수 있습니다.</p>
-    <div id="slackSettingsContent" hidden>
-      <label>
-        Slack webhook URL
-        <input id="slackWebhookUrl" type="url" autocomplete="off" placeholder="https://hooks.slack.com/services/..." />
-      </label>
-      <div class="button-row">
-        <button id="saveSlackSettings">저장</button>
-        <button id="testSlackSettings" type="button">테스트</button>
+    <div id="slackSettingsContent" class="slack-settings-content" hidden>
+      <div class="slack-webhook-form">
+        <label>
+          Slack webhook URL
+          <input id="slackWebhookUrl" type="url" autocomplete="off" placeholder="https://hooks.slack.com/services/..." />
+        </label>
+        <div class="button-row slack-actions">
+          <button id="saveSlackSettings">저장</button>
+          <button id="testSlackSettings" type="button">테스트</button>
+        </div>
       </div>
-      <div id="slackClusterToggles"></div>
+      <div class="slack-cluster-section">
+        <div>
+          <h3>클러스터별 알림</h3>
+          <p class="muted">High/Critical 런타임 이벤트만 Slack으로 전송합니다.</p>
+        </div>
+        <div id="slackClusterToggles" class="slack-cluster-list"></div>
+      </div>
     </div>
   `;
   parent.appendChild(panel);
@@ -638,7 +819,7 @@ function renderSlackClusterToggles() {
         <label class="cluster-row">
           <span>
             <strong>${escapeHtml(cluster.name || "unknown-cluster")}</strong>
-            <p>High/Critical 런타임 이벤트만 전송</p>
+            <p>${cluster.slack_enabled !== false ? "Slack 알림 활성화됨" : "Slack 알림 비활성화됨"}</p>
           </span>
           <input
             type="checkbox"
@@ -717,15 +898,22 @@ async function loadRuntimeEvent(eventId) {
     showToast("로그인 후 사용할 수 있습니다");
     return;
   }
-  const response = await fetch(`/runtime-events/${encodeURIComponent(eventId)}`);
-  if (!response.ok) {
-    throw new Error(await response.text());
+  renderSelectedRuntimeEventState("loading", { id: eventId }, "이 이벤트 상세를 불러오는 중입니다.");
+  try {
+    const response = await fetch(`/runtime-events/${encodeURIComponent(eventId)}`);
+    if (!response.ok) {
+      throw new Error(await response.text());
+    }
+    selectedRuntimeEvent = await response.json();
+    $("#eventPayload").value = JSON.stringify(eventToAnalysisPayload(selectedRuntimeEvent), null, 2);
+    $("#resourceManifest").value = selectedRuntimeEvent.resource_manifest || "";
+    renderManifestGuidance(null);
+    renderSelectedRuntimeEventState("ready", selectedRuntimeEvent);
+    showToast(`이벤트 #${shortEventId(selectedRuntimeEvent)} 상세를 불러왔습니다`);
+  } catch (error) {
+    renderSelectedRuntimeEventState("error", { id: eventId }, "이 이벤트 상세를 불러오지 못했습니다.");
+    throw error;
   }
-  selectedRuntimeEvent = await response.json();
-  $("#eventPayload").value = JSON.stringify(eventToAnalysisPayload(selectedRuntimeEvent), null, 2);
-  $("#resourceManifest").value = selectedRuntimeEvent.resource_manifest || "";
-  renderManifestGuidance(null);
-  showToast("이벤트 상세를 불러왔습니다");
 }
 
 async function loadSelectedManifest() {
@@ -1065,6 +1253,7 @@ async function logout() {
   renderUserClusters();
   renderSlackSettings();
   selectedRuntimeEvent = null;
+  renderSelectedRuntimeEventState("ready");
   $("#runtimeEvents").innerHTML = "";
 }
 
