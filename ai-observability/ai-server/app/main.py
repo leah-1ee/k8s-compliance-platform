@@ -1,6 +1,7 @@
 import logging
 import os
 import secrets
+import shlex
 from contextvars import ContextVar
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
@@ -20,7 +21,6 @@ from app.policy_generator import SUPPORTED_POLICY_EXAMPLES, UnsupportedPolicyErr
 from app import storage
 from app.runtime_client import (
     build_report,
-    fetch_resource_manifest,
     get_runtime_event,
     list_runtime_events,
     record_falco_event,
@@ -160,6 +160,63 @@ def _bearer_or_raw_token(value: str | None) -> str:
     if normalized.lower().startswith("bearer "):
         return normalized.split(" ", 1)[1].strip()
     return normalized
+
+
+def _manifest_guidance(
+    namespace: str = "",
+    pod: str = "",
+    cluster: str = "",
+    container: str = "",
+    manifest: str = "",
+) -> dict:
+    ns = (namespace or "").strip()
+    pod_name = (pod or "").strip()
+    cluster_name = (cluster or "").strip()
+    container_name = (container or "").strip()
+    context = {
+        "cluster": cluster_name,
+        "namespace": ns,
+        "pod": pod_name,
+        "container": container_name,
+    }
+    guidance = (
+        "중앙 AI 서버는 사용자 클러스터의 Kubernetes API 권한을 가정하지 않습니다. "
+        "아래 명령을 이벤트가 발생한 사용자 클러스터의 kubeconfig context에서 실행하세요."
+    )
+    if pod_name and ns:
+        command = f"kubectl get pod {shlex.quote(pod_name)} -n {shlex.quote(ns)} -o yaml"
+        return {
+            "manifest": manifest,
+            "error": "",
+            "kubectl_command": command,
+            "manifest_guidance": guidance,
+            "resource_context": context,
+        }
+    if pod_name:
+        command = f"kubectl get pod {shlex.quote(pod_name)} --all-namespaces -o yaml"
+        return {
+            "manifest": manifest,
+            "error": "이벤트에 namespace가 없어 전체 namespace에서 pod 이름으로 조회하는 명령을 제공합니다.",
+            "kubectl_command": command,
+            "manifest_guidance": guidance,
+            "resource_context": context,
+        }
+    if ns:
+        command = f"kubectl get pods -n {shlex.quote(ns)} -o wide"
+        return {
+            "manifest": manifest,
+            "error": "이벤트에 pod 이름이 없어 namespace의 pod 목록을 확인하는 명령을 제공합니다.",
+            "kubectl_command": command,
+            "manifest_guidance": guidance,
+            "resource_context": context,
+        }
+    return {
+        "manifest": manifest,
+        "error": "이벤트에 namespace와 pod 이름이 없어 특정 manifest 조회 명령을 만들 수 없습니다.",
+        "kubectl_command": "",
+        "manifest_guidance": guidance,
+        "resource_context": context,
+    }
 
 
 limiter = Limiter(key_func=get_remote_address)
@@ -679,13 +736,26 @@ def admin_disable_cluster(cluster_id: str, x_admin_token: str | None = Header(de
 def resource_manifest(
     namespace: str = "",
     pod: str = "",
+    event_id: str = "",
     compliance_ai_session: str | None = Cookie(default=None),
-) -> dict[str, str]:
-    # Kubernetes API에서 관련 Pod 매니페스트 조회
-    _, auth_error = require_user(compliance_ai_session)
+) -> dict:
+    # 사용자 클러스터에서 직접 실행할 매니페스트 조회 명령 안내
+    user, auth_error = require_user(compliance_ai_session)
     if auth_error:
         return auth_error
-    return fetch_resource_manifest(namespace, pod)
+    assert user is not None
+    if event_id:
+        event = get_runtime_event(event_id, user_id=user["id"])
+        if event is None:
+            return JSONResponse(status_code=404, content={"error": f"event {event_id} not found"})
+        return _manifest_guidance(
+            namespace=event.get("namespace", ""),
+            pod=event.get("pod_name", ""),
+            cluster=event.get("cluster", ""),
+            container=event.get("container_name", ""),
+            manifest=event.get("resource_manifest", ""),
+        )
+    return _manifest_guidance(namespace=namespace, pod=pod)
 
 
 @app.post("/analyze-runtime-event/{event_id}", response_model=ViolationAnalysisResponse)
@@ -707,9 +777,13 @@ def analyze_runtime_event(
     if event is None:
         return JSONResponse(status_code=404, content={"error": f"event {event_id} not found"})
     resource_manifest = event.get("resource_manifest", "")
-    manifest_result = {"manifest": resource_manifest, "error": ""}
-    if not resource_manifest:
-        manifest_result = fetch_resource_manifest(event.get("namespace", ""), event.get("pod_name", ""))
+    manifest_result = _manifest_guidance(
+        namespace=event.get("namespace", ""),
+        pod=event.get("pod_name", ""),
+        cluster=event.get("cluster", ""),
+        container=event.get("container_name", ""),
+        manifest=resource_manifest,
+    )
     payload = ViolationAnalysisRequest(
         cluster=event.get("cluster") or os.getenv("CLUSTER_NAME", "current-cluster"),
         rule=event.get("rule", ""),
@@ -733,8 +807,13 @@ def analyze_runtime_event(
         llm_provider=sanitize_llm_provider(x_llm_provider),
         llm_api_key=sanitize_llm_api_key(x_llm_api_key),
     )
-    if manifest_result.get("error") and not result.llm_error:
-        result.llm_error = manifest_result["error"]
+    if not resource_manifest and not result.llm_error:
+        command = manifest_result.get("kubectl_command", "")
+        result.llm_error = (
+            f"{manifest_result.get('error') or manifest_result.get('manifest_guidance')} 실행 명령: {command}"
+            if command
+            else manifest_result.get("error", "")
+        )
     return result
 
 

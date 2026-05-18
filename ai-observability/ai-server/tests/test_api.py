@@ -857,6 +857,96 @@ def test_runtime_events_are_scoped_to_logged_in_users():
     assert hidden_detail.status_code == 404
 
 
+def test_resource_manifest_guidance_is_scoped_to_event_owner():
+    owner_a = storage.upsert_user(
+        provider="dev",
+        provider_subject="manifest-owner-a@example.test",
+        email="manifest-owner-a@example.test",
+    )
+    owner_b = storage.upsert_user(
+        provider="dev",
+        provider_subject="manifest-owner-b@example.test",
+        email="manifest-owner-b@example.test",
+    )
+    session_a = storage.create_session(owner_a["id"])
+    session_b = storage.create_session(owner_b["id"])
+    cluster_a = storage.create_cluster("manifest-owned-a", user_id=owner_a["id"])
+
+    event = client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster_a['token']}"},
+        json={
+            "event": {
+                "time": "2026-05-12T01:00:00Z",
+                "rule": "Manifest Guidance Event",
+                "priority": "Warning",
+                "output_fields": {
+                    "k8s.ns.name": "prod",
+                    "k8s.pod.name": "suspicious-pod",
+                    "container.name": "app",
+                },
+            },
+        },
+    ).json()["event"]
+
+    response = client.get(
+        f"/resource-manifest?event_id={event['id']}",
+        cookies={"compliance_ai_session": session_a},
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["manifest"] == ""
+    assert body["kubectl_command"] == "kubectl get pod suspicious-pod -n prod -o yaml"
+    assert "사용자 클러스터" in body["manifest_guidance"]
+    assert body["resource_context"] == {
+        "cluster": "manifest-owned-a",
+        "namespace": "prod",
+        "pod": "suspicious-pod",
+        "container": "app",
+    }
+
+    hidden_response = client.get(
+        f"/resource-manifest?event_id={event['id']}",
+        cookies={"compliance_ai_session": session_b},
+    )
+    assert hidden_response.status_code == 404
+
+
+def test_resource_manifest_guidance_degrades_when_fields_are_missing():
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="manifest-missing-fields@example.test",
+        email="manifest-missing-fields@example.test",
+    )
+    session = storage.create_session(owner["id"])
+    cluster = storage.create_cluster("manifest-missing-fields", user_id=owner["id"])
+
+    event = client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster['token']}"},
+        json={
+            "event": {
+                "time": "2026-05-12T01:05:00Z",
+                "rule": "Manifest Missing Fields Event",
+                "priority": "Warning",
+            },
+        },
+    ).json()["event"]
+
+    response = client.get(
+        f"/resource-manifest?event_id={event['id']}",
+        cookies={"compliance_ai_session": session},
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["manifest"] == ""
+    assert body["kubectl_command"] == ""
+    assert "namespace와 pod 이름" in body["error"]
+    assert body["resource_context"]["cluster"] == "manifest-missing-fields"
+
+
 def test_runtime_events_skip_legacy_response_server_by_default(monkeypatch):
     calls = []
 
@@ -1020,9 +1110,7 @@ def test_admin_dashboard_lists_users_and_event_counts():
     assert [item["id"] for item in user_clusters_body["clusters"]] == [cluster["id"]]
 
 
-def test_resource_manifest_without_kube_env_is_clear(monkeypatch):
-    monkeypatch.setattr("app.runtime_client.KUBE_API_URL", "")
-
+def test_resource_manifest_direct_params_return_kubectl_guidance():
     response = client.get(
         "/resource-manifest?namespace=default&pod=test-pod",
         cookies={"compliance_ai_session": _session_for("manifest-user@example.test")},
@@ -1031,7 +1119,8 @@ def test_resource_manifest_without_kube_env_is_clear(monkeypatch):
 
     assert response.status_code == 200
     assert body["manifest"] == ""
-    assert "Kubernetes API 환경 변수" in body["error"]
+    assert body["kubectl_command"] == "kubectl get pod test-pod -n default -o yaml"
+    assert body["error"] == ""
 
 
 def test_parse_llm_incident_json_accepts_code_fence():

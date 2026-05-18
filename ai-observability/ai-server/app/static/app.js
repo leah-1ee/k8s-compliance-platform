@@ -4,6 +4,7 @@ let latestPolicyText = "";
 let latestAnalysisText = "";
 let latestYamlSnippet = "";
 let latestReportText = "";
+let latestManifestCommand = "";
 let selectedRuntimeEvent = null;
 let grafanaUrl = "";
 let authState = { authenticated: false, user: null, auth: { google_configured: false } };
@@ -181,6 +182,52 @@ function setOutput(selector, value) {
   const element = $(selector);
   element.textContent = value;
   element.removeAttribute("data-empty");
+}
+
+function renderManifestGuidance(result = null) {
+  const button = $("#loadSelectedManifest");
+  if (!button) {
+    return;
+  }
+  let panel = $("#manifestGuidancePanel");
+  if (!panel) {
+    button.insertAdjacentHTML("afterend", '<div id="manifestGuidancePanel" class="analysis-code-block" hidden></div>');
+    panel = $("#manifestGuidancePanel");
+  }
+  latestManifestCommand = result?.kubectl_command || "";
+  if (!result || (!latestManifestCommand && !result.error)) {
+    panel.hidden = true;
+    panel.innerHTML = "";
+    return;
+  }
+  const context = result.resource_context || {};
+  const contextText = [
+    context.cluster ? `cluster=${context.cluster}` : "",
+    context.namespace ? `namespace=${context.namespace}` : "",
+    context.pod ? `pod=${context.pod}` : "",
+    context.container ? `container=${context.container}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  panel.hidden = false;
+  panel.innerHTML = `
+    <div class="card-heading">
+      <button class="copy-section copy-manifest-command" aria-label="kubectl 명령 복사" title="복사">
+        <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+          <path d="M5 15V6a2 2 0 0 1 2-2h9"></path>
+        </svg>
+        <svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 6 9 17l-5-5"></path>
+        </svg>
+      </button>
+      <h3>사용자 클러스터에서 매니페스트 조회</h3>
+    </div>
+    <p>${escapeHtml(result.manifest_guidance || "아래 명령을 이벤트가 발생한 클러스터에서 실행하세요.")}</p>
+    ${contextText ? `<p>${escapeHtml(contextText)}</p>` : ""}
+    ${latestManifestCommand ? `<pre><code>${escapeHtml(latestManifestCommand)}</code></pre>` : ""}
+    ${result.error ? `<p>${escapeHtml(result.error)}</p>` : ""}
+  `;
 }
 
 function eventToAnalysisPayload(event) {
@@ -676,7 +723,8 @@ async function loadRuntimeEvent(eventId) {
   }
   selectedRuntimeEvent = await response.json();
   $("#eventPayload").value = JSON.stringify(eventToAnalysisPayload(selectedRuntimeEvent), null, 2);
-  $("#resourceManifest").value = "";
+  $("#resourceManifest").value = selectedRuntimeEvent.resource_manifest || "";
+  renderManifestGuidance(null);
   showToast("이벤트 상세를 불러왔습니다");
 }
 
@@ -692,12 +740,15 @@ async function loadSelectedManifest() {
   const namespace = selectedRuntimeEvent.namespace || "";
   const pod = selectedRuntimeEvent.pod_name || "";
   const response = await fetch(
-    `/resource-manifest?namespace=${encodeURIComponent(namespace)}&pod=${encodeURIComponent(pod)}`,
+    `/resource-manifest?event_id=${encodeURIComponent(selectedRuntimeEvent.id || "")}&namespace=${encodeURIComponent(namespace)}&pod=${encodeURIComponent(pod)}`,
   );
   const body = await response.json();
+  renderManifestGuidance(body);
   if (body.manifest) {
     $("#resourceManifest").value = body.manifest;
-    showToast("매니페스트 조회 완료");
+    showToast("저장된 매니페스트를 불러왔습니다");
+  } else if (body.kubectl_command) {
+    showToast("kubectl 명령을 준비했습니다");
   } else {
     showInlineAlert(body.error || "매니페스트를 조회하지 못했습니다.");
   }
@@ -889,6 +940,16 @@ $("#analysisResult").addEventListener("click", (event) => {
     return;
   }
   copyText(latestYamlSnippet)
+    .then(() => markCopied(button))
+    .catch((error) => showToast(error.message));
+});
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest(".copy-manifest-command");
+  if (!button) {
+    return;
+  }
+  copyText(latestManifestCommand)
     .then(() => markCopied(button))
     .catch((error) => showToast(error.message));
 });
