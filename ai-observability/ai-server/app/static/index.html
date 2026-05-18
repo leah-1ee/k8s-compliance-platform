@@ -3,30 +3,78 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Compliance AI Console</title>
+    <title>ComplianceOps</title>
     <link rel="stylesheet" href="/static/styles.css?v=violation-ux-2" />
   </head>
   <body>
-    <main class="shell">
-      <header class="topbar">
-        <div>
-          <h1>Compliance AI Console</h1>
-          <p>Kubernetes Policy-as-Code 자동 생성 및 위반 분석 도구</p>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="ComplianceOps navigation">
+        <div class="brand-block">
+          <div class="brand-mark">CO</div>
+          <div>
+            <h1>ComplianceOps</h1>
+            <span class="sr-only">Compliance AI Console</span>
+            <span class="sr-only">Kubernetes Policy-as-Code 자동 생성 및 위반 분석 도구</span>
+            <p>Policy-as-Code Console</p>
+          </div>
         </div>
-        <div class="topbar-actions">
-          <span class="auth-status" id="authStatus">로그인 확인 중</span>
-          <a class="grafana-link" href="#" id="grafanaLink">Grafana</a>
-          <a class="grafana-link" href="/auth/google/login" id="loginLink" hidden>Google 로그인</a>
-          <a class="grafana-link" href="/auth/dev-login" id="devLoginLink" hidden>개발 로그인</a>
-          <button id="logoutButton" hidden>로그아웃</button>
+        <nav class="sidebar-nav" aria-label="Primary navigation">
+          <button class="tab nav-item is-active" data-tab="dashboard">Dashboard</button>
+          <button class="tab nav-item" data-tab="policy">Policy Generator</button>
+          <button class="tab nav-item" data-tab="setup">Cluster Setup</button>
+          <button class="tab nav-item" data-tab="analysis">Violation Detail</button>
+          <button class="tab nav-item" data-tab="report">AI Report</button>
+        </nav>
+        <div class="sidebar-footer">
+          <span class="badge ready compact">Connected</span>
+          <p>Kubernetes compliance automation</p>
+          <button class="secondary theme-toggle" id="themeToggle" type="button" aria-pressed="false">Dark mode</button>
         </div>
-      </header>
+      </aside>
 
-      <section class="workspace" aria-label="AI console workspace">
+      <main class="main-shell">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Cloud Security Console</p>
+            <h2 id="pageTitle">Dashboard</h2>
+          </div>
+          <div class="topbar-actions">
+            <span class="auth-status" id="authStatus">로그인 확인 중</span>
+            <a class="button-like secondary" href="#" id="grafanaLink">Grafana</a>
+            <a class="button-like secondary" href="/auth/google/login" id="loginLink" hidden>Google 로그인</a>
+            <a class="button-like secondary" href="/auth/dev-login" id="devLoginLink" hidden>개발 로그인</a>
+            <button class="secondary" id="logoutButton" hidden>로그아웃</button>
+          </div>
+        </header>
+
+        <section class="metric-grid" aria-label="Compliance summary">
+          <article class="metric-card">
+            <span>Active Policies</span>
+            <strong>12</strong>
+            <p>Gatekeeper constraints</p>
+          </article>
+          <article class="metric-card">
+            <span>Recent Violations</span>
+            <strong>3</strong>
+            <p>Last 24 hours</p>
+          </article>
+          <article class="metric-card">
+            <span>Runtime Events</span>
+            <strong>50</strong>
+            <p>Default event window</p>
+          </article>
+          <article class="metric-card">
+            <span>Last Sync</span>
+            <strong>10m</strong>
+            <p>Cluster telemetry</p>
+          </article>
+        </section>
+
         <section class="llm-key-panel" aria-label="LLM API key settings">
-          <label class="checkbox-row byok-toggle">
+          <label class="toggle-row byok-toggle">
             <input id="useOwnApiKey" type="checkbox" />
-            Use my own API key
+            <span class="toggle-control" aria-hidden="true"></span>
+            <span>Use my own API key</span>
           </label>
           <div class="llm-key-grid" id="byokFields" hidden>
             <label>
@@ -43,232 +91,260 @@
               <input id="llmApiKey" type="password" autocomplete="off" placeholder="현재 세션에서만 사용" />
             </label>
             <p class="key-notice">
-              Your API key is used only for requests in this session.<br />
-              It is never saved on the server.<br />
-              Do not use this on a shared or public computer.
+              Your API key is used only for requests in this session. It is never saved on the server.
             </p>
           </div>
           <div class="inline-alert" id="inlineAlert" role="alert" hidden></div>
         </section>
 
-        <nav class="tabs" aria-label="console tabs">
-          <button class="tab is-active" data-tab="policy">Policy Generator</button>
-          <button class="tab" data-tab="setup">Cluster Setup</button>
-          <button class="tab" data-tab="analysis">Violation Detail</button>
-          <button class="tab" data-tab="report">AI Report</button>
-          <button class="tab" data-tab="queries">Dashboard Queries</button>
-        </nav>
-
-        <section class="panel is-active" id="policyPanel">
-          <div class="form-grid">
-            <label id="policyPromptField" hidden>
-              Policy Generation Request (정책 생성 요청)
-              <textarea id="policyPrompt" rows="6">latest 태그를 사용하는 컨테이너 이미지를 금지하는 Gatekeeper 정책을 만들어줘</textarea>
-            </label>
-            <div class="compact-grid">
-              <label>
-                Policy Type (정책 유형)
-                <select id="policyKind">
-                  <option value="">자동 판별</option>
-                  <option value="latest-tag">latest 태그 금지</option>
-                  <option value="non-root">non-root 강제</option>
-                  <option value="allowed-registries">레지스트리 제한</option>
-                  <option value="host-namespace">host namespace 금지</option>
-                  <option value="security-context-mutation">securityContext 자동 주입</option>
-                  <option value="resource-limits-mutation">resource limits 자동 주입</option>
-                  <option value="network-policy">NetworkPolicy</option>
-                </select>
-              </label>
-              <label>
-                EnforcementAction (적용 방식)
-                <select id="enforcementAction">
-                  <option value="deny">deny</option>
-                  <option value="warn">warn</option>
-                  <option value="dryrun">dryrun</option>
-                </select>
-              </label>
-              <label>
-                Constraint Name (정책 이름)
-                <input id="constraintName" value="disallow-latest-tag" />
-              </label>
-            </div>
-            <label>
-              Allowed Registries (허용 레지스트리)
-              <input id="allowedRegistries" value="docker.io/library/, gcr.io/, ghcr.io/, registry.k8s.io/" />
-            </label>
-            <label>
-              Excluded Namespaces (제외 네임스페이스)
-              <input id="excludedNamespaces" value="kube-system, gatekeeper-system, monitoring" />
-            </label>
-            <label class="checkbox-row">
-              <input id="useLlm" type="checkbox" />
-              생성 결과 LLM 검토
-            </label>
-          </div>
-          <div class="actions">
-            <button class="primary" id="generatePolicy">정책 생성</button>
-            <button id="copyPolicy">전체 복사</button>
-          </div>
-          <div class="loading-row" id="policyLoading" hidden>
-            <span class="spinner" aria-hidden="true"></span>
-            <span id="policyLoadingText">정책 생성 중...</span>
-          </div>
-          <div class="result-grid">
-            <article class="result-card">
-              <div class="card-heading">
-                <button class="copy-section" data-copy-target="templateOutput" aria-label="ConstraintTemplate 복사" title="복사">
-                  <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <rect x="9" y="9" width="11" height="11" rx="2"></rect>
-                    <path d="M5 15V6a2 2 0 0 1 2-2h9"></path>
-                  </svg>
-                  <svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M20 6 9 17l-5-5"></path>
-                  </svg>
-                </button>
-                <h2>ConstraintTemplate (정책 템플릿)</h2>
-              </div>
-              <pre id="templateOutput" data-empty="true">정책을 생성하면 여기에 결과가 표시됩니다</pre>
-            </article>
-            <article class="result-card">
-              <div class="card-heading">
-                <button class="copy-section" data-copy-target="constraintOutput" aria-label="Constraint 복사" title="복사">
-                  <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <rect x="9" y="9" width="11" height="11" rx="2"></rect>
-                    <path d="M5 15V6a2 2 0 0 1 2-2h9"></path>
-                  </svg>
-                  <svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M20 6 9 17l-5-5"></path>
-                  </svg>
-                </button>
-                <h2>Constraint (정책 리소스)</h2>
-              </div>
-              <pre id="constraintOutput" data-empty="true">정책을 생성하면 여기에 결과가 표시됩니다</pre>
-            </article>
-            <article class="result-card">
-              <div class="card-heading">
-                <button class="copy-section" data-copy-target="regoOutput" aria-label="Rego 복사" title="복사">
-                  <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <rect x="9" y="9" width="11" height="11" rx="2"></rect>
-                    <path d="M5 15V6a2 2 0 0 1 2-2h9"></path>
-                  </svg>
-                  <svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M20 6 9 17l-5-5"></path>
-                  </svg>
-                </button>
-                <h2>Rego (정책 로직)</h2>
-              </div>
-              <pre id="regoOutput" data-empty="true">정책을 생성하면 여기에 결과가 표시됩니다</pre>
-            </article>
-            <article class="result-card">
-              <div class="card-heading">
-                <button class="copy-section" data-copy-target="llmOutput" aria-label="LLM Review 복사" title="복사">
-                  <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <rect x="9" y="9" width="11" height="11" rx="2"></rect>
-                    <path d="M5 15V6a2 2 0 0 1 2-2h9"></path>
-                  </svg>
-                  <svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M20 6 9 17l-5-5"></path>
-                  </svg>
-                </button>
-                <h2>LLM Review (생성 결과 검토)</h2>
-              </div>
-              <pre id="llmOutput" data-empty="true">LLM 검토를 선택하면 여기에 결과가 표시됩니다</pre>
-            </article>
-          </div>
-        </section>
-
-        <section class="panel" id="setupPanel">
-          <div class="auth-required" id="clusterSetupAuthMessage" hidden>
-            <span class="badge loading">login</span>
-            <h2>로그인 후 클러스터를 등록할 수 있습니다.</h2>
-            <p>상단의 Google 로그인 또는 개발 로그인을 사용하세요.</p>
-          </div>
-          <div id="clusterSetupContent">
-            <div class="form-grid">
-              <label>
-                클러스터 이름
-                <input id="setupClusterName" placeholder="school-cloud-prod" autocomplete="off" />
-              </label>
-            </div>
-            <div class="actions">
-              <button class="primary" id="registerUserCluster">등록</button>
-              <button id="refreshUserClusters">새로고침</button>
-            </div>
-            <div class="setup-grid">
-              <article class="result-card">
-                <div class="card-heading">
-                  <button class="copy-section" data-copy-target="setupInstallCommand" aria-label="Falco Sidekick 설치 명령 복사" title="복사">
-                    <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
-                      <rect x="9" y="9" width="11" height="11" rx="2"></rect>
-                      <path d="M5 15V6a2 2 0 0 1 2-2h9"></path>
-                    </svg>
-                    <svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M20 6 9 17l-5-5"></path>
-                    </svg>
-                  </button>
-                  <h2>Falco Sidekick 설치 명령</h2>
-                </div>
-                <pre id="setupInstallCommand" data-empty="true">클러스터를 등록하거나 토큰을 재발급하면 여기에 설치 명령이 표시됩니다.</pre>
+        <section class="workspace" aria-label="ComplianceOps workspace">
+          <section class="panel is-active" id="dashboardPanel">
+            <div class="dashboard-grid">
+              <article class="dashboard-card">
+                <span class="badge ready">● Healthy</span>
+                <h2>Compliance posture</h2>
+                <p>정책 생성, 클러스터 등록, 런타임 위반 분석을 하나의 운영 콘솔에서 관리합니다.</p>
               </article>
-              <article>
-                <h2>내 클러스터</h2>
-                <div class="cluster-list" id="userClusters">
-                  <p>클러스터 목록을 불러오는 중입니다.</p>
+              <article class="dashboard-card">
+                <span class="badge loading">● Live</span>
+                <h2>Runtime signal</h2>
+                <p>Falco Sidekick 이벤트와 Gatekeeper 정책 위반을 사용자 클러스터 기준으로 집계합니다.</p>
+              </article>
+            </div>
+            <div class="query-list">
+              <article class="query-card">
+                <h2>AI Classification Requests</h2>
+                <p>선택한 시간 범위 동안 AI Classifier로 전달된 요청 수를 집계합니다.</p>
+                <pre><code>sum(increase(compliance_ai_requests_total{service="response-server"}[$__range]))</code></pre>
+              </article>
+              <article class="query-card">
+                <h2>Gatekeeper Violations by Enforcement</h2>
+                <p>정책 위반을 deny, warn, dryrun 같은 적용 방식 기준으로 집계합니다.</p>
+                <pre><code>sum by (enforcement_action) (gatekeeper_violations)</code></pre>
+              </article>
+            </div>
+          </section>
+
+          <section class="panel" id="policyPanel">
+            <div class="split-view">
+              <article class="input-card">
+                <div class="section-heading">
+                  <div class="section-title-row">
+                    <span class="badge loading">Generator</span>
+                    <h2>Policy Generator</h2>
+                  </div>
+                  <p>Natural language 또는 사전 정의된 정책 유형으로 Gatekeeper 정책을 생성합니다.</p>
+                </div>
+                <div class="form-grid">
+                  <label id="policyPromptField" hidden>
+                    Policy Generation Request (정책 생성 요청)
+                    <textarea id="policyPrompt" rows="6">latest 태그를 사용하는 컨테이너 이미지를 금지하는 Gatekeeper 정책을 만들어줘</textarea>
+                  </label>
+                  <label>
+                    Policy Type (정책 유형)
+                    <select id="policyKind">
+                      <option value="">자동 판별</option>
+                      <option value="latest-tag">latest 태그 금지</option>
+                      <option value="non-root">non-root 강제</option>
+                      <option value="allowed-registries">레지스트리 제한</option>
+                      <option value="host-namespace">host namespace 금지</option>
+                      <option value="security-context-mutation">securityContext 자동 주입</option>
+                      <option value="resource-limits-mutation">resource limits 자동 주입</option>
+                      <option value="network-policy">NetworkPolicy</option>
+                    </select>
+                  </label>
+                  <label>
+                    EnforcementAction (적용 방식)
+                    <select id="enforcementAction">
+                      <option value="deny">deny</option>
+                      <option value="warn">warn</option>
+                      <option value="dryrun">dryrun</option>
+                    </select>
+                  </label>
+                  <div class="enforcement-badges" aria-label="Enforcement action guide">
+                    <span class="status-badge deny" data-enforcement-badge="deny">Deny</span>
+                    <span class="status-badge warn" data-enforcement-badge="warn">Warn</span>
+                    <span class="status-badge dryrun" data-enforcement-badge="dryrun">Dryrun</span>
+                  </div>
+                  <label>
+                    Constraint Name (정책 이름)
+                    <input id="constraintName" value="disallow-latest-tag" />
+                  </label>
+                  <label>
+                    Allowed Registries (허용 레지스트리)
+                    <input id="allowedRegistries" value="docker.io/library/, gcr.io/, ghcr.io/, registry.k8s.io/" />
+                  </label>
+                  <label>
+                    Excluded Namespaces (제외 네임스페이스)
+                    <input id="excludedNamespaces" value="kube-system, gatekeeper-system, monitoring" />
+                  </label>
+                  <label class="toggle-row">
+                    <input id="useLlm" type="checkbox" />
+                    <span class="toggle-control" aria-hidden="true"></span>
+                    <span>생성 결과 LLM 검토</span>
+                  </label>
+                </div>
+                <div class="actions">
+                  <button class="primary" id="generatePolicy">정책 생성</button>
+                  <button class="secondary" id="copyPolicy">전체 복사</button>
+                </div>
+                <div class="loading-row" id="policyLoading" hidden>
+                  <span class="spinner" aria-hidden="true"></span>
+                  <span id="policyLoadingText">정책 생성 중...</span>
+                </div>
+              </article>
+
+              <article class="code-editor">
+                <div class="editor-topbar">
+                  <span>Generated Policy Artifacts</span>
+                </div>
+                <div class="result-grid">
+                  <section class="result-card">
+                    <div class="card-heading">
+                      <button class="copy-section" data-copy-target="templateOutput" aria-label="ConstraintTemplate 복사" title="복사">
+                        <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
+                          <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+                          <path d="M5 15V6a2 2 0 0 1 2-2h9"></path>
+                        </svg>
+                        <svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+                      </button>
+                      <h2>ConstraintTemplate</h2>
+                    </div>
+                    <pre id="templateOutput" data-empty="true">정책을 생성하면 여기에 결과가 표시됩니다</pre>
+                  </section>
+                  <section class="result-card">
+                    <div class="card-heading">
+                      <button class="copy-section" data-copy-target="constraintOutput" aria-label="Constraint 복사" title="복사">
+                        <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
+                          <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+                          <path d="M5 15V6a2 2 0 0 1 2-2h9"></path>
+                        </svg>
+                        <svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+                      </button>
+                      <h2>Constraint</h2>
+                    </div>
+                    <pre id="constraintOutput" data-empty="true">정책을 생성하면 여기에 결과가 표시됩니다</pre>
+                  </section>
+                  <section class="result-card">
+                    <div class="card-heading">
+                      <button class="copy-section" data-copy-target="regoOutput" aria-label="Rego 복사" title="복사">
+                        <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
+                          <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+                          <path d="M5 15V6a2 2 0 0 1 2-2h9"></path>
+                        </svg>
+                        <svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+                      </button>
+                      <h2>Rego</h2>
+                    </div>
+                    <pre id="regoOutput" data-empty="true">정책을 생성하면 여기에 결과가 표시됩니다</pre>
+                  </section>
+                  <section class="result-card">
+                    <div class="card-heading">
+                      <button class="copy-section" data-copy-target="llmOutput" aria-label="LLM Review 복사" title="복사">
+                        <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
+                          <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+                          <path d="M5 15V6a2 2 0 0 1 2-2h9"></path>
+                        </svg>
+                        <svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+                      </button>
+                      <h2>LLM Review</h2>
+                    </div>
+                    <pre id="llmOutput" data-empty="true">LLM 검토를 선택하면 여기에 결과가 표시됩니다</pre>
+                  </section>
                 </div>
               </article>
             </div>
-          </div>
-        </section>
+          </section>
 
-        <section class="panel" id="analysisPanel">
-          <div class="auth-required" id="analysisAuthMessage" hidden>
-            <span class="badge loading">login</span>
-            <h2>로그인 후 런타임 위반을 확인할 수 있습니다.</h2>
-            <p>클러스터별 Falco/Gatekeeper 이벤트와 매니페스트 분석은 로그인한 사용자 클러스터 기준으로 표시됩니다.</p>
-          </div>
-          <div id="analysisContent">
-            <div class="actions">
-              <button id="refreshRuntimeEvents">최근 위반 새로고침</button>
-              <button id="loadSelectedManifest">선택 이벤트 매니페스트 조회</button>
+          <section class="panel" id="setupPanel">
+            <div class="auth-required" id="clusterSetupAuthMessage" hidden>
+              <span class="badge loading">login</span>
+              <h2>로그인 후 클러스터를 등록할 수 있습니다.</h2>
+              <p>상단의 Google 로그인 또는 개발 로그인을 사용하세요.</p>
             </div>
-            <div class="runtime-filters" aria-label="runtime event filters">
-              <label>
-                클러스터
-                <select id="runtimeCluster">
-                  <option value="">전체 클러스터</option>
-                </select>
-              </label>
-              <label>
-                클러스터 구분
-                <select id="runtimeClusterKind">
-                  <option value="">전체</option>
-                  <option value="customer">사용자 클러스터</option>
-                  <option value="demo">데모/테스트 클러스터</option>
-                </select>
-              </label>
-              <label>
-                이벤트 소스
-                <select id="runtimeSource">
-                  <option value="">전체 저장 이벤트</option>
-                  <option value="sidekick">Falco Sidekick</option>
-                  <option value="gatekeeper">Gatekeeper</option>
-                </select>
-              </label>
-              <label class="checkbox-row">
-                <input id="includeLegacyEvents" type="checkbox" />
-                레거시 response-server 이벤트 포함
-              </label>
+            <div id="clusterSetupContent">
+              <div class="form-grid">
+                <label>
+                  클러스터 이름
+                  <input id="setupClusterName" placeholder="school-cloud-prod" autocomplete="off" />
+                </label>
+              </div>
+              <div class="actions setup-actions">
+                <button class="primary" id="registerUserCluster">등록</button>
+                <button class="secondary" id="refreshUserClusters">새로고침</button>
+              </div>
+              <div class="setup-grid">
+                <article class="result-card">
+                  <div class="card-heading">
+                    <button class="copy-section" data-copy-target="setupInstallCommand" aria-label="Falco Sidekick 설치 명령 복사" title="복사">
+                      <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+                        <path d="M5 15V6a2 2 0 0 1 2-2h9"></path>
+                      </svg>
+                      <svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+                    </button>
+                    <h2>Falco Sidekick 설치 명령</h2>
+                  </div>
+                  <pre id="setupInstallCommand" data-empty="true">클러스터를 등록하거나 토큰을 재발급하면 여기에 설치 명령이 표시됩니다.</pre>
+                </article>
+                <article>
+                  <h2>내 클러스터</h2>
+                  <div class="cluster-list" id="userClusters">
+                    <p>클러스터 목록을 불러오는 중입니다.</p>
+                  </div>
+                </article>
+              </div>
             </div>
-            <div class="runtime-events" id="runtimeEvents" aria-label="recent runtime violations">
-              <article class="event-row">
-                <h2>최근 위반 이벤트</h2>
-                <p>response-server 또는 Gatekeeper 수집 이벤트를 불러오면 여기에 표시됩니다.</p>
-              </article>
+          </section>
+
+          <section class="panel" id="analysisPanel">
+            <div class="auth-required" id="analysisAuthMessage" hidden>
+              <span class="badge loading">login</span>
+              <h2>로그인 후 런타임 위반을 확인할 수 있습니다.</h2>
+              <p>클러스터별 Falco/Gatekeeper 이벤트와 매니페스트 분석은 로그인한 사용자 클러스터 기준으로 표시됩니다.</p>
             </div>
-            <div class="form-grid">
-              <label>
-                Event JSON (이벤트 JSON)
-                <textarea id="eventPayload" rows="16">{
+            <div id="analysisContent">
+              <div class="actions runtime-actions">
+                <button class="secondary" id="refreshRuntimeEvents">최근 위반 새로고침</button>
+                <button class="secondary" id="loadSelectedManifest">선택 이벤트 매니페스트 조회</button>
+              </div>
+              <div class="runtime-filters" aria-label="runtime event filters">
+                <label>
+                  클러스터
+                  <select id="runtimeCluster"><option value="">전체 클러스터</option></select>
+                </label>
+                <label>
+                  클러스터 구분
+                  <select id="runtimeClusterKind">
+                    <option value="">전체</option>
+                    <option value="customer">사용자 클러스터</option>
+                    <option value="demo">데모/테스트 클러스터</option>
+                  </select>
+                </label>
+                <label>
+                  이벤트 소스
+                  <select id="runtimeSource">
+                    <option value="">전체 저장 이벤트</option>
+                    <option value="sidekick">Falco Sidekick</option>
+                    <option value="gatekeeper">Gatekeeper</option>
+                  </select>
+                </label>
+                <label class="toggle-row">
+                  <input id="includeLegacyEvents" type="checkbox" />
+                  <span class="toggle-control" aria-hidden="true"></span>
+                  <span>레거시 response-server 이벤트 포함</span>
+                </label>
+              </div>
+              <div class="runtime-events" id="runtimeEvents" aria-label="recent runtime violations">
+                <article class="event-row">
+                  <h2>최근 위반 이벤트</h2>
+                  <p>response-server 또는 Gatekeeper 수집 이벤트를 불러오면 여기에 표시됩니다.</p>
+                </article>
+              </div>
+              <div class="form-grid">
+                <label>
+                  Event JSON (이벤트 JSON)
+                  <textarea id="eventPayload" rows="16">{
   "cluster": "school-cloud",
   "rule": "Compliance - Shell Spawned in Container",
   "priority": "Warning",
@@ -284,10 +360,10 @@
   },
   "tags": ["shell", "runtime"]
 }</textarea>
-              </label>
-              <label>
-                Resource Manifest (관련 리소스 매니페스트)
-                <textarea id="resourceManifest" rows="12">apiVersion: v1
+                </label>
+                <label>
+                  Resource Manifest (관련 리소스 매니페스트)
+                  <textarea id="resourceManifest" rows="12">apiVersion: v1
 kind: Pod
 metadata:
   name: test-pod
@@ -299,83 +375,50 @@ spec:
     - name: app
       image: nginx:latest
       command: ["sh"]</textarea>
-              </label>
-              <label class="checkbox-row">
-                <input id="useViolationLlm" type="checkbox" />
-                LLM으로 원인/수정 YAML 생성
-              </label>
+                </label>
+                <label class="toggle-row">
+                  <input id="useViolationLlm" type="checkbox" />
+                  <span class="toggle-control" aria-hidden="true"></span>
+                  <span>LLM으로 원인/수정 YAML 생성</span>
+                </label>
+              </div>
+              <div class="actions analysis-submit-actions">
+                <button class="primary" id="analyzeViolation">상세 분석</button>
+                <button class="secondary" id="copyAnalysis">분석 복사</button>
+              </div>
+              <div class="loading-row" id="analysisLoading" hidden>
+                <span class="spinner" aria-hidden="true"></span>
+                <span id="analysisLoadingText">위반 상세 분석 중...</span>
+              </div>
+              <div class="analysis-card" id="analysisResult">
+                <span class="badge ready">● 준비됨</span>
+                <h2>위반 상세 대기</h2>
+                <p>Falco/Gatekeeper 이벤트와 관련 매니페스트 입력 후 분석 실행</p>
+              </div>
             </div>
-            <div class="actions">
-              <button class="primary" id="analyzeViolation">상세 분석</button>
-              <button id="copyAnalysis">분석 복사</button>
-            </div>
-            <div class="loading-row" id="analysisLoading" hidden>
-              <span class="spinner" aria-hidden="true"></span>
-              <span id="analysisLoadingText">위반 상세 분석 중...</span>
-            </div>
-            <div class="analysis-card" id="analysisResult">
-              <span class="badge ready">● 준비됨</span>
-              <h2>위반 상세 대기</h2>
-              <p>Falco/Gatekeeper 이벤트와 관련 매니페스트 입력 후 분석 실행</p>
-            </div>
-          </div>
-        </section>
+          </section>
 
-        <section class="panel" id="reportPanel">
-          <div class="auth-required" id="reportAuthMessage" hidden>
-            <span class="badge loading">login</span>
-            <h2>로그인 후 AI 리포트를 생성할 수 있습니다.</h2>
-            <p>리포트는 로그인한 사용자에게 귀속된 클러스터 이벤트만 집계합니다.</p>
-          </div>
-          <div id="reportContent">
-            <div class="actions">
-              <button class="primary" id="generateReport">리포트 생성</button>
-              <button id="copyReport">리포트 복사</button>
+          <section class="panel" id="reportPanel">
+            <div class="auth-required" id="reportAuthMessage" hidden>
+              <span class="badge loading">login</span>
+              <h2>로그인 후 AI 리포트를 생성할 수 있습니다.</h2>
+              <p>리포트는 로그인한 사용자에게 귀속된 클러스터 이벤트만 집계합니다.</p>
             </div>
-            <div class="analysis-card" id="reportResult">
-              <span class="badge ready">● 준비됨</span>
-              <h2>AI 컴플라이언스 리포트 대기</h2>
-              <p>Gatekeeper/Falco 이벤트와 메트릭 요약을 기반으로 JSON 리포트를 생성합니다.</p>
+            <div id="reportContent">
+              <div class="actions report-actions">
+                <button class="primary" id="generateReport">리포트 생성</button>
+                <button class="secondary" id="copyReport">리포트 복사</button>
+              </div>
+              <div class="analysis-card" id="reportResult">
+                <span class="badge ready">● 준비됨</span>
+                <h2>AI 컴플라이언스 리포트 대기</h2>
+                <p>Gatekeeper/Falco 이벤트와 메트릭 요약을 기반으로 JSON 리포트를 생성합니다.</p>
+              </div>
             </div>
-          </div>
+          </section>
         </section>
-
-        <section class="panel" id="queriesPanel">
-          <div class="query-list">
-            <article class="query-card">
-              <h2>AI Classification Requests</h2>
-              <p>선택한 시간 범위 동안 AI Classifier로 전달된 요청 수를 집계합니다.</p>
-              <pre><code>sum(increase(compliance_ai_requests_total{service="response-server"}[$__range]))</code></pre>
-            </article>
-            <article class="query-card">
-              <h2>AI Classification Errors</h2>
-              <p>선택한 시간 범위 동안 AI 분류 처리 중 발생한 오류 수를 표시합니다.</p>
-              <pre><code>sum(increase(compliance_ai_errors_total{service="response-server"}[$__range]))</code></pre>
-            </article>
-            <article class="query-card">
-              <h2>Seconds Since Last Gatekeeper Audit</h2>
-              <p>Gatekeeper의 마지막 감사 실행 이후 경과 시간을 초 단위로 확인합니다.</p>
-              <pre><code>time() - gatekeeper_audit_last_run_time</code></pre>
-            </article>
-            <article class="query-card">
-              <h2>Gatekeeper Violations by Enforcement</h2>
-              <p>정책 위반을 deny, warn, dryrun 같은 적용 방식 기준으로 집계합니다.</p>
-              <pre><code>sum by (enforcement_action) (gatekeeper_violations)</code></pre>
-            </article>
-            <article class="query-card">
-              <h2>Policy Violations by Policy</h2>
-              <p>어떤 Gatekeeper 정책에서 위반이 많이 발생하는지 정책 이름별로 비교합니다.</p>
-              <pre><code>sum by (name) (gatekeeper_violations)</code></pre>
-            </article>
-            <article class="query-card">
-              <h2>Gatekeeper Audit Duration</h2>
-              <p>최근 5분 동안 Gatekeeper 감사 작업의 평균 소요 시간을 계산합니다.</p>
-              <pre><code>rate(gatekeeper_audit_duration_seconds_sum[5m]) / rate(gatekeeper_audit_duration_seconds_count[5m])</code></pre>
-            </article>
-          </div>
-        </section>
-      </section>
-    </main>
+      </main>
+    </div>
     <div class="toast" id="toast" role="status"></div>
     <script src="/static/app.js?v=violation-ux-2"></script>
   </body>

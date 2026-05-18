@@ -63,7 +63,16 @@ Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance
 - TASK-07 done locally: `k8s-policy-engine` is documented as the development/validation source of truth; `cloud-deploy/policies` is the VM deployable copy
 - TASK-07 done locally: `local-path-storage` and `falco` namespace exclusions plus `docker.io/leeon3345/` registry allowlist are mirrored in both policy trees
 - TASK-07 done locally: policy dry-run/smoke commands and Falco validation/smoke commands are documented
-- TASK-07 note: no AI server code or UI changed; no new AI server image tag is required; VM Gatekeeper/Falco validation remains for the user to run
+- TASK-07 VM validated: Gatekeeper dry-run passed; allowed image admitted; `nginx:latest` denied by registry/latest policies
+- TASK-07 VM validated: Falco rules loaded with existing `evt.dir` deprecation warnings; Falco/Falco Sidekick reached Running after `falco` namespace policy exclusion
+- TASK-07 VM validated: AI Console showed new Falco runtime events from `school-cloud`
+- TASK-07 screenshot evidence stored under `ai-observability/docs/ai-server-test/task7-policy-falco-hygiene/`
+- UI refactor done locally: `ComplianceOps` B2B Cloud Console redesign using vanilla HTML/CSS/JS only
+- UI refactor done locally: fixed left sidebar navigation, responsive summary metric cards, Policy Generator split-view, dark/light theme toggle, polished code output panels
+- UI refactor done locally: Runtime Event cards now show id/time/context, default limit is 50, display limit control exists, and infra namespace hiding is available
+- UI refactor done locally: Slack Notifications, Cluster Setup, Violation Detail, and AI Report spacing/badge/toggle polish completed
+- TASK-08 updated: next work is pre-login landing/intro and user login UX for `ComplianceOps`
+- TASK-07 note: no AI server code or UI changed; no new AI server image tag is required
 - Tests: `53 passed, 41 warnings` in `ai-observability/ai-server/tests`
 
 ## Deployment Notes
@@ -94,6 +103,7 @@ Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance
   - Gatekeeper policy source of truth: `k8s-policy-engine/`
   - VM deployable policy copy: `cloud-deploy/policies/`
   - Falco namespace is excluded from Gatekeeper validate/mutation policies because Falco requires privileged host-level access
+  - Falco Sidekick demo install should keep `minimumpriority=warning`; lowering to `notice` is useful for smoke but too noisy for the UI
 - Update command:
   - `kubectl set image deploy/ai-classifier -n compliance-system ai-classifier=docker.io/leeon3345/compliance-ai-server:<tag>`
   - `kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s`
@@ -120,9 +130,10 @@ Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance
 
 ## Remaining Tasks (priority order)
 
-1. **Admin cleanup controls** — optional delete/archive for disabled test clusters; current UI only disables clusters
-2. **Ops docs** — zrok stabilization script, image tag/deploy procedure, SQLite backup/reset, demo data cleanup
-3. **Google OAuth live smoke (final task)** — after Google Console signup and real credentials exist, create real `ai-google-oauth` secret and deploy/smoke-test the current image
+1. **Pre-login landing + login UX (TASK-08)** — add responsive intro/landing section explaining `ComplianceOps`, clear Google/dev login CTAs, and polished logged-out first impression
+2. **Admin cleanup controls** — optional delete/archive for disabled test clusters; current UI only disables clusters
+3. **Ops docs** — zrok stabilization script, image tag/deploy procedure, SQLite backup/reset, demo data cleanup
+4. **Google OAuth live smoke (final task)** — after Google Console signup and real credentials exist, create real `ai-google-oauth` secret and deploy/smoke-test the current image
 
 ## Do Not Change (fixed decisions)
 
@@ -143,10 +154,13 @@ Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance
 ai-observability/ai-server/app/storage.py
 ai-observability/ai-server/app/main.py
 ai-observability/ai-server/app/runtime_client.py
+ai-observability/ai-server/app/static/index.html
 ai-observability/ai-server/app/static/app.js
+ai-observability/ai-server/app/static/styles.css
 ai-observability/ai-server/tests/test_api.py
 ai-observability/k8s/ai-server.yaml
 ai-observability/docs/ai-server-test/task6-manifest-snapshot/
+ai-observability/docs/ai-server-test/task7-policy-falco-hygiene/
 cloud-deploy/README.md
 cloud-deploy/policies/
 k8s-policy-engine/README.md
@@ -159,6 +173,7 @@ cloud-deploy/ai-server.yaml
 .context/Task5.md
 .context/Task6.md
 .context/Task7.md
+.context/Task8.md
 ```
 
-Last AI server test result: `53 passed, 41 warnings` (unchanged from TASK-06; TASK-07 did not change AI server code)
+Last AI server test result: `53 passed, 41 warnings` after local ComplianceOps UI refactor/polish

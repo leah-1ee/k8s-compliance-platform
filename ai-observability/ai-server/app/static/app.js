@@ -11,6 +11,7 @@ let authState = { authenticated: false, user: null, auth: { google_configured: f
 let userClusters = [];
 let slackSettings = { webhook_url: "", configured: false };
 const SESSION_KEY = "complianceAiLlmApiKey";
+const THEME_KEY = "complianceOpsTheme";
 const DEFAULT_RUNTIME_LIMIT = "50";
 const INFRA_NAMESPACES = new Set([
   "kube-system",
@@ -58,6 +59,23 @@ function clearInlineAlert() {
   const alert = $("#inlineAlert");
   alert.textContent = "";
   alert.hidden = true;
+}
+
+function applyTheme(theme) {
+  const normalizedTheme = theme === "dark" ? "dark" : "light";
+  document.documentElement.dataset.theme = normalizedTheme;
+  localStorage.setItem(THEME_KEY, normalizedTheme);
+  const button = $("#themeToggle");
+  if (button) {
+    const isDark = normalizedTheme === "dark";
+    button.textContent = isDark ? "Light mode" : "Dark mode";
+    button.setAttribute("aria-pressed", String(isDark));
+  }
+}
+
+function toggleTheme() {
+  const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  applyTheme(nextTheme);
 }
 
 function isSecureContextForKey() {
@@ -167,6 +185,11 @@ function activateTab(tabName) {
     panel.classList.remove("is-active");
   });
   $(`#${tabName}Panel`).classList.add("is-active");
+  const activeTab = document.querySelector(`.tab[data-tab="${tabName}"]`);
+  const pageTitle = $("#pageTitle");
+  if (activeTab && pageTitle) {
+    pageTitle.textContent = activeTab.textContent.trim();
+  }
 }
 
 function escapeHtml(value) {
@@ -532,6 +555,14 @@ function syncPolicyPromptMode() {
   if (!useLlm && effectivePolicyKind) {
     $("#policyPrompt").value = POLICY_PROMPTS[effectivePolicyKind];
   }
+  syncEnforcementBadges();
+}
+
+function syncEnforcementBadges() {
+  const selected = $("#enforcementAction")?.value || "deny";
+  document.querySelectorAll("[data-enforcement-badge]").forEach((badge) => {
+    badge.classList.toggle("is-selected", badge.dataset.enforcementBadge === selected);
+  });
 }
 
 async function analyzeViolation() {
@@ -656,9 +687,10 @@ function ensureRuntimeUsabilityControls() {
           <option value="100">100</option>
         </select>
       </label>
-      <label>
+      <label class="toggle-row">
         <input id="hideInfraRuntimeNamespaces" type="checkbox" checked />
-        infra namespace 숨김
+        <span class="toggle-control" aria-hidden="true"></span>
+        <span>infra namespace 숨김</span>
       </label>
     `,
   );
@@ -770,11 +802,11 @@ function ensureSlackSettingsPanel() {
       <div class="slack-webhook-form">
         <label>
           Slack webhook URL
-          <input id="slackWebhookUrl" type="url" autocomplete="off" placeholder="https://hooks.slack.com/services/..." />
+          <input id="slackWebhookUrl" class="slack-webhook-input" type="url" autocomplete="off" placeholder="https://hooks.slack.com/services/..." />
         </label>
         <div class="button-row slack-actions">
-          <button id="saveSlackSettings">저장</button>
-          <button id="testSlackSettings" type="button">테스트</button>
+          <button id="saveSlackSettings" class="primary slack-primary-action">저장</button>
+          <button id="testSlackSettings" class="slack-secondary-action" type="button">테스트</button>
         </div>
       </div>
       <div class="slack-cluster-section">
@@ -815,19 +847,34 @@ function renderSlackClusterToggles() {
   }
   container.innerHTML = userClusters
     .map(
-      (cluster) => `
-        <label class="cluster-row">
-          <span>
-            <strong>${escapeHtml(cluster.name || "unknown-cluster")}</strong>
-            <p>${cluster.slack_enabled !== false ? "Slack 알림 활성화됨" : "Slack 알림 비활성화됨"}</p>
+      (cluster) => {
+        const isSlackEnabled = cluster.slack_enabled !== false;
+        return `
+        <label class="cluster-row slack-cluster-row">
+          <span class="slack-cluster-copy">
+            <span class="slack-cluster-title-row">
+              <strong>${escapeHtml(cluster.name || "unknown-cluster")}</strong>
+              <span class="slack-status-badge ${isSlackEnabled ? "is-active" : "is-muted"}">
+                <span class="slack-status-dot"></span>
+                ${isSlackEnabled ? "Active" : "Muted"}
+              </span>
+            </span>
+            <p>High/Critical 런타임 이벤트만 Slack으로 전송</p>
           </span>
-          <input
-            type="checkbox"
-            data-slack-cluster="${escapeHtml(cluster.id || "")}"
-            ${cluster.slack_enabled !== false ? "checked" : ""}
-          />
+          <span class="slack-toggle-wrap">
+            <input
+              class="slack-toggle-input"
+              type="checkbox"
+              data-slack-cluster="${escapeHtml(cluster.id || "")}"
+              ${isSlackEnabled ? "checked" : ""}
+            />
+            <span class="slack-toggle" aria-hidden="true">
+              <span class="slack-toggle-thumb"></span>
+            </span>
+          </span>
         </label>
-      `,
+      `;
+      },
     )
     .join("");
 }
@@ -1189,6 +1236,10 @@ $("#policyKind").addEventListener("change", () => {
   syncPolicyPromptMode();
 });
 
+$("#enforcementAction").addEventListener("change", () => {
+  syncEnforcementBadges();
+});
+
 $("#logoutButton").addEventListener("click", () => {
   logout()
     .then(() => showToast("로그아웃되었습니다"))
@@ -1200,6 +1251,10 @@ $("#grafanaLink").addEventListener("click", (event) => {
     event.preventDefault();
     showToast("Grafana URL 설정 필요");
   }
+});
+
+$("#themeToggle").addEventListener("click", () => {
+  toggleTheme();
 });
 
 async function loadConfig() {
@@ -1268,6 +1323,7 @@ function initLlmKeyPanel() {
   $("#useViolationLlm").checked = false;
 }
 
+applyTheme(localStorage.getItem(THEME_KEY) || "light");
 initLlmKeyPanel();
 syncPolicyPromptMode();
 window.setInterval(() => {
