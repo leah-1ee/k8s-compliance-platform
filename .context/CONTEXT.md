@@ -61,7 +61,7 @@ Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance
 - TASK-06 screenshot evidence stored under `ai-observability/docs/ai-server-test/task6-manifest-snapshot/`
 - TASK-07 done locally: Gatekeeper policy drift between `cloud-deploy/policies` and `k8s-policy-engine` was compared and synchronized
 - TASK-07 done locally: `k8s-policy-engine` is documented as the development/validation source of truth; `cloud-deploy/policies` is the VM deployable copy
-- TASK-07 done locally: `local-path-storage` exclusions and `docker.io/leeon3345/` registry allowlist are mirrored in both policy trees
+- TASK-07 done locally: `local-path-storage` and `falco` namespace exclusions plus `docker.io/leeon3345/` registry allowlist are mirrored in both policy trees
 - TASK-07 done locally: policy dry-run/smoke commands and Falco validation/smoke commands are documented
 - TASK-07 note: no AI server code or UI changed; no new AI server image tag is required; VM Gatekeeper/Falco validation remains for the user to run
 - Tests: `53 passed, 41 warnings` in `ai-observability/ai-server/tests`
@@ -93,6 +93,7 @@ Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance
   - If future AI server code changes, use `docker.io/leeon3345/compliance-ai-server:0.1.14`
   - Gatekeeper policy source of truth: `k8s-policy-engine/`
   - VM deployable policy copy: `cloud-deploy/policies/`
+  - Falco namespace is excluded from Gatekeeper validate/mutation policies because Falco requires privileged host-level access
 - Update command:
   - `kubectl set image deploy/ai-classifier -n compliance-system ai-classifier=docker.io/leeon3345/compliance-ai-server:<tag>`
   - `kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s`

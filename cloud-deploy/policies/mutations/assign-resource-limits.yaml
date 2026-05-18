@@ -19,6 +19,7 @@ spec:
     # Grafana 스케줄링 보장
     - monitoring
     - local-path-storage
+    - falco
   location: "spec.containers[name:*].resources.limits.cpu"
   parameters:
     assign:
@@ -48,6 +49,7 @@ spec:
     # Grafana 스케줄링 보장
     - monitoring
     - local-path-storage
+    - falco
   location: "spec.containers[name:*].resources.limits.memory"
   parameters:
     assign:
@@ -77,6 +79,7 @@ spec:
     # Grafana 스케줄링 보장
     - monitoring
     - local-path-storage
+    - falco
   location: "spec.initContainers[name:*].resources.limits.cpu"
   parameters:
     assign:
@@ -106,6 +109,7 @@ spec:
     # Grafana 스케줄링 보장
     - monitoring
     - local-path-storage
+    - falco
   location: "spec.initContainers[name:*].resources.limits.memory"
   parameters:
     assign:

@@ -440,7 +440,13 @@ curl -s localhost:5000/api/v1/falco/status
 컨테이너 이벤트 smoke:
 
 ```bash
-kubectl apply -f manifests/runtime-ui-demo-workload.yaml
+kubectl create namespace runtime-demo --dry-run=client -o yaml | kubectl apply -f -
+kubectl run runtime-demo-target \
+  -n runtime-demo \
+  --image=docker.io/library/busybox:1.36 \
+  --restart=Never \
+  --command -- sh -c 'sleep 3600'
+kubectl wait -n runtime-demo --for=condition=Ready pod/runtime-demo-target --timeout=90s
 kubectl exec -n runtime-demo runtime-demo-target -- sh -lc 'whoami; id; cat /etc/passwd >/dev/null'
 kubectl port-forward -n compliance-system svc/response-server 5000:5000
 curl -s localhost:5000/api/v1/events/summary

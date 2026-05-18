@@ -18,3 +18,4 @@ spec:
       # Prometheus/Grafana 설치 보장
       - monitoring
       - local-path-storage
+      - falco

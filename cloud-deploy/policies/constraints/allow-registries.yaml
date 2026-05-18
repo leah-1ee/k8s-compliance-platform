@@ -18,6 +18,7 @@ spec:
       # Prometheus/Grafana 이미지 허용
       - monitoring
       - local-path-storage
+      - falco
   parameters:
     repos:
       - "docker.io/library/"

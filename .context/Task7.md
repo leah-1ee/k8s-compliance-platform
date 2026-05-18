@@ -50,6 +50,7 @@ Target behavior:
 - Compared duplicated Gatekeeper policy files between `cloud-deploy/policies` and `k8s-policy-engine`.
 - Synchronized demo-safe drift into `k8s-policy-engine`:
   - `local-path-storage` namespace exclusions
+  - `falco` namespace exclusions for Falco/Falco Sidekick privileged host-level access
   - `docker.io/leeon3345/` allowed registry prefix
 - Documented policy ownership:
   - `k8s-policy-engine/` is the development/validation source of truth.
@@ -148,7 +149,13 @@ sudo /usr/bin/falco -o engine.kind=modern_ebpf --dry-run
 kubectl apply -f runtime-detection/manifests/falco-watchdog.yaml
 kubectl port-forward -n compliance-system svc/response-server 5000:5000
 curl -s localhost:5000/api/v1/falco/status
-kubectl apply -f runtime-detection/manifests/runtime-ui-demo-workload.yaml
+kubectl create namespace runtime-demo --dry-run=client -o yaml | kubectl apply -f -
+kubectl run runtime-demo-target \
+  -n runtime-demo \
+  --image=docker.io/library/busybox:1.36 \
+  --restart=Never \
+  --command -- sh -c 'sleep 3600'
+kubectl wait -n runtime-demo --for=condition=Ready pod/runtime-demo-target --timeout=90s
 kubectl exec -n runtime-demo runtime-demo-target -- sh -lc 'whoami; id; cat /etc/passwd >/dev/null'
 curl -s localhost:5000/api/v1/events/summary
 ```

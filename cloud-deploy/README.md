@@ -73,6 +73,7 @@ kubectl get constraints
 
 `monitoring` namespace는 Prometheus/Grafana 설치를 위해 Validate 및 Mutation 정책 적용 대상에서 제외한다.
 `local-path-storage` namespace는 SQLite PVC용 local-path provisioner 설치를 위해 제외한다.
+`falco` namespace는 Falco/Falco Sidekick의 privileged, host namespace, hostPath 요구사항 때문에 제외한다.
 `docker.io/leeon3345/` 이미지는 demo/ops 이미지 롤아웃을 위해 allow-registries에 포함한다.
 
 배포 전 dry-run:

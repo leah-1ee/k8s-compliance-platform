@@ -21,7 +21,7 @@ ConstraintTemplate(Rego 정책 정의), Constraint(정책 적용), Assign(자동
 | assign-security-context | Mutation | Pod containers / initContainers | - | 2.9.1 시스템 및 서비스 운영관리 |
 | assign-resource-limits | Mutation | Pod containers / initContainers | - | 2.9.1 시스템 및 서비스 운영관리 |
 
-> 모든 정책은 `kube-system`, `gatekeeper-system`, `kube-flannel`, `monitoring`, `local-path-storage` 네임스페이스에 적용되지 않습니다.
+> 모든 정책은 `kube-system`, `gatekeeper-system`, `kube-flannel`, `monitoring`, `local-path-storage`, `falco` 네임스페이스에 적용되지 않습니다.
 
 ## 운영 소스 오브 트루스
 
@@ -39,6 +39,7 @@ diff -rq -x README.md -x Makefile -x scripts -x tests -x helm -x .gitkeep \
 현재 demo/ops 요구사항으로 유지하는 예외는 다음과 같습니다.
 
 - `local-path-storage`: SQLite PVC용 local-path provisioner가 정책에 막히지 않도록 제외
+- `falco`: Falco/Falco Sidekick의 privileged, host namespace, hostPath 요구사항을 보장하도록 제외
 - `docker.io/leeon3345/`: 직접 빌드/푸시한 demo 이미지를 allow-registries에 허용
 
 ---
