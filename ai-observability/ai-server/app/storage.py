@@ -34,6 +34,7 @@ def init_db() -> None:
                     kind TEXT NOT NULL DEFAULT 'customer',
                     token_hash TEXT,
                     status TEXT NOT NULL DEFAULT 'active',
+                    slack_enabled INTEGER NOT NULL DEFAULT 1,
                     last_seen_at TEXT,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(user_id) REFERENCES users(id)
@@ -56,6 +57,13 @@ def init_db() -> None:
                     user_id TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     expires_at TEXT NOT NULL,
+                    FOREIGN KEY(user_id) REFERENCES users(id)
+                );
+
+                CREATE TABLE IF NOT EXISTS user_slack_settings (
+                    user_id TEXT PRIMARY KEY,
+                    webhook_url TEXT NOT NULL DEFAULT '',
+                    updated_at TEXT NOT NULL,
                     FOREIGN KEY(user_id) REFERENCES users(id)
                 );
 
@@ -92,9 +100,11 @@ def init_db() -> None:
             )
             _ensure_column(conn, "clusters", "user_id", "TEXT")
             _ensure_column(conn, "clusters", "kind", "TEXT NOT NULL DEFAULT 'customer'")
+            _ensure_column(conn, "clusters", "slack_enabled", "INTEGER NOT NULL DEFAULT 1")
             _ensure_column(conn, "events", "cluster_id", "TEXT")
             _ensure_column(conn, "events", "cluster_kind", "TEXT NOT NULL DEFAULT 'customer'")
             _ensure_cluster_name_scope(conn)
+            _ensure_column(conn, "clusters", "slack_enabled", "INTEGER NOT NULL DEFAULT 1")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_clusters_user_id ON clusters(user_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_events_cluster_id ON events(cluster_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_events_cluster_kind ON events(cluster_kind)")
@@ -199,6 +209,48 @@ def list_users() -> list[dict[str, Any]]:
             """
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def get_slack_settings(user_id: str) -> dict[str, Any]:
+    init_db()
+    normalized_user_id = str(user_id or "").strip()
+    if not normalized_user_id:
+        return {"webhook_url": "", "configured": False}
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT webhook_url, updated_at
+            FROM user_slack_settings
+            WHERE user_id = ?
+            """,
+            (normalized_user_id,),
+        ).fetchone()
+    webhook_url = row["webhook_url"] if row else ""
+    return {
+        "webhook_url": webhook_url,
+        "configured": bool(webhook_url),
+        "updated_at": row["updated_at"] if row else "",
+    }
+
+
+def save_slack_settings(user_id: str, webhook_url: str) -> dict[str, Any]:
+    init_db()
+    normalized_user_id = str(user_id or "").strip()
+    normalized_webhook_url = str(webhook_url or "").strip()
+    if not normalized_user_id:
+        raise ValueError("user_id is required")
+    with _LOCK, _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO user_slack_settings (user_id, webhook_url, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                webhook_url = excluded.webhook_url,
+                updated_at = excluded.updated_at
+            """,
+            (normalized_user_id, normalized_webhook_url, _utc_now()),
+        )
+    return get_slack_settings(normalized_user_id)
 
 
 def create_session(user_id: str, ttl_days: int = 30) -> str:
@@ -324,7 +376,7 @@ def list_clusters(user_id: str = "") -> list[dict[str, Any]]:
         rows = conn.execute(
             f"""
             SELECT clusters.id, clusters.user_id, clusters.name, clusters.kind, clusters.status,
-                   clusters.last_seen_at, clusters.created_at, users.email AS user_email,
+                   clusters.slack_enabled, clusters.last_seen_at, clusters.created_at, users.email AS user_email,
                    users.name AS user_name,
                    (
                        SELECT COUNT(*)
@@ -338,7 +390,10 @@ def list_clusters(user_id: str = "") -> list[dict[str, Any]]:
             """,
             params,
         ).fetchall()
-    return [dict(row) for row in rows]
+    clusters = [dict(row) for row in rows]
+    for cluster in clusters:
+        cluster["slack_enabled"] = bool(cluster.get("slack_enabled"))
+    return clusters
 
 
 def get_cluster(cluster_id: str) -> dict[str, Any] | None:
@@ -346,7 +401,7 @@ def get_cluster(cluster_id: str) -> dict[str, Any] | None:
     with _connect() as conn:
         row = conn.execute(
             """
-            SELECT id, user_id, name, kind, status, last_seen_at, created_at
+            SELECT id, user_id, name, kind, status, slack_enabled, last_seen_at, created_at
             FROM clusters
             WHERE id = ?
             """,
@@ -354,7 +409,25 @@ def get_cluster(cluster_id: str) -> dict[str, Any] | None:
         ).fetchone()
     if row is None:
         return None
-    return dict(row)
+    cluster = dict(row)
+    cluster["slack_enabled"] = bool(cluster.get("slack_enabled"))
+    return cluster
+
+
+def set_cluster_slack_enabled(cluster_id: str, user_id: str, enabled: bool) -> dict[str, Any] | None:
+    init_db()
+    with _LOCK, _connect() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE clusters
+            SET slack_enabled = ?
+            WHERE id = ? AND user_id = ?
+            """,
+            (1 if enabled else 0, cluster_id, user_id),
+        )
+    if cursor.rowcount == 0:
+        return None
+    return get_cluster(cluster_id)
 
 
 def update_cluster_kind(cluster_id: str, kind: str) -> dict[str, Any] | None:
@@ -421,7 +494,7 @@ def find_cluster_by_token(token: str) -> dict[str, Any] | None:
     with _connect() as conn:
         row = conn.execute(
             """
-            SELECT id, user_id, name, kind, status, last_seen_at, created_at
+            SELECT id, user_id, name, kind, status, slack_enabled, last_seen_at, created_at
             FROM clusters
             WHERE token_hash = ? AND status = 'active'
             """,
@@ -429,7 +502,9 @@ def find_cluster_by_token(token: str) -> dict[str, Any] | None:
         ).fetchone()
     if row is None:
         return None
-    return dict(row)
+    cluster = dict(row)
+    cluster["slack_enabled"] = bool(cluster.get("slack_enabled"))
+    return cluster
 
 
 def mark_cluster_seen(cluster_id: str, timestamp: str) -> None:
@@ -612,6 +687,7 @@ def _ensure_cluster_name_scope(conn: sqlite3.Connection) -> None:
                 kind TEXT NOT NULL DEFAULT 'customer',
                 token_hash TEXT,
                 status TEXT NOT NULL DEFAULT 'active',
+                slack_enabled INTEGER NOT NULL DEFAULT 1,
                 last_seen_at TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(user_id) REFERENCES users(id)
@@ -620,8 +696,8 @@ def _ensure_cluster_name_scope(conn: sqlite3.Connection) -> None:
         )
         conn.execute(
             """
-            INSERT INTO clusters (id, user_id, name, kind, token_hash, status, last_seen_at, created_at)
-            SELECT id, user_id, name, kind, token_hash, status, last_seen_at, created_at
+            INSERT INTO clusters (id, user_id, name, kind, token_hash, status, slack_enabled, last_seen_at, created_at)
+            SELECT id, user_id, name, kind, token_hash, status, 1, last_seen_at, created_at
             FROM clusters_legacy_unique_name
             """
         )

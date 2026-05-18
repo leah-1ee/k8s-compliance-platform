@@ -3,7 +3,7 @@ import os
 import secrets
 from contextvars import ContextVar
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 from fastapi import Cookie, FastAPI, Header, Request
@@ -431,6 +431,7 @@ def ingest_falco_events(payload: dict, authorization: str | None = Header(defaul
         source="sidekick",
     )
     storage.mark_cluster_seen(cluster["id"], event.get("timestamp", ""))
+    _notify_slack_for_event(cluster, event)
     return {"status": "recorded", "event": event}
 
 
@@ -490,6 +491,82 @@ def user_rotate_cluster_token(
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
     rotated["install_command"] = _sidekick_install_command(request, rotated["token"])
     return {"cluster": rotated}
+
+
+@app.get("/api/slack-settings")
+def get_slack_settings(compliance_ai_session: str | None = Cookie(default=None)) -> dict:
+    # 로그인 사용자의 Slack 알림 설정
+    user, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
+    assert user is not None
+    return {"settings": storage.get_slack_settings(user["id"])}
+
+
+@app.post("/api/slack-settings")
+def save_slack_settings(payload: dict, compliance_ai_session: str | None = Cookie(default=None)) -> dict:
+    # 사용자별 Slack incoming webhook URL 저장
+    user, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
+    assert user is not None
+    webhook_url = str(payload.get("webhook_url", "")).strip()
+    if webhook_url and not _is_valid_slack_webhook_url(webhook_url):
+        return JSONResponse(status_code=400, content={"error": "valid Slack webhook URL required"})
+    return {"settings": storage.save_slack_settings(user["id"], webhook_url)}
+
+
+@app.post("/api/slack-settings/test")
+def test_slack_settings(compliance_ai_session: str | None = Cookie(default=None)) -> dict:
+    # 저장된 Slack webhook으로 테스트 메시지를 전송한다.
+    user, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
+    assert user is not None
+    settings = storage.get_slack_settings(user["id"])
+    webhook_url = settings.get("webhook_url", "")
+    if not webhook_url:
+        return JSONResponse(status_code=400, content={"error": "Slack webhook URL is not configured"})
+    try:
+        _post_slack_message(
+            webhook_url,
+            {
+                "text": "Compliance AI Slack notification test",
+                "blocks": [
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "*Compliance AI* Slack 알림 테스트가 성공했습니다.",
+                        },
+                    }
+                ],
+            },
+        )
+    except httpx.HTTPError as error:
+        return JSONResponse(status_code=502, content={"error": f"Slack webhook request failed: {error}"})
+    return {"status": "sent"}
+
+
+@app.post("/api/clusters/{cluster_id}/slack")
+def set_cluster_slack(
+    cluster_id: str,
+    payload: dict,
+    compliance_ai_session: str | None = Cookie(default=None),
+) -> dict:
+    # 클러스터별 Slack 알림 on/off
+    user, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
+    assert user is not None
+    cluster = storage.set_cluster_slack_enabled(
+        cluster_id,
+        user["id"],
+        bool(payload.get("enabled")),
+    )
+    if cluster is None:
+        return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    return {"cluster": cluster}
 
 
 @app.get("/admin", response_class=FileResponse)
@@ -713,6 +790,76 @@ def _public_user(user: dict | None) -> dict | None:
         "name": user.get("name", ""),
         "picture": user.get("picture", ""),
         "provider": user.get("provider", ""),
+    }
+
+
+def _is_valid_slack_webhook_url(value: str) -> bool:
+    parsed = urlparse(value)
+    if parsed.scheme != "https":
+        return False
+    if parsed.netloc not in {"hooks.slack.com", "hooks.slack-gov.com"}:
+        return False
+    return parsed.path.startswith("/services/")
+
+
+def _should_notify_slack(event: dict) -> bool:
+    severity = str(event.get("severity", "")).strip().lower()
+    priority = str(event.get("priority", "")).strip().lower()
+    return severity in {"high", "critical"} or priority in {"high", "critical"}
+
+
+def _post_slack_message(webhook_url: str, payload: dict) -> None:
+    response = httpx.post(webhook_url, json=payload, timeout=5)
+    response.raise_for_status()
+
+
+def _notify_slack_for_event(cluster: dict, event: dict) -> None:
+    if not cluster.get("user_id") or not cluster.get("slack_enabled", True):
+        return
+    if not _should_notify_slack(event):
+        return
+    settings = storage.get_slack_settings(cluster["user_id"])
+    webhook_url = settings.get("webhook_url", "")
+    if not webhook_url:
+        return
+    try:
+        _post_slack_message(webhook_url, _slack_event_payload(cluster, event))
+    except httpx.HTTPError as error:
+        logger.warning(
+            "slack notification failed cluster_id=%s event_id=%s error=%s",
+            cluster.get("id", ""),
+            event.get("id", ""),
+            error,
+        )
+
+
+def _slack_event_payload(cluster: dict, event: dict) -> dict:
+    severity = str(event.get("severity") or event.get("priority") or "unknown").upper()
+    rule = str(event.get("rule") or "Unknown runtime rule")
+    namespace = str(event.get("namespace") or "unknown")
+    pod_name = str(event.get("pod_name") or "unknown")
+    cluster_name = str(event.get("cluster") or cluster.get("name") or "unknown")
+    text = f"[{severity}] {rule} on {cluster_name}/{namespace}/{pod_name}"
+    return {
+        "text": text,
+        "blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*{severity} runtime event*\n{rule}",
+                },
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {"type": "mrkdwn", "text": f"*Cluster*\n{cluster_name}"},
+                    {"type": "mrkdwn", "text": f"*Namespace*\n{namespace}"},
+                    {"type": "mrkdwn", "text": f"*Pod*\n{pod_name}"},
+                    {"type": "mrkdwn", "text": f"*Container*\n{event.get('container_name') or 'unknown'}"},
+                ],
+            },
+        ],
     }
 
 

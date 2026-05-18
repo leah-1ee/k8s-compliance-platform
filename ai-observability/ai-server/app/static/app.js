@@ -8,6 +8,7 @@ let selectedRuntimeEvent = null;
 let grafanaUrl = "";
 let authState = { authenticated: false, user: null, auth: { google_configured: false } };
 let userClusters = [];
+let slackSettings = { webhook_url: "", configured: false };
 const SESSION_KEY = "complianceAiLlmApiKey";
 const POLICY_PROMPTS = {
   "latest-tag": "latest 태그를 사용하는 컨테이너 이미지를 금지하는 Gatekeeper 정책을 만들어줘",
@@ -455,6 +456,7 @@ function renderClusterSetupGate() {
   const isAuthenticated = Boolean(authState.authenticated);
   $("#clusterSetupAuthMessage").hidden = isAuthenticated;
   $("#clusterSetupContent").hidden = !isAuthenticated;
+  renderSlackSettings();
 }
 
 function renderAuthGates() {
@@ -465,6 +467,7 @@ function renderAuthGates() {
   $("#analysisContent").hidden = !isAuthenticated;
   $("#reportAuthMessage").hidden = isAuthenticated;
   $("#reportContent").hidden = !isAuthenticated;
+  renderSlackSettings();
 }
 
 function renderRuntimeClusterFilter() {
@@ -508,6 +511,7 @@ function renderUserClusters() {
       `,
     )
     .join("");
+  renderSlackClusterToggles();
 }
 
 async function loadUserClusters() {
@@ -516,12 +520,124 @@ async function loadUserClusters() {
     userClusters = [];
     renderRuntimeClusterFilter();
     renderUserClusters();
+    renderSlackClusterToggles();
     return;
   }
   const body = await apiJson("/api/clusters");
   userClusters = body.clusters || [];
   renderRuntimeClusterFilter();
   renderUserClusters();
+}
+
+function ensureSlackSettingsPanel() {
+  if ($("#slackSettingsPanel")) {
+    return;
+  }
+  const anchor = $("#clusterSetupAuthMessage");
+  const parent = anchor?.parentElement || $("#clusterSetupContent");
+  if (!parent) {
+    return;
+  }
+  const panel = document.createElement("section");
+  panel.id = "slackSettingsPanel";
+  panel.className = "card";
+  panel.innerHTML = `
+    <div class="card-heading">
+      <h2>Slack Notifications</h2>
+    </div>
+    <p id="slackSettingsAuthMessage" class="muted">로그인 후 Slack 알림을 설정할 수 있습니다.</p>
+    <div id="slackSettingsContent" hidden>
+      <label>
+        Slack webhook URL
+        <input id="slackWebhookUrl" type="url" autocomplete="off" placeholder="https://hooks.slack.com/services/..." />
+      </label>
+      <div class="button-row">
+        <button id="saveSlackSettings">저장</button>
+        <button id="testSlackSettings" type="button">테스트</button>
+      </div>
+      <div id="slackClusterToggles"></div>
+    </div>
+  `;
+  parent.appendChild(panel);
+}
+
+function renderSlackSettings() {
+  ensureSlackSettingsPanel();
+  if (!$("#slackSettingsPanel")) {
+    return;
+  }
+  const isAuthenticated = Boolean(authState.authenticated);
+  $("#slackSettingsAuthMessage").hidden = isAuthenticated;
+  $("#slackSettingsContent").hidden = !isAuthenticated;
+  if (isAuthenticated) {
+    $("#slackWebhookUrl").value = slackSettings.webhook_url || "";
+    renderSlackClusterToggles();
+  }
+}
+
+function renderSlackClusterToggles() {
+  ensureSlackSettingsPanel();
+  const container = $("#slackClusterToggles");
+  if (!container || !authState.authenticated) {
+    return;
+  }
+  if (!userClusters.length) {
+    container.innerHTML = '<p class="muted">Slack 알림을 켤 클러스터가 없습니다.</p>';
+    return;
+  }
+  container.innerHTML = userClusters
+    .map(
+      (cluster) => `
+        <label class="cluster-row">
+          <span>
+            <strong>${escapeHtml(cluster.name || "unknown-cluster")}</strong>
+            <p>High/Critical 런타임 이벤트만 전송</p>
+          </span>
+          <input
+            type="checkbox"
+            data-slack-cluster="${escapeHtml(cluster.id || "")}"
+            ${cluster.slack_enabled !== false ? "checked" : ""}
+          />
+        </label>
+      `,
+    )
+    .join("");
+}
+
+async function loadSlackSettings() {
+  if (!authState.authenticated) {
+    slackSettings = { webhook_url: "", configured: false };
+    renderSlackSettings();
+    return;
+  }
+  const body = await apiJson("/api/slack-settings");
+  slackSettings = body.settings || { webhook_url: "", configured: false };
+  renderSlackSettings();
+}
+
+async function saveSlackSettings() {
+  const body = await apiJson("/api/slack-settings", {
+    method: "POST",
+    body: JSON.stringify({ webhook_url: $("#slackWebhookUrl").value.trim() }),
+  });
+  slackSettings = body.settings || slackSettings;
+  renderSlackSettings();
+  showToast("Slack 설정 저장 완료");
+}
+
+async function testSlackSettings() {
+  await apiJson("/api/slack-settings/test", { method: "POST" });
+  showToast("Slack 테스트 전송 완료");
+}
+
+async function setClusterSlack(clusterId, enabled) {
+  const body = await apiJson(`/api/clusters/${encodeURIComponent(clusterId)}/slack`, {
+    method: "POST",
+    body: JSON.stringify({ enabled }),
+  });
+  const updated = body.cluster;
+  userClusters = userClusters.map((cluster) => (cluster.id === updated.id ? { ...cluster, ...updated } : cluster));
+  renderSlackClusterToggles();
 }
 
 async function registerUserCluster() {
@@ -641,6 +757,8 @@ document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => activateTab(tab.dataset.tab));
 });
 
+ensureSlackSettingsPanel();
+
 $("#generatePolicy").addEventListener("click", () => {
   generatePolicy().catch((error) => {
     showInlineAlert(error.message);
@@ -698,6 +816,33 @@ $("#userClusters").addEventListener("click", (event) => {
     showInlineAlert(error.message);
     showToast("토큰 재발급 실패");
   });
+});
+
+$("#saveSlackSettings").addEventListener("click", () => {
+  saveSlackSettings().catch((error) => {
+    showInlineAlert(error.message);
+    showToast("Slack 설정 저장 실패");
+  });
+});
+
+$("#testSlackSettings").addEventListener("click", () => {
+  testSlackSettings().catch((error) => {
+    showInlineAlert(error.message);
+    showToast("Slack 테스트 실패");
+  });
+});
+
+$("#slackClusterToggles").addEventListener("change", (event) => {
+  const input = event.target.closest("[data-slack-cluster]");
+  if (!input) {
+    return;
+  }
+  setClusterSlack(input.dataset.slackCluster, input.checked)
+    .then(() => showToast("클러스터 Slack 설정 변경 완료"))
+    .catch((error) => {
+      showInlineAlert(error.message);
+      showToast("클러스터 Slack 설정 실패");
+    });
 });
 
 ["#runtimeCluster", "#runtimeClusterKind", "#runtimeSource", "#includeLegacyEvents"].forEach((selector) => {
@@ -854,8 +999,10 @@ async function logout() {
   }
   authState = { authenticated: false, user: null, auth: authState.auth };
   userClusters = [];
+  slackSettings = { webhook_url: "", configured: false };
   renderAuthStatus();
   renderUserClusters();
+  renderSlackSettings();
   selectedRuntimeEvent = null;
   $("#runtimeEvents").innerHTML = "";
 }
@@ -880,7 +1027,13 @@ window.setInterval(() => {
 }, 30000);
 loadConfig().catch(() => showToast("설정 로드 실패"));
 loadAuthStatus()
-  .then(() => Promise.all([loadUserClusters(), authState.authenticated ? refreshRuntimeEvents() : Promise.resolve()]))
+  .then(() =>
+    Promise.all([
+      loadUserClusters(),
+      loadSlackSettings(),
+      authState.authenticated ? refreshRuntimeEvents() : Promise.resolve(),
+    ]),
+  )
   .catch(() => {
     $("#authStatus").textContent = "로그인 상태 확인 실패";
     renderAuthGates();

@@ -251,6 +251,142 @@ def test_cluster_names_are_scoped_per_user():
     assert duplicate.status_code == 409
 
 
+def test_slack_settings_require_login():
+    assert client.get("/api/slack-settings").status_code == 401
+    assert client.post("/api/slack-settings", json={"webhook_url": ""}).status_code == 401
+    assert client.post("/api/slack-settings/test").status_code == 401
+
+
+def test_slack_settings_and_cluster_toggle(monkeypatch):
+    calls = []
+
+    class FakeSlackResponse:
+        def raise_for_status(self):
+            return None
+
+    def fake_post(url, json, timeout):
+        calls.append({"url": url, "json": json, "timeout": timeout})
+        return FakeSlackResponse()
+
+    monkeypatch.setattr("app.main.httpx.post", fake_post)
+    session = _session_for("slack-settings-owner@example.test")
+    cluster = client.post(
+        "/api/clusters",
+        cookies={"compliance_ai_session": session},
+        json={"name": "slack-settings-cluster"},
+    ).json()["cluster"]
+
+    invalid = client.post(
+        "/api/slack-settings",
+        cookies={"compliance_ai_session": session},
+        json={"webhook_url": "https://example.test/services/not-slack"},
+    )
+    assert invalid.status_code == 400
+
+    save_response = client.post(
+        "/api/slack-settings",
+        cookies={"compliance_ai_session": session},
+        json={"webhook_url": "https://hooks.slack.com/services/T000/B000/XXX"},
+    )
+    save_body = save_response.json()
+
+    assert save_response.status_code == 200
+    assert save_body["settings"]["configured"] is True
+    assert save_body["settings"]["webhook_url"].startswith("https://hooks.slack.com/services/")
+
+    test_response = client.post(
+        "/api/slack-settings/test",
+        cookies={"compliance_ai_session": session},
+    )
+    assert test_response.status_code == 200
+    assert test_response.json()["status"] == "sent"
+    assert calls[0]["timeout"] == 5
+    assert "Slack 알림 테스트" in calls[0]["json"]["blocks"][0]["text"]["text"]
+
+    toggle_response = client.post(
+        f"/api/clusters/{cluster['id']}/slack",
+        cookies={"compliance_ai_session": session},
+        json={"enabled": False},
+    )
+    assert toggle_response.status_code == 200
+    assert toggle_response.json()["cluster"]["slack_enabled"] is False
+
+    list_response = client.get("/api/clusters", cookies={"compliance_ai_session": session})
+    listed_cluster = next(item for item in list_response.json()["clusters"] if item["id"] == cluster["id"])
+    assert listed_cluster["slack_enabled"] is False
+
+
+def test_slack_notification_only_for_enabled_high_or_critical_events(monkeypatch):
+    calls = []
+
+    class FakeSlackResponse:
+        def raise_for_status(self):
+            return None
+
+    def fake_post(url, json, timeout):
+        calls.append({"url": url, "json": json, "timeout": timeout})
+        return FakeSlackResponse()
+
+    monkeypatch.setattr("app.main.httpx.post", fake_post)
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="slack-notify-owner@example.test",
+        email="slack-notify-owner@example.test",
+    )
+    session = storage.create_session(owner["id"])
+    cluster = storage.create_cluster("slack-notify-cluster", user_id=owner["id"])
+    client.post(
+        "/api/slack-settings",
+        cookies={"compliance_ai_session": session},
+        json={"webhook_url": "https://hooks.slack.com/services/T111/B222/YYY"},
+    )
+
+    warning_response = client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster['token']}"},
+        json={"event": {"time": "2026-05-14T00:00:00Z", "rule": "Warning Event", "priority": "Warning"}},
+    )
+    assert warning_response.status_code == 200
+    assert calls == []
+
+    critical_response = client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster['token']}"},
+        json={
+            "event": {
+                "time": "2026-05-14T00:01:00Z",
+                "rule": "Critical Event",
+                "priority": "Critical",
+                "output_fields": {
+                    "k8s.ns.name": "prod",
+                    "k8s.pod.name": "critical-pod",
+                    "container.name": "app",
+                },
+            }
+        },
+    )
+    assert critical_response.status_code == 200
+    assert len(calls) == 1
+    assert calls[0]["url"] == "https://hooks.slack.com/services/T111/B222/YYY"
+    assert "Critical Event" in calls[0]["json"]["text"]
+    assert "slack-notify-cluster/prod/critical-pod" in calls[0]["json"]["text"]
+
+    disable_response = client.post(
+        f"/api/clusters/{cluster['id']}/slack",
+        cookies={"compliance_ai_session": session},
+        json={"enabled": False},
+    )
+    assert disable_response.status_code == 200
+
+    disabled_response = client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster['token']}"},
+        json={"event": {"time": "2026-05-14T00:02:00Z", "rule": "Disabled Event", "priority": "Critical"}},
+    )
+    assert disabled_response.status_code == 200
+    assert len(calls) == 1
+
+
 def test_classify_contract():
     response = client.post(
         "/classify",
