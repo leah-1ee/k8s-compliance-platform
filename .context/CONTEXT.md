@@ -5,9 +5,9 @@ Policy-as-Code based Kubernetes compliance automation platform.
 Natural language → Rego policy via LLM, Falco event AI classification, real-time dashboard.
 
 ## Current Image Version
-Current deployed image target: `docker.io/leeon3345/compliance-ai-server:0.1.8`
-Next build/deploy tag: `docker.io/leeon3345/compliance-ai-server:0.1.9`
-If `0.1.9` was already pushed for TASK-02, use `docker.io/leeon3345/compliance-ai-server:0.1.10` for TASK-03 publish.
+Current deployed image target: `docker.io/leeon3345/compliance-ai-server:0.1.10`
+Next build/deploy tag: `docker.io/leeon3345/compliance-ai-server:0.1.11`
+`0.1.10` was already deployed; use `docker.io/leeon3345/compliance-ai-server:0.1.11` for the next publish.
 
 ## Tech Stack
 - Backend: Python (FastAPI), SQLite (WAL mode, PVC persistent)
@@ -48,7 +48,7 @@ If `0.1.9` was already pushed for TASK-02, use `docker.io/leeon3345/compliance-a
 
 ## Deployment Notes
 
-- Deployed image target: `docker.io/leeon3345/compliance-ai-server:0.1.8`
+- Deployed image target: `docker.io/leeon3345/compliance-ai-server:0.1.10`
 - Active deployment in cluster: `deploy/ai-classifier -n compliance-system`
 - Deployment env:
   - `CLUSTER_NAME=school-cloud`

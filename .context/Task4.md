@@ -59,12 +59,12 @@ git push origin ai-observability-leeon
 
 ### 3. Docker build and push
 
-Use `0.1.9` if it has not already been pushed for TASK-02. If `0.1.9` is already used, use `0.1.10`.
+Use `0.1.11`; `0.1.10` was already deployed.
 
 ```bash
 cd /Users/leeon/Documents/k8s-compliance-platform
 docker buildx build --platform linux/amd64 \
-  -t docker.io/leeon3345/compliance-ai-server:0.1.9 \
+  -t docker.io/leeon3345/compliance-ai-server:0.1.11 \
   ai-observability/ai-server \
   --push
 ```
@@ -75,7 +75,7 @@ Run these on the VM or terminal that has `kubectl` access to the target cluster.
 
 ```bash
 kubectl set image deploy/ai-classifier -n compliance-system \
-  ai-classifier=docker.io/leeon3345/compliance-ai-server:0.1.9
+  ai-classifier=docker.io/leeon3345/compliance-ai-server:0.1.11
 kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s
 ```
 
