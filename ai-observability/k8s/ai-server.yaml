@@ -100,7 +100,7 @@ spec:
       serviceAccountName: ai-classifier
       containers:
         - name: ai-classifier
-          image: docker.io/leeon3345/compliance-ai-server:0.1.11
+          image: docker.io/leeon3345/compliance-ai-server:0.1.15
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

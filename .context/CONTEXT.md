@@ -6,8 +6,8 @@ Natural language → Rego policy via LLM, Falco event AI classification, real-ti
 
 ## Current Image Version
 Current deployed image target: `docker.io/leeon3345/compliance-ai-server:0.1.13`
-Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance-ai-server:0.1.14`
-`0.1.10` was the older deployed image. `0.1.11` was prepared by TASK-04, `0.1.12` by TASK-05, and `0.1.13` by TASK-06; do not overwrite or reuse older tags.
+Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance-ai-server:0.1.16`
+`0.1.10` was the older deployed image. `0.1.11` was prepared by TASK-04, `0.1.12` by TASK-05, `0.1.13` by TASK-06, and `0.1.15` by TASK-10; do not overwrite or reuse older tags.
 
 ## Tech Stack
 - Backend: Python (FastAPI), SQLite (WAL mode, PVC persistent)
@@ -67,11 +67,13 @@ Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance
 - TASK-07 VM validated: Falco rules loaded with existing `evt.dir` deprecation warnings; Falco/Falco Sidekick reached Running after `falco` namespace policy exclusion
 - TASK-07 VM validated: AI Console showed new Falco runtime events from `school-cloud`
 - TASK-07 screenshot evidence stored under `ai-observability/docs/ai-server-test/task7-policy-falco-hygiene/`
-- UI refactor done locally: `ComplianceOps` B2B Cloud Console redesign using vanilla HTML/CSS/JS only
+- UI refactor done locally: `KubeOwl` B2B Cloud Console redesign using vanilla HTML/CSS/JS only
 - UI refactor done locally: fixed left sidebar navigation, responsive summary metric cards, Policy Generator split-view, dark/light theme toggle, polished code output panels
 - UI refactor done locally: Runtime Event cards now show id/time/context, default limit is 50, display limit control exists, and infra namespace hiding is available
 - UI refactor done locally: Slack Notifications, Cluster Setup, Violation Detail, and AI Report spacing/badge/toggle polish completed
-- TASK-08 updated: next work is pre-login landing/intro and user login UX for `ComplianceOps`
+- TASK-08 preserved: Runtime Event UI usability follow-up remains the previous task context
+- TASK-09 done locally: pre-login landing/intro and user login UX for the console
+- TASK-10 done locally: brand renamed to `KubeOwl`, uploaded owl/Kubernetes logo added, Grafana/Slack CSS data-URL icons applied, and deploy manifests prepared for image `docker.io/leeon3345/compliance-ai-server:0.1.15`
 - TASK-07 note: no AI server code or UI changed; no new AI server image tag is required
 - Tests: `53 passed, 41 warnings` in `ai-observability/ai-server/tests`
 
@@ -99,7 +101,7 @@ Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance
   - Do not configure fake Google OAuth credentials; live OAuth smoke remains deferred until real credentials exist
 - TASK-07 note:
   - Policy/Falco hygiene changed only policy/docs assets; no new AI server image is required
-  - If future AI server code changes, use `docker.io/leeon3345/compliance-ai-server:0.1.14`
+  - If future AI server code changes after TASK-10, use `docker.io/leeon3345/compliance-ai-server:0.1.16`
   - Gatekeeper policy source of truth: `k8s-policy-engine/`
   - VM deployable policy copy: `cloud-deploy/policies/`
   - Falco namespace is excluded from Gatekeeper validate/mutation policies because Falco requires privileged host-level access
@@ -109,6 +111,10 @@ Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance
   - `kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s`
 - Runtime event verification requires Falco + Falco Sidekick installed in the user's cluster. If `kubectl get pods -A | grep -Ei 'falco|sidekick'` shows no running Falco/Sidekick pods, the UI will correctly show no recent runtime events.
 - Cluster cleanup UI currently supports disable only. There is no delete button yet.
+- TASK-10 VM rollout target image:
+  - `docker.io/leeon3345/compliance-ai-server:0.1.15`
+  - `kubectl set image deploy/ai-classifier -n compliance-system ai-classifier=docker.io/leeon3345/compliance-ai-server:0.1.15`
+  - `kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s`
 
 ## Auth State
 
@@ -130,10 +136,9 @@ Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance
 
 ## Remaining Tasks (priority order)
 
-1. **Pre-login landing + login UX (TASK-08)** — add responsive intro/landing section explaining `ComplianceOps`, clear Google/dev login CTAs, and polished logged-out first impression
-2. **Admin cleanup controls** — optional delete/archive for disabled test clusters; current UI only disables clusters
-3. **Ops docs** — zrok stabilization script, image tag/deploy procedure, SQLite backup/reset, demo data cleanup
-4. **Google OAuth live smoke (final task)** — after Google Console signup and real credentials exist, create real `ai-google-oauth` secret and deploy/smoke-test the current image
+1. **Admin cleanup controls** — optional delete/archive for disabled test clusters; current UI only disables clusters
+2. **Ops docs** — zrok stabilization script, image tag/deploy procedure, SQLite backup/reset, demo data cleanup
+3. **Google OAuth live smoke (final task)** — after Google Console signup and real credentials exist, create real `ai-google-oauth` secret and deploy/smoke-test the current image
 
 ## Do Not Change (fixed decisions)
 
@@ -157,6 +162,7 @@ ai-observability/ai-server/app/runtime_client.py
 ai-observability/ai-server/app/static/index.html
 ai-observability/ai-server/app/static/app.js
 ai-observability/ai-server/app/static/styles.css
+ai-observability/ai-server/app/static/assets/kubeowl-logo.png
 ai-observability/ai-server/tests/test_api.py
 ai-observability/k8s/ai-server.yaml
 ai-observability/docs/ai-server-test/task6-manifest-snapshot/
@@ -174,6 +180,8 @@ cloud-deploy/ai-server.yaml
 .context/Task6.md
 .context/Task7.md
 .context/Task8.md
+.context/Task9.md
+.context/Task10.md
 ```
 
-Last AI server test result: `53 passed, 41 warnings` after local ComplianceOps UI refactor/polish
+Last AI server test result: `53 passed, 41 warnings` after local KubeOwl branding and pre-login UI polish

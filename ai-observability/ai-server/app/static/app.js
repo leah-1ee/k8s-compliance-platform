@@ -7,9 +7,10 @@ let latestReportText = "";
 let latestManifestCommand = "";
 let selectedRuntimeEvent = null;
 let grafanaUrl = "";
-let authState = { authenticated: false, user: null, auth: { google_configured: false } };
+let authState = { authenticated: false, user: null, auth: { google_configured: false, dev_enabled: false } };
 let userClusters = [];
 let slackSettings = { webhook_url: "", configured: false };
+let landingTypewriterStarted = false;
 const SESSION_KEY = "complianceAiLlmApiKey";
 const THEME_KEY = "complianceOpsTheme";
 const DEFAULT_RUNTIME_LIMIT = "50";
@@ -68,7 +69,13 @@ function applyTheme(theme) {
   const button = $("#themeToggle");
   if (button) {
     const isDark = normalizedTheme === "dark";
-    button.textContent = isDark ? "Light mode" : "Dark mode";
+    const label = button.querySelector(".theme-label");
+    if (label) {
+      label.textContent = isDark ? "Light" : "Dark";
+    } else {
+      button.textContent = isDark ? "Light mode" : "Dark mode";
+    }
+    button.setAttribute("aria-label", isDark ? "Light mode" : "Dark mode");
     button.setAttribute("aria-pressed", String(isDark));
   }
 }
@@ -719,7 +726,53 @@ function renderAuthGates() {
   $("#analysisContent").hidden = !isAuthenticated;
   $("#reportAuthMessage").hidden = isAuthenticated;
   $("#reportContent").hidden = !isAuthenticated;
+  renderLandingIntro();
   renderSlackSettings();
+}
+
+function renderLandingIntro() {
+  const landingIntro = $("#landingIntro");
+  if (!landingIntro) {
+    return;
+  }
+  const isAuthenticated = Boolean(authState.authenticated);
+  const googleConfigured = Boolean(authState.auth?.google_configured);
+  const devEnabled = Boolean(authState.auth?.dev_enabled);
+  landingIntro.hidden = isAuthenticated;
+  $("#landingLoginLink").hidden = isAuthenticated || !googleConfigured;
+  $("#landingDevLoginLink").hidden = isAuthenticated || !devEnabled;
+  $("#landingLoginNote").hidden = isAuthenticated || (!googleConfigured && !devEnabled);
+  $("#landingNoLoginMessage").hidden = isAuthenticated || googleConfigured || devEnabled;
+  if (!isAuthenticated) {
+    startLandingTypewriter();
+  }
+}
+
+function startLandingTypewriter() {
+  const subtitle = $("#landingSubtitle");
+  if (!subtitle || landingTypewriterStarted) {
+    return;
+  }
+  const fullText = subtitle.dataset.typewriterText || subtitle.textContent.trim();
+  landingTypewriterStarted = true;
+  subtitle.setAttribute("aria-label", fullText);
+  subtitle.textContent = "";
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    subtitle.textContent = fullText;
+    return;
+  }
+  let index = 0;
+  const typeNext = () => {
+    subtitle.textContent = fullText.slice(0, index);
+    if (index >= fullText.length) {
+      return;
+    }
+    const char = fullText[index];
+    index += 1;
+    const delay = [".", ",", "·", "까지"].includes(char) ? 120 : char === " " ? 32 : 24;
+    window.setTimeout(typeNext, delay);
+  };
+  window.setTimeout(typeNext, 220);
 }
 
 function renderRuntimeClusterFilter() {
@@ -794,7 +847,8 @@ function ensureSlackSettingsPanel() {
   panel.id = "slackSettingsPanel";
   panel.className = "card slack-settings-card";
   panel.innerHTML = `
-    <div class="card-heading">
+    <div class="card-heading slack-card-heading">
+      <span class="devicon--slack slack-icon" aria-hidden="true"></span>
       <h2>Slack Notifications</h2>
     </div>
     <p id="slackSettingsAuthMessage" class="muted">로그인 후 Slack 알림을 설정할 수 있습니다.</p>
@@ -1040,7 +1094,11 @@ function markCopied(button) {
 }
 
 document.querySelectorAll(".tab").forEach((tab) => {
-  tab.addEventListener("click", () => activateTab(tab.dataset.tab));
+  tab.addEventListener("click", () => {
+    activateTab(tab.dataset.tab);
+    $(".sidebar")?.classList.remove("is-open");
+    $("#navMenuToggle")?.setAttribute("aria-expanded", "false");
+  });
 });
 
 ensureSlackSettingsPanel();
@@ -1257,6 +1315,26 @@ $("#themeToggle").addEventListener("click", () => {
   toggleTheme();
 });
 
+$("#navMenuToggle").addEventListener("click", () => {
+  const sidebar = $(".sidebar");
+  const isOpen = sidebar.classList.toggle("is-open");
+  $("#navMenuToggle").setAttribute("aria-expanded", String(isOpen));
+  $("#navMenuToggle").setAttribute("aria-label", isOpen ? "메뉴 닫기" : "메뉴 열기");
+});
+
+function openPublicPolicyGenerator() {
+  const landingIntro = $("#landingIntro");
+  if (landingIntro) {
+    landingIntro.hidden = true;
+  }
+  activateTab("policy");
+  $("#policyPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+$("#landingPolicyButton").addEventListener("click", () => {
+  openPublicPolicyGenerator();
+});
+
 async function loadConfig() {
   const response = await fetch("/config");
   const config = await response.json();
@@ -1279,6 +1357,8 @@ function renderAuthStatus() {
   const loginLink = $("#loginLink");
   const devLoginLink = $("#devLoginLink");
   const logoutButton = $("#logoutButton");
+  document.body.classList.toggle("logged-out", !authState.authenticated);
+  document.body.classList.toggle("logged-in", Boolean(authState.authenticated));
   if (authState.authenticated) {
     status.textContent = authState.user?.email || "로그인됨";
     loginLink.hidden = true;

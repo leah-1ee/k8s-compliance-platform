@@ -60,7 +60,7 @@ def test_ui_is_served():
     response = client.get("/ui")
 
     assert response.status_code == 200
-    assert "Compliance AI Console" in response.text
+    assert "KubeOwl Console" in response.text
     assert "Kubernetes Policy-as-Code 자동 생성 및 위반 분석 도구" in response.text
     assert "OpenAI (GPT)" in response.text
     assert "Anthropic (Claude)" in response.text

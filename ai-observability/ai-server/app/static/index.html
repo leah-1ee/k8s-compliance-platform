@@ -3,20 +3,29 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ComplianceOps</title>
+    <title>KubeOwl</title>
     <link rel="stylesheet" href="/static/styles.css?v=violation-ux-2" />
   </head>
-  <body>
+  <body class="logged-out">
     <div class="app-shell">
-      <aside class="sidebar" aria-label="ComplianceOps navigation">
-        <div class="brand-block">
-          <div class="brand-mark">CO</div>
-          <div>
-            <h1>ComplianceOps</h1>
-            <span class="sr-only">Compliance AI Console</span>
-            <span class="sr-only">Kubernetes Policy-as-Code 자동 생성 및 위반 분석 도구</span>
-            <p>Policy-as-Code Console</p>
+      <aside class="sidebar" aria-label="KubeOwl navigation">
+        <div class="sidebar-header">
+          <div class="brand-block">
+            <div class="brand-mark">
+              <img class="site-logo" src="/static/assets/kubeowl-logo.png" alt="KubeOwl logo" />
+            </div>
+            <div>
+              <h1>KubeOwl</h1>
+              <span class="sr-only">KubeOwl Console</span>
+              <span class="sr-only">Kubernetes Policy-as-Code 자동 생성 및 위반 분석 도구</span>
+              <p>Policy-as-Code Console</p>
+            </div>
           </div>
+          <button class="nav-menu-toggle" id="navMenuToggle" type="button" aria-expanded="false" aria-label="메뉴 열기">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
         </div>
         <nav class="sidebar-nav" aria-label="Primary navigation">
           <button class="tab nav-item is-active" data-tab="dashboard">Dashboard</button>
@@ -28,24 +37,117 @@
         <div class="sidebar-footer">
           <span class="badge ready compact">Connected</span>
           <p>Kubernetes compliance automation</p>
-          <button class="secondary theme-toggle" id="themeToggle" type="button" aria-pressed="false">Dark mode</button>
+          <button class="theme-toggle" id="themeToggle" type="button" aria-pressed="false" aria-label="Dark mode">
+            <span class="theme-label">Dark</span>
+            <span class="theme-switch" aria-hidden="true"><span></span></span>
+          </button>
         </div>
       </aside>
 
       <main class="main-shell">
         <header class="topbar">
-          <div>
+          <div class="topbar-title">
             <p class="eyebrow">Cloud Security Console</p>
             <h2 id="pageTitle">Dashboard</h2>
           </div>
+          <div class="landing-top-brand" aria-label="KubeOwl">
+            <div class="brand-mark">
+              <img class="site-logo" src="/static/assets/kubeowl-logo.png" alt="KubeOwl logo" />
+            </div>
+            <div>
+              <h1>KubeOwl</h1>
+              <p>Policy-as-Code Console</p>
+            </div>
+          </div>
           <div class="topbar-actions">
             <span class="auth-status" id="authStatus">로그인 확인 중</span>
-            <a class="button-like secondary" href="#" id="grafanaLink">Grafana</a>
+            <a class="button-like secondary icon-button" href="#" id="grafanaLink">
+              <span class="devicon--grafana" aria-hidden="true"></span>
+              <span>Grafana</span>
+            </a>
             <a class="button-like secondary" href="/auth/google/login" id="loginLink" hidden>Google 로그인</a>
             <a class="button-like secondary" href="/auth/dev-login" id="devLoginLink" hidden>개발 로그인</a>
             <button class="secondary" id="logoutButton" hidden>로그아웃</button>
           </div>
         </header>
+
+        <section class="landing-intro" id="landingIntro" aria-label="KubeOwl introduction" hidden>
+          <section class="landing-hero hero" aria-label="KubeOwl hero">
+            <div class="landing-copy">
+              <p class="eyebrow">Kubernetes Compliance Automation</p>
+              <h2 class="landing-title">KubeOwl</h2>
+              <p
+                class="typewriter-subtitle"
+                id="landingSubtitle"
+                data-typewriter-text="Kubernetes 정책 생성부터 런타임 위반 분석까지 한 화면에서 운영하는 Policy-as-Code 콘솔입니다."
+              >
+                Kubernetes 정책 생성부터 런타임 위반 분석까지 한 화면에서 운영하는 Policy-as-Code
+                콘솔입니다.
+              </p>
+              <div class="landing-login-actions" id="landingLoginActions" aria-label="login actions">
+                <a class="button-like primary" href="/auth/google/login" id="landingLoginLink" hidden>
+                  Google로 시작
+                </a>
+                <a class="button-like secondary" href="/auth/dev-login" id="landingDevLoginLink" hidden>
+                  개발 로그인
+                </a>
+                <button class="primary" id="landingPolicyButton" type="button">
+                  공개 Policy Generator 열기
+                </button>
+                <p class="landing-login-note" id="landingLoginNote">
+                  Google 로그인은 운영 환경용이며, 개발 로그인은 로컬/데모 모드에서만 사용합니다.
+                </p>
+                <p class="landing-login-note" id="landingNoLoginMessage" hidden>
+                  현재 로그인 공급자가 설정되지 않았습니다. 공개 Policy Generator는 계속 사용할 수 있습니다.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section class="landing-signal-panel features" aria-label="KubeOwl workflow">
+            <article>
+              <span>01</span>
+              <strong>Natural language to Gatekeeper</strong>
+              <p>요구사항을 입력하면 ConstraintTemplate, Constraint, Rego 산출물을 생성합니다.</p>
+            </article>
+            <article>
+              <span>02</span>
+              <strong>Falco Sidekick ingest</strong>
+              <p>사용자 클러스터를 등록하고 런타임 이벤트를 안전하게 수집합니다.</p>
+              <div class="rich-hover-card" role="tooltip" aria-label="Falco runtime event UI preview">
+                <img
+                  class="rich-hover-card-image"
+                  src="./assets/screenshot-falco.png"
+                  alt="Falco runtime event UI screenshot preview"
+                />
+                <p>Falco 이벤트가 수집되면 런타임 위반 목록과 상세 분석 흐름에서 확인할 수 있습니다.</p>
+              </div>
+            </article>
+            <article>
+              <span>03</span>
+              <strong>AI-assisted triage</strong>
+              <p>위반 원인, 심각도, 수정 방향을 사용자 클러스터 범위 안에서 분석합니다.</p>
+            </article>
+          </section>
+
+          <section class="landing-feature-grid bottom-cards" id="landingFeatureGrid" aria-label="KubeOwl capabilities">
+            <article>
+              <span class="badge loading">Policy</span>
+              <h3>정책을 빠르게 표준화</h3>
+              <p>latest 태그 금지, non-root 강제, 허용 레지스트리 같은 Kubernetes 보안 규칙을 생성합니다.</p>
+            </article>
+            <article>
+              <span class="badge ready">Runtime</span>
+              <h3>클러스터별 이벤트 관측</h3>
+              <p>Falco와 Gatekeeper 신호를 클러스터, 소스, 심각도 기준으로 확인합니다.</p>
+            </article>
+            <article>
+              <span class="badge medium">Report</span>
+              <h3>AI 리포트로 정리</h3>
+              <p>운영자가 바로 조치할 수 있도록 위반 요약과 권장 조치를 리포트로 만듭니다.</p>
+            </article>
+          </section>
+        </section>
 
         <section class="metric-grid" aria-label="Compliance summary">
           <article class="metric-card">
@@ -97,7 +199,7 @@
           <div class="inline-alert" id="inlineAlert" role="alert" hidden></div>
         </section>
 
-        <section class="workspace" aria-label="ComplianceOps workspace">
+        <section class="workspace" aria-label="KubeOwl workspace">
           <section class="panel is-active" id="dashboardPanel">
             <div class="dashboard-grid">
               <article class="dashboard-card">
