@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 import httpx
@@ -268,6 +269,7 @@ def test_user_cluster_trash_and_restore():
     session = storage.create_session(owner["id"])
     other_session = storage.create_session(other["id"])
     cluster = storage.create_cluster("trashable-cluster", user_id=owner["id"])
+    active_cluster = storage.create_cluster("trash-active-cluster", user_id=owner["id"])
 
     forbidden = client.delete(
         f"/api/clusters/{cluster['id']}",
@@ -279,7 +281,7 @@ def test_user_cluster_trash_and_restore():
     )
     hidden_list = client.get("/api/clusters", cookies={"compliance_ai_session": session}).json()
     trash_list = client.get(
-        "/api/clusters?include_deleted=true",
+        "/api/clusters?include_deleted=true&deleted_only=true",
         cookies={"compliance_ai_session": session},
     ).json()
     restore_response = client.post(
@@ -293,8 +295,51 @@ def test_user_cluster_trash_and_restore():
     assert trash_response.json()["cluster"]["deleted_at"]
     assert all(item["id"] != cluster["id"] for item in hidden_list["clusters"])
     assert any(item["id"] == cluster["id"] for item in trash_list["clusters"])
+    assert all(item["id"] != active_cluster["id"] for item in trash_list["clusters"])
     assert restore_response.status_code == 200
     assert restore_response.json()["cluster"]["status"] == "disabled"
+
+
+def test_user_cluster_permanent_delete_and_auto_purge():
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="trash-purge-owner@example.test",
+        email="trash-purge-owner@example.test",
+    )
+    session = storage.create_session(owner["id"])
+    permanent = storage.create_cluster("trash-permanent-cluster", user_id=owner["id"])
+    expired = storage.create_cluster("trash-expired-cluster", user_id=owner["id"])
+
+    client.delete(
+        f"/api/clusters/{permanent['id']}",
+        cookies={"compliance_ai_session": session},
+    )
+    client.delete(
+        f"/api/clusters/{expired['id']}",
+        cookies={"compliance_ai_session": session},
+    )
+    old_deleted_at = (datetime.now(timezone.utc) - timedelta(days=4)).isoformat()
+    with storage._connect() as conn:
+        conn.execute("UPDATE clusters SET deleted_at = ? WHERE id = ?", (old_deleted_at, expired["id"]))
+
+    purge_response = client.delete(
+        f"/api/clusters/{permanent['id']}/permanent",
+        cookies={"compliance_ai_session": session},
+    )
+    trash_list = client.get(
+        "/api/clusters?include_deleted=true&deleted_only=true",
+        cookies={"compliance_ai_session": session},
+    ).json()
+    restore_deleted_response = client.post(
+        f"/api/clusters/{permanent['id']}/restore",
+        cookies={"compliance_ai_session": session},
+    )
+
+    assert purge_response.status_code == 200
+    assert purge_response.json()["status"] == "deleted"
+    assert all(item["id"] != permanent["id"] for item in trash_list["clusters"])
+    assert all(item["id"] != expired["id"] for item in trash_list["clusters"])
+    assert restore_deleted_response.status_code == 404
 
 
 def test_slack_settings_require_login():

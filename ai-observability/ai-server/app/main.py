@@ -508,6 +508,7 @@ def ingest_falco_events(payload: dict, authorization: str | None = Header(defaul
 @app.get("/api/clusters")
 def user_list_clusters(
     include_deleted: bool = False,
+    deleted_only: bool = False,
     compliance_ai_session: str | None = Cookie(default=None),
 ) -> dict:
     # 로그인 사용자의 클러스터 목록
@@ -515,7 +516,13 @@ def user_list_clusters(
     if auth_error:
         return auth_error
     assert user is not None
-    return {"clusters": storage.list_clusters(user_id=user["id"], include_deleted=include_deleted)}
+    return {
+        "clusters": storage.list_clusters(
+            user_id=user["id"],
+            include_deleted=include_deleted,
+            deleted_only=deleted_only,
+        )
+    }
 
 
 @app.post("/api/clusters")
@@ -564,6 +571,21 @@ def user_rotate_cluster_token(
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
     rotated["install_command"] = _sidekick_install_command(request, rotated["token"])
     return {"cluster": rotated}
+
+
+@app.delete("/api/clusters/{cluster_id}/permanent")
+def user_permanently_delete_cluster(
+    cluster_id: str,
+    compliance_ai_session: str | None = Cookie(default=None),
+) -> dict:
+    user, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
+    assert user is not None
+    deleted = storage.permanently_delete_cluster(cluster_id, user["id"])
+    if not deleted:
+        return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    return {"status": "deleted"}
 
 
 @app.delete("/api/clusters/{cluster_id}")

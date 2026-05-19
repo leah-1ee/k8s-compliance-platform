@@ -692,13 +692,13 @@ function renderPolicyFallbackSteps(fallback = {}) {
               <details class="policy-apply-step" ${step.open ? "open" : ""}>
                 <summary>
                   <span>
-                    <strong>${escapeHtml(step.label)}</strong>
+                    <strong>
+                      ${escapeHtml(step.label)}
+                      <span class="policy-apply-step-toggle" aria-hidden="true"></span>
+                    </strong>
                     <small>${escapeHtml(step.description)}</small>
                   </span>
-                  <span class="policy-apply-step-actions">
-                    <span class="policy-apply-step-toggle" aria-hidden="true">접기</span>
-                    <button class="secondary" data-copy-policy-step="${targetId}" type="button">복사</button>
-                  </span>
+                  <button class="secondary" data-copy-policy-step="${targetId}" type="button">복사</button>
                 </summary>
                 <pre id="${targetId}" class="policy-apply-command" contenteditable="true" spellcheck="false">${highlightEditableCommand(step.command)}</pre>
               </details>
@@ -1062,8 +1062,11 @@ function renderUserClusters() {
     container.innerHTML = "";
     return;
   }
+  const trashMode = Boolean($("#showDeletedClusters")?.checked);
   if (!userClusters.length) {
-    container.innerHTML = '<p class="muted">등록된 클러스터가 없습니다.</p>';
+    container.innerHTML = trashMode
+      ? '<p class="muted">휴지통에 클러스터가 없습니다.</p>'
+      : '<p class="muted">등록된 클러스터가 없습니다.</p>';
     return;
   }
   container.innerHTML = userClusters
@@ -1077,13 +1080,16 @@ function renderUserClusters() {
             <p>
               status=${escapeHtml(cluster.status || "active")} ·
               last_seen=${escapeHtml(cluster.last_seen_at || "-")}
-              ${isDeleted ? ` · deleted_at=${escapeHtml(cluster.deleted_at || "-")}` : ""}
+              ${isDeleted ? ` · deleted_at=${escapeHtml(cluster.deleted_at || "-")} · 3일 후 자동 영구 삭제` : ""}
             </p>
           </div>
           <div class="cluster-row-actions">
             ${
               isDeleted
-                ? `<button class="secondary" data-user-restore="${escapeHtml(cluster.id || "")}">복원</button>`
+                ? `
+                  <button class="secondary" data-user-restore="${escapeHtml(cluster.id || "")}">복원</button>
+                  <button class="danger" data-user-purge="${escapeHtml(cluster.id || "")}">영구 삭제</button>
+                `
                 : `
                   <button data-user-rotate="${escapeHtml(cluster.id || "")}">토큰 재발급</button>
                   <button class="secondary" data-user-delete="${escapeHtml(cluster.id || "")}">휴지통</button>
@@ -1108,9 +1114,12 @@ async function loadUserClusters() {
     renderPolicyApplyPanel();
     return;
   }
-  const includeDeleted = $("#showDeletedClusters")?.checked ? "true" : "false";
-  const body = await apiJson(`/api/clusters?include_deleted=${includeDeleted}`);
-  userClusters = body.clusters || [];
+  const deletedOnly = $("#showDeletedClusters")?.checked ? "true" : "false";
+  const body = await apiJson(`/api/clusters?include_deleted=${deletedOnly}&deleted_only=${deletedOnly}`);
+  const clusters = body.clusters || [];
+  userClusters = deletedOnly === "true"
+    ? clusters.filter((cluster) => cluster.status === "deleted")
+    : clusters.filter((cluster) => cluster.status !== "deleted");
   renderRuntimeClusterFilter();
   renderUserClusters();
   renderPolicyApplyPanel();
@@ -1346,6 +1355,18 @@ async function restoreUserCluster(clusterId) {
   await loadUserClusters();
   await refreshDashboardSummary();
   showToast("클러스터를 복원했습니다. 사용 전 토큰을 재발급하세요");
+}
+
+async function permanentlyDeleteUserCluster(clusterId) {
+  if (!window.confirm("휴지통의 클러스터를 영구 삭제할까요? 관련 런타임 이벤트와 적용 기록도 함께 삭제됩니다.")) {
+    return;
+  }
+  await apiJson(`/api/clusters/${encodeURIComponent(clusterId)}/permanent`, {
+    method: "DELETE",
+  });
+  await loadUserClusters();
+  await refreshDashboardSummary();
+  showToast("클러스터를 영구 삭제했습니다");
 }
 
 async function loadRuntimeEvent(eventId) {
@@ -1631,6 +1652,7 @@ $("#userClusters").addEventListener("click", (event) => {
   const rotateButton = event.target.closest("[data-user-rotate]");
   const deleteButton = event.target.closest("[data-user-delete]");
   const restoreButton = event.target.closest("[data-user-restore]");
+  const purgeButton = event.target.closest("[data-user-purge]");
   if (rotateButton) {
     rotateUserClusterToken(rotateButton.dataset.userRotate).catch((error) => {
       showInlineAlert(error.message);
@@ -1642,6 +1664,13 @@ $("#userClusters").addEventListener("click", (event) => {
     trashUserCluster(deleteButton.dataset.userDelete).catch((error) => {
       showInlineAlert(error.message);
       showToast("클러스터 삭제 실패");
+    });
+    return;
+  }
+  if (purgeButton) {
+    permanentlyDeleteUserCluster(purgeButton.dataset.userPurge).catch((error) => {
+      showInlineAlert(error.message);
+      showToast("클러스터 영구 삭제 실패");
     });
     return;
   }

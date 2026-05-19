@@ -5,9 +5,9 @@ Policy-as-Code based Kubernetes compliance automation platform.
 Natural language → Rego policy via LLM, Falco event AI classification, real-time dashboard.
 
 ## Current Image Version
-Current VM image observed: `docker.io/leeon3345/compliance-ai-server:0.1.17`
-Next build/deploy tag for current AI server/UI changes: `docker.io/leeon3345/compliance-ai-server:0.1.18`
-`0.1.10` was the older deployed image. `0.1.11` was prepared by TASK-04, `0.1.12` by TASK-05, `0.1.13` by TASK-06, `0.1.15` by TASK-10 branding/deploy prep, and `0.1.16`/`0.1.17` were used during TASK-10 policy apply/UI iteration; do not overwrite or reuse older tags.
+Current VM image observed by user during TASK-11: `docker.io/leeon3345/compliance-ai-server:0.1.18`
+Next build/deploy tag for current AI server/UI changes: `docker.io/leeon3345/compliance-ai-server:0.1.20`
+`0.1.10` was the older deployed image. `0.1.11` was prepared by TASK-04, `0.1.12` by TASK-05, `0.1.13` by TASK-06, `0.1.15` by TASK-10 branding/deploy prep, `0.1.16`/`0.1.17` were used during TASK-10 policy apply/UI iteration, `0.1.18` is the TASK-10 completed/Grafana-title image observed in use, and `0.1.20` is the TASK-11 UI/trash cleanup follow-up target; do not overwrite or reuse older tags.
 
 ## Tech Stack
 - Backend: Python (FastAPI), SQLite (WAL mode, PVC persistent)
@@ -84,8 +84,12 @@ Next build/deploy tag for current AI server/UI changes: `docker.io/leeon3345/com
 - TASK-10 UI polish done locally and committed/partially pending: Policy Apply guidance, status pill, Cluster Setup/Sidekick terminal block, Slack cluster notification spacing, EnforcementAction selected-state visibility, and Grafana dashboard card layout
 - TASK-10 Grafana dashboard naming done locally: provisioned `Compliance Overview` renamed to `Gatekeeper Compliance Overview`; `Runtime Detection — Compliance Dashboard` renamed to `Runtime Detection`; ConfigMap JSON source remains the source of truth
 - TASK-10 VM finding: `Active Policies` requires read-only `constraints.gatekeeper.sh` RBAC on the actual deployment ServiceAccount (`compliance-system:ai-classifier`), not `compliance-system:default`
+- TASK-11 VM/user-reported verification: `0.1.18` was rolled out successfully, Grafana dashboard titles were updated, and `ai-classifier` ServiceAccount returned `yes` for Gatekeeper constraint read access.
+- TASK-11 UI hardening done locally: policy fallback guide now explains up front that the AI server cannot directly apply to user clusters, splits kubectl commands into editable/copyable steps, uses supplied arrow icons, improves light-mode code contrast, and labels fallback resources as pending kubectl execution instead of `skipped`.
+- TASK-11 Cluster Setup cleanup done locally: user trash view is intended to show deleted clusters only, deleted clusters can be restored or permanently deleted, and deleted clusters are purged automatically after 3 days.
+- TASK-12 created: Google OAuth live activation and admin console cleanup are next; validation and docs are intentionally last.
 - TASK-07 note: no AI server code or UI changed; no new AI server image tag is required
-- Tests: `62 passed, 56 warnings` in `ai-observability/ai-server/tests`; `node --check ai-observability/ai-server/app/static/app.js` passes
+- Tests: `63 passed, 61 warnings` in `ai-observability/ai-server/tests`; `node --check ai-observability/ai-server/app/static/app.js` passes
 
 ## Deployment Notes
 
@@ -126,8 +130,8 @@ Next build/deploy tag for current AI server/UI changes: `docker.io/leeon3345/com
   - `kubectl set image deploy/ai-classifier -n compliance-system ai-classifier=docker.io/leeon3345/compliance-ai-server:0.1.15`
   - `kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s`
 - TASK-11/current rollout target image:
-  - `docker.io/leeon3345/compliance-ai-server:0.1.18`
-  - `kubectl set image deploy/ai-classifier -n compliance-system ai-classifier=docker.io/leeon3345/compliance-ai-server:0.1.18`
+  - `docker.io/leeon3345/compliance-ai-server:0.1.20`
+  - `kubectl set image deploy/ai-classifier -n compliance-system ai-classifier=docker.io/leeon3345/compliance-ai-server:0.1.20`
   - `kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s`
 - TASK-11 Grafana ConfigMap apply:
   - `kubectl apply -f ai-observability/dashboards/grafana/compliance-overview-configmap.yaml`
@@ -159,14 +163,13 @@ Next build/deploy tag for current AI server/UI changes: `docker.io/leeon3345/com
 
 ## Remaining Tasks (priority order)
 
-1. **TASK-11 VM rollout and smoke (P0)** — build/push `docker.io/leeon3345/compliance-ai-server:0.1.18`, roll out `deploy/ai-classifier`, apply Grafana ConfigMaps, and verify dashboard titles/UI changes are live.
-2. **Active Policies verification (P0)** — ensure `compliance-system:ai-classifier` has read-only `constraints.gatekeeper.sh` RBAC and confirm `/dashboard-summary` reports live Gatekeeper constraint count.
-3. **Demo hardening pass (P0)** — verify one end-to-end story: generate/apply Gatekeeper policy, trigger/observe violation, show Runtime Detection event, run Violation Detail, generate AI Report PDF, and show Grafana dashboards with non-empty or intentionally-zero panels.
-4. **Grafana cleanup (P1)** — decide whether the visible `Grafana Overview` dashboard is external/default or should be removed/renamed; keep repo JSON/ConfigMaps as source of truth.
-5. **User-cluster RBAC docs (P1)** — document that fallback apply requires the user's kubeconfig account to have Gatekeeper/NetworkPolicy permissions; central per-user-cluster Active Policies needs a future agent/read-only connection model.
-6. **Ops docs (P1)** — document zrok stabilization, image tag/deploy procedure, SQLite/Grafana backup and persistence, Grafana dashboard apply commands, and demo data cleanup.
-7. **Admin page cleanup/refactor (P1)** — add first-class archive/restore/delete UX for test clusters, improve table filtering/search, and separate user/cluster/event operations.
-8. **Google OAuth live smoke (P2/final)** — after Google Console signup and real credentials exist, create real `ai-google-oauth` secret and deploy/smoke-test the current image.
+1. **TASK-11 0.1.20 rollout and smoke (P0)** — build/push `docker.io/leeon3345/compliance-ai-server:0.1.20`, roll out `deploy/ai-classifier`, hard-refresh UI, and verify policy fallback guide plus Cluster Setup trash/permanent delete behavior.
+2. **TASK-12 Google OAuth live activation (P0)** — after Google Console signup and real credentials exist, create real `ai-google-oauth` secret, switch off dev-login, and smoke-test the live Google login/callback/logout flow.
+3. **TASK-12 Admin page cleanup/refactor (P1)** — add first-class admin archive/restore/permanent-delete UX for test clusters, improve table filtering/search, and separate user/cluster/event operations.
+4. **Demo data cleanup controls (P1)** — provide safe cleanup for old test clusters/events/apply history after admin actions are implemented.
+5. **Grafana cleanup (P2)** — decide whether the visible `Grafana Overview` dashboard is external/default or should be removed/renamed; keep repo JSON/ConfigMaps as source of truth.
+6. **Final verification (P3)** — verify one end-to-end story: generate/apply Gatekeeper policy via fallback, trigger/observe violation, show Runtime Detection event, run Violation Detail, generate AI Report PDF, and show Grafana dashboards.
+7. **Final docs (P4)** — document zrok stabilization, OAuth setup/rollback, image tag/deploy procedure, SQLite/Grafana backup and persistence, Grafana dashboard apply commands, demo data cleanup, and user-cluster RBAC expectations.
 
 ## Do Not Change (fixed decisions)
 
@@ -213,6 +216,7 @@ cloud-deploy/ai-server.yaml
 .context/Task8.md
 .context/Task9.md
 .context/Task10.md
+.context/Task12.md
 ```
 
-Last AI server test result: `62 passed, 56 warnings` after policy apply flow, fallback guidance, UI layout polish, and Grafana dashboard card/title updates
+Last AI server test result: `63 passed, 61 warnings` after policy fallback guide hardening, editable kubectl commands, user trash deleted-only/permanent-delete cleanup, and 3-day deleted-cluster auto purge

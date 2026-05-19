@@ -475,15 +475,19 @@ def create_cluster(name: str, kind: str = "customer", user_id: str = "") -> dict
     return cluster
 
 
-def list_clusters(user_id: str = "", include_deleted: bool = False) -> list[dict[str, Any]]:
+def list_clusters(user_id: str = "", include_deleted: bool = False, deleted_only: bool = False) -> list[dict[str, Any]]:
     init_db()
+    purge_expired_deleted_clusters()
     normalized_user_id = str(user_id or "").strip()
     params: list[Any] = []
     where = ""
     if normalized_user_id:
         where = "WHERE clusters.user_id = ?"
         params.append(normalized_user_id)
-    if not include_deleted:
+    if deleted_only:
+        deleted_filter = "clusters.status = 'deleted'"
+        where = f"{where} AND {deleted_filter}" if where else f"WHERE {deleted_filter}"
+    elif not include_deleted:
         deleted_filter = "clusters.status != 'deleted'"
         where = f"{where} AND {deleted_filter}" if where else f"WHERE {deleted_filter}"
     with _connect() as conn:
@@ -618,6 +622,45 @@ def trash_cluster(cluster_id: str, user_id: str) -> dict[str, Any] | None:
     if cursor.rowcount == 0:
         return None
     return get_cluster(cluster_id)
+
+
+def permanently_delete_cluster(cluster_id: str, user_id: str) -> bool:
+    init_db()
+    with _LOCK, _connect() as conn:
+        row = conn.execute(
+            "SELECT id FROM clusters WHERE id = ? AND user_id = ? AND status = 'deleted'",
+            (cluster_id, user_id),
+        ).fetchone()
+        if row is None:
+            return False
+        conn.execute("DELETE FROM policy_apply_history WHERE cluster_id = ?", (cluster_id,))
+        conn.execute("DELETE FROM events WHERE cluster_id = ?", (cluster_id,))
+        conn.execute("DELETE FROM clusters WHERE id = ? AND user_id = ? AND status = 'deleted'", (cluster_id, user_id))
+    return True
+
+
+def purge_expired_deleted_clusters(retention_days: int = 3) -> int:
+    init_db()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    with _LOCK, _connect() as conn:
+        rows = conn.execute(
+            "SELECT id, deleted_at FROM clusters WHERE status = 'deleted' AND deleted_at IS NOT NULL AND deleted_at != ''"
+        ).fetchall()
+        expired_ids = []
+        for row in rows:
+            try:
+                deleted_at = datetime.fromisoformat(str(row["deleted_at"]))
+            except ValueError:
+                continue
+            if deleted_at.tzinfo is None:
+                deleted_at = deleted_at.replace(tzinfo=timezone.utc)
+            if deleted_at <= cutoff:
+                expired_ids.append(row["id"])
+        for cluster_id in expired_ids:
+            conn.execute("DELETE FROM policy_apply_history WHERE cluster_id = ?", (cluster_id,))
+            conn.execute("DELETE FROM events WHERE cluster_id = ?", (cluster_id,))
+            conn.execute("DELETE FROM clusters WHERE id = ?", (cluster_id,))
+    return len(expired_ids)
 
 
 def restore_cluster(cluster_id: str, user_id: str) -> dict[str, Any] | None:
