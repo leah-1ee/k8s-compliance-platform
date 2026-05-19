@@ -518,7 +518,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Compliance Overview",
+  "title": "Gatekeeper Compliance Overview",
   "uid": "compliance-overview",
   "version": 1,
   "weekStart": ""

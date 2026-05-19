@@ -201,28 +201,43 @@
 
         <section class="workspace" aria-label="KubeOwl workspace">
           <section class="panel is-active" id="dashboardPanel">
-            <div class="dashboard-grid">
-              <article class="dashboard-card">
-                <span class="badge ready">● Healthy</span>
-                <h2>Compliance posture</h2>
-                <p>정책 생성, 클러스터 등록, 런타임 위반 분석을 하나의 운영 콘솔에서 관리합니다.</p>
-              </article>
-              <article class="dashboard-card">
-                <span class="badge loading">● Live</span>
-                <h2>Runtime signal</h2>
-                <p>Falco Sidekick 이벤트와 Gatekeeper 정책 위반을 사용자 클러스터 기준으로 집계합니다.</p>
-              </article>
+            <div class="grafana-dashboard-heading">
+              <span class="devicon--grafana grafana-heading-logo" aria-hidden="true"></span>
+              <div>
+                <h2>Grafana</h2>
+                <p>운영자는 아래 3개의 대시보드에서 정책 상태, 런타임 탐지, AI 분류 흐름을 확인합니다.</p>
+              </div>
             </div>
-            <div class="query-list">
-              <article class="query-card">
-                <h2>AI Classification Requests</h2>
-                <p>선택한 시간 범위 동안 AI Classifier로 전달된 요청 수를 집계합니다.</p>
-                <pre><code>sum(increase(compliance_ai_requests_total{service="response-server"}[$__range]))</code></pre>
+            <div class="dashboard-grid grafana-dashboard-grid">
+              <article class="dashboard-card grafana-dashboard-card">
+                <span class="badge ready">Gatekeeper</span>
+                <h2>Gatekeeper Compliance Overview</h2>
+                <p>Gatekeeper 감사 상태, 정책 위반 추이, enforcement action별 위반 수를 한 화면에서 확인합니다.</p>
+                <ul>
+                  <li>Gatekeeper audit health</li>
+                  <li>Violations by policy</li>
+                  <li>Violations by enforcement</li>
+                </ul>
               </article>
-              <article class="query-card">
-                <h2>Gatekeeper Violations by Enforcement</h2>
-                <p>정책 위반을 deny, warn, dryrun 같은 적용 방식 기준으로 집계합니다.</p>
-                <pre><code>sum by (enforcement_action) (gatekeeper_violations)</code></pre>
+              <article class="dashboard-card grafana-dashboard-card">
+                <span class="badge loading">Runtime</span>
+                <h2>Runtime Detection</h2>
+                <p>Falco Sidekick 런타임 이벤트, severity 분포, 자동 대응 결과를 운영 관점에서 추적합니다.</p>
+                <ul>
+                  <li>Events by severity</li>
+                  <li>Rules and namespaces</li>
+                  <li>Response actions</li>
+                </ul>
+              </article>
+              <article class="dashboard-card grafana-dashboard-card">
+                <span class="badge medium">AI</span>
+                <h2>AI Classifier Reliability</h2>
+                <p>Response Server에서 AI Classifier로 전달된 요청량, 오류율, fallback 흐름을 점검합니다.</p>
+                <ul>
+                  <li>Classification requests</li>
+                  <li>Classification errors</li>
+                  <li>Fallback and latency</li>
+                </ul>
               </article>
             </div>
           </section>

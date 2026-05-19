@@ -1087,7 +1087,7 @@ data:
       },
       "timepicker": {},
       "timezone": "browser",
-      "title": "Runtime Detection — Compliance Dashboard",
+      "title": "Runtime Detection",
       "uid": "compliance-runtime-detection",
       "version": 1
     }

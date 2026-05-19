@@ -5,9 +5,9 @@ Policy-as-Code based Kubernetes compliance automation platform.
 Natural language → Rego policy via LLM, Falco event AI classification, real-time dashboard.
 
 ## Current Image Version
-Current deployed image target: `docker.io/leeon3345/compliance-ai-server:0.1.13`
-Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance-ai-server:0.1.16`
-`0.1.10` was the older deployed image. `0.1.11` was prepared by TASK-04, `0.1.12` by TASK-05, `0.1.13` by TASK-06, and `0.1.15` by TASK-10; do not overwrite or reuse older tags.
+Current VM image observed: `docker.io/leeon3345/compliance-ai-server:0.1.17`
+Next build/deploy tag for current AI server/UI changes: `docker.io/leeon3345/compliance-ai-server:0.1.18`
+`0.1.10` was the older deployed image. `0.1.11` was prepared by TASK-04, `0.1.12` by TASK-05, `0.1.13` by TASK-06, `0.1.15` by TASK-10 branding/deploy prep, and `0.1.16`/`0.1.17` were used during TASK-10 policy apply/UI iteration; do not overwrite or reuse older tags.
 
 ## Tech Stack
 - Backend: Python (FastAPI), SQLite (WAL mode, PVC persistent)
@@ -73,12 +73,19 @@ Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance
 - UI refactor done locally: Runtime Event cards now show id/time/context, default limit is 50, display limit control exists, and infra namespace hiding is available
 - UI refactor done locally: Slack Notifications, Cluster Setup, Violation Detail, and AI Report spacing/badge/toggle polish completed
 - TASK-10 update done locally: dashboard metrics are no longer hard-coded; `/dashboard-summary` drives Active Policies, Recent Violations, Runtime Events, and Last Sync
+- TASK-10 note: `Active Policies` counts live Gatekeeper `constraints.gatekeeper.sh/v1beta1` objects, not generated policy drafts; Policy Generator still needs a cluster apply flow for this metric to increase from generated policies
 - TASK-10 update done locally: Cluster Setup supports trash/restore for user-owned clusters
+- Grafana recovery done locally: Compliance Overview and Runtime Detection dashboards are now provisioned from JSON/ConfigMap instead of relying on volatile Grafana UI state; important stat panels fall back to `0` when Prometheus series do not exist yet
 - TASK-08 preserved: Runtime Event UI usability follow-up remains the previous task context
 - TASK-09 done locally: pre-login landing/intro and user login UX for the console
 - TASK-10 done locally: brand renamed to `KubeOwl`, uploaded owl/Kubernetes logo added, Grafana/Slack CSS data-URL icons applied, and deploy manifests prepared for image `docker.io/leeon3345/compliance-ai-server:0.1.15`
+- TASK-10 policy apply flow done locally and committed: authenticated cluster policy apply endpoint, per-user cluster ownership/status checks, multi-document ordering, apply history, honest `not_configured` fallback, and tests added
+- TASK-10 fallback fixed locally and committed: Gatekeeper `ConstraintTemplate` and generated `Constraint` are split into staged heredocs with CRD Established wait; fallback includes permission check, admin RBAC, dry-run, and apply commands
+- TASK-10 UI polish done locally and committed/partially pending: Policy Apply guidance, status pill, Cluster Setup/Sidekick terminal block, Slack cluster notification spacing, EnforcementAction selected-state visibility, and Grafana dashboard card layout
+- TASK-10 Grafana dashboard naming done locally: provisioned `Compliance Overview` renamed to `Gatekeeper Compliance Overview`; `Runtime Detection — Compliance Dashboard` renamed to `Runtime Detection`; ConfigMap JSON source remains the source of truth
+- TASK-10 VM finding: `Active Policies` requires read-only `constraints.gatekeeper.sh` RBAC on the actual deployment ServiceAccount (`compliance-system:ai-classifier`), not `compliance-system:default`
 - TASK-07 note: no AI server code or UI changed; no new AI server image tag is required
-- Tests: `53 passed, 41 warnings` in `ai-observability/ai-server/tests`
+- Tests: `62 passed, 56 warnings` in `ai-observability/ai-server/tests`; `node --check ai-observability/ai-server/app/static/app.js` passes
 
 ## Deployment Notes
 
@@ -118,6 +125,18 @@ Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance
   - `docker.io/leeon3345/compliance-ai-server:0.1.15`
   - `kubectl set image deploy/ai-classifier -n compliance-system ai-classifier=docker.io/leeon3345/compliance-ai-server:0.1.15`
   - `kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s`
+- TASK-11/current rollout target image:
+  - `docker.io/leeon3345/compliance-ai-server:0.1.18`
+  - `kubectl set image deploy/ai-classifier -n compliance-system ai-classifier=docker.io/leeon3345/compliance-ai-server:0.1.18`
+  - `kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s`
+- TASK-11 Grafana ConfigMap apply:
+  - `kubectl apply -f ai-observability/dashboards/grafana/compliance-overview-configmap.yaml`
+  - `kubectl apply -f runtime-detection/manifests/grafana/dashboard-configmap.yaml`
+  - Restart Grafana if sidecar/provisioning does not refresh titles automatically
+- TASK-11 Active Policies RBAC:
+  - deployment ServiceAccount observed: `ai-classifier`
+  - required read-only permission: `get,list,watch` on `resources: ["*"]` in `apiGroups: ["constraints.gatekeeper.sh"]`
+  - verify with `kubectl auth can-i list k8srequirenonroot.constraints.gatekeeper.sh --as=system:serviceaccount:compliance-system:ai-classifier`
 
 ## Auth State
 
@@ -136,12 +155,18 @@ Next build/deploy tag if AI server code changes: `docker.io/leeon3345/compliance
 | Cluster Setup | Yes |
 | Slack settings | Yes |
 | Admin (`/admin`) | Admin only |
+| Policy cluster apply | Yes |
 
 ## Remaining Tasks (priority order)
 
-1. **Admin page cleanup/refactor** — add first-class archive/restore/delete UX for test clusters, improve table filtering/search, and separate user/cluster/event operations
-2. **Ops docs** — zrok stabilization script, image tag/deploy procedure, SQLite backup/reset, demo data cleanup
-3. **Google OAuth live smoke (final task)** — after Google Console signup and real credentials exist, create real `ai-google-oauth` secret and deploy/smoke-test the current image
+1. **TASK-11 VM rollout and smoke (P0)** — build/push `docker.io/leeon3345/compliance-ai-server:0.1.18`, roll out `deploy/ai-classifier`, apply Grafana ConfigMaps, and verify dashboard titles/UI changes are live.
+2. **Active Policies verification (P0)** — ensure `compliance-system:ai-classifier` has read-only `constraints.gatekeeper.sh` RBAC and confirm `/dashboard-summary` reports live Gatekeeper constraint count.
+3. **Demo hardening pass (P0)** — verify one end-to-end story: generate/apply Gatekeeper policy, trigger/observe violation, show Runtime Detection event, run Violation Detail, generate AI Report PDF, and show Grafana dashboards with non-empty or intentionally-zero panels.
+4. **Grafana cleanup (P1)** — decide whether the visible `Grafana Overview` dashboard is external/default or should be removed/renamed; keep repo JSON/ConfigMaps as source of truth.
+5. **User-cluster RBAC docs (P1)** — document that fallback apply requires the user's kubeconfig account to have Gatekeeper/NetworkPolicy permissions; central per-user-cluster Active Policies needs a future agent/read-only connection model.
+6. **Ops docs (P1)** — document zrok stabilization, image tag/deploy procedure, SQLite/Grafana backup and persistence, Grafana dashboard apply commands, and demo data cleanup.
+7. **Admin page cleanup/refactor (P1)** — add first-class archive/restore/delete UX for test clusters, improve table filtering/search, and separate user/cluster/event operations.
+8. **Google OAuth live smoke (P2/final)** — after Google Console signup and real credentials exist, create real `ai-google-oauth` secret and deploy/smoke-test the current image.
 
 ## Do Not Change (fixed decisions)
 
@@ -167,6 +192,7 @@ ai-observability/ai-server/app/static/app.js
 ai-observability/ai-server/app/static/styles.css
 ai-observability/ai-server/app/static/assets/kubeowl-logo.png
 ai-observability/ai-server/tests/test_api.py
+ai-observability/dashboards/grafana/
 ai-observability/k8s/ai-server.yaml
 ai-observability/docs/ai-server-test/task6-manifest-snapshot/
 ai-observability/docs/ai-server-test/task7-policy-falco-hygiene/
@@ -176,8 +202,10 @@ k8s-policy-engine/README.md
 k8s-policy-engine/constraints/
 k8s-policy-engine/mutations/
 runtime-detection/README.md
+runtime-detection/manifests/grafana/
 cloud-deploy/ai-server.yaml
 .context/CONTEXT.md
+.context/Task11.md
 .context/Task4.md
 .context/Task5.md
 .context/Task6.md
@@ -187,4 +215,4 @@ cloud-deploy/ai-server.yaml
 .context/Task10.md
 ```
 
-Last AI server test result: `57 passed, 50 warnings` after dynamic dashboard metrics, AI Report LLM summary, PDF print export, runtime event filtering, and cluster trash/restore updates
+Last AI server test result: `62 passed, 56 warnings` after policy apply flow, fallback guidance, UI layout polish, and Grafana dashboard card/title updates
