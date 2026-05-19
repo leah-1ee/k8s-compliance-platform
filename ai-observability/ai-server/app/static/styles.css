@@ -1505,6 +1505,44 @@ select:focus {
   flex: 0 0 auto;
 }
 
+.policy-apply-step-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.policy-apply-step-toggle {
+  min-width: 42px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.policy-apply-step-toggle::before {
+  content: "▾";
+  margin-right: 4px;
+  font-size: 12px;
+}
+
+.policy-apply-step:not([open]) .policy-apply-step-toggle::before {
+  content: "▸";
+}
+
+.policy-apply-step:not([open]) .policy-apply-step-toggle {
+  color: var(--secondary-text);
+}
+
+.policy-apply-step:not([open]) .policy-apply-step-toggle {
+  font-size: 0;
+}
+
+.policy-apply-step:not([open]) .policy-apply-step-toggle::after {
+  content: "열기";
+  font-size: 12px;
+}
+
 .policy-apply-resource pre,
 .policy-apply-step pre {
   margin: 0;

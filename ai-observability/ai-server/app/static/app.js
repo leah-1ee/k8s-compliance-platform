@@ -633,21 +633,21 @@ function fallbackCommandSteps(fallback = {}) {
       label: "2. 필요 시 RBAC",
       description: "권한 확인이 실패하면 클러스터 관리자가 먼저 실행하는 예시 권한 부여 명령입니다.",
       command: fallback.admin_rbac_command,
-      open: false,
+      open: true,
     },
     {
       key: "dry-run",
       label: "3. dry-run 검증",
       description: "실제 리소스를 만들기 전에 API 서버 검증만 수행합니다.",
       command: fallback.dry_run_command,
-      open: false,
+      open: true,
     },
     {
       key: "apply",
       label: "4. 실제 apply",
       description: "dry-run이 성공한 뒤 같은 클러스터 context에서 실행합니다.",
       command: fallback.apply_command,
-      open: false,
+      open: true,
     },
   ];
   return steps.filter((step) => String(step.command || "").trim());
@@ -688,7 +688,10 @@ function renderPolicyFallbackSteps(fallback = {}) {
                     <strong>${escapeHtml(step.label)}</strong>
                     <small>${escapeHtml(step.description)}</small>
                   </span>
-                  <button class="secondary" data-copy-policy-step="${targetId}" type="button">복사</button>
+                  <span class="policy-apply-step-actions">
+                    <span class="policy-apply-step-toggle" aria-hidden="true">접기</span>
+                    <button class="secondary" data-copy-policy-step="${targetId}" type="button">복사</button>
+                  </span>
                 </summary>
                 <pre id="${targetId}">${escapeHtml(step.command)}</pre>
               </details>
