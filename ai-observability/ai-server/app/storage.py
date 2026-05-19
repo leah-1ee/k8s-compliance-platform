@@ -108,6 +108,19 @@ def init_db() -> None:
                     FOREIGN KEY(cluster_id) REFERENCES clusters(id)
                 );
 
+                CREATE TABLE IF NOT EXISTS grafana_provisioning (
+                    cluster_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    org_id INTEGER NOT NULL,
+                    org_name TEXT NOT NULL,
+                    datasource_uid TEXT NOT NULL,
+                    dashboard_url TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY(user_id) REFERENCES users(id),
+                    FOREIGN KEY(cluster_id) REFERENCES clusters(id)
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp DESC);
                 CREATE INDEX IF NOT EXISTS idx_events_cluster ON events(cluster);
                 CREATE INDEX IF NOT EXISTS idx_events_namespace ON events(namespace);
@@ -129,6 +142,7 @@ def init_db() -> None:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_policy_apply_history_user ON policy_apply_history(user_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_policy_apply_history_cluster ON policy_apply_history(cluster_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_grafana_provisioning_user ON grafana_provisioning(user_id)")
             _mark_env_demo_clusters(conn)
         _INITIALIZED = True
 
@@ -263,6 +277,70 @@ def get_slack_settings(user_id: str) -> dict[str, Any]:
         "configured": bool(webhook_url),
         "updated_at": row["updated_at"] if row else "",
     }
+
+
+def get_grafana_provisioning(user_id: str, cluster_id: str) -> dict[str, Any] | None:
+    init_db()
+    normalized_user_id = str(user_id or "").strip()
+    normalized_cluster_id = str(cluster_id or "").strip()
+    if not normalized_user_id or not normalized_cluster_id:
+        return None
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT cluster_id, user_id, org_id, org_name, datasource_uid, dashboard_url, created_at, updated_at
+            FROM grafana_provisioning
+            WHERE user_id = ? AND cluster_id = ?
+            """,
+            (normalized_user_id, normalized_cluster_id),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def save_grafana_provisioning(
+    user_id: str,
+    cluster_id: str,
+    org_id: int,
+    org_name: str,
+    datasource_uid: str,
+    dashboard_url: str = "",
+) -> dict[str, Any]:
+    init_db()
+    normalized_user_id = str(user_id or "").strip()
+    normalized_cluster_id = str(cluster_id or "").strip()
+    normalized_org_name = str(org_name or "").strip()
+    normalized_datasource_uid = str(datasource_uid or "").strip()
+    if not normalized_user_id or not normalized_cluster_id or not normalized_org_name or not normalized_datasource_uid:
+        raise ValueError("user_id, cluster_id, org_name, and datasource_uid are required")
+    now = _utc_now()
+    with _LOCK, _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO grafana_provisioning (
+                cluster_id, user_id, org_id, org_name, datasource_uid, dashboard_url, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(cluster_id) DO UPDATE SET
+                user_id = excluded.user_id,
+                org_id = excluded.org_id,
+                org_name = excluded.org_name,
+                datasource_uid = excluded.datasource_uid,
+                dashboard_url = excluded.dashboard_url,
+                updated_at = excluded.updated_at
+            """,
+            (
+                normalized_cluster_id,
+                normalized_user_id,
+                int(org_id),
+                normalized_org_name,
+                normalized_datasource_uid,
+                str(dashboard_url or "").strip(),
+                now,
+            ),
+        )
+    mapping = get_grafana_provisioning(normalized_user_id, normalized_cluster_id)
+    assert mapping is not None
+    return mapping
 
 
 def save_slack_settings(user_id: str, webhook_url: str) -> dict[str, Any]:

@@ -4,6 +4,7 @@ import secrets
 import shlex
 from contextvars import ContextVar
 from pathlib import Path
+from urllib.parse import quote
 from urllib.parse import urlencode, urlparse
 
 import httpx
@@ -20,6 +21,8 @@ from app.policy_generator import generate_policy
 from app.policy_generator import SUPPORTED_POLICY_EXAMPLES, UnsupportedPolicyError
 from app import storage
 from app.grafana.proxy import router as grafana_proxy_router
+from app.grafana.provisioning import ProvisioningError, provision_user
+from app.grafana.ui_proxy import router as grafana_ui_router
 from app.runtime_client import (
     apply_policy_manifest,
     build_dashboard_summary,
@@ -241,6 +244,7 @@ app.add_exception_handler(
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.include_router(grafana_proxy_router)
+app.include_router(grafana_ui_router)
 
 
 @app.middleware("http")
@@ -704,6 +708,42 @@ def set_cluster_slack(
     if cluster is None:
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
     return {"cluster": cluster}
+
+
+@app.post("/api/clusters/{cluster_id}/grafana/provision")
+def provision_cluster_grafana(
+    cluster_id: str,
+    compliance_ai_session: str | None = Cookie(default=None),
+) -> dict:
+    user, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
+    assert user is not None
+    cluster = storage.get_cluster(cluster_id)
+    if cluster is None or cluster.get("user_id") != user["id"] or cluster.get("status") == "deleted":
+        return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    try:
+        provisioning = provision_user(user["id"], cluster["id"], user.get("email", ""))
+    except ProvisioningError as error:
+        return JSONResponse(status_code=502, content={"error": str(error)})
+    dashboard_path = str(provisioning.get("dashboard_url") or "/d/kubeowl-observability/kubeowl-observability")
+    if not dashboard_path.startswith("/"):
+        dashboard_path = f"/{dashboard_path}"
+    org_id = provisioning.get("org_id")
+    redirect_to = quote(dashboard_path, safe="/?=&")
+    grafana_url = f"/grafana-ui/org/switch/{org_id}?redirectTo={redirect_to}" if org_id else f"/grafana-ui{dashboard_path}"
+    return {
+        "status": "provisioned",
+        "cluster": {
+            "id": cluster["id"],
+            "name": cluster["name"],
+            "status": cluster["status"],
+        },
+        "grafana": {
+            **provisioning,
+            "url": grafana_url,
+        },
+    }
 
 
 @app.post("/api/clusters/{cluster_id}/policy-applies")

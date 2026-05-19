@@ -1151,6 +1151,7 @@ function renderUserClusters() {
                   <button class="danger" data-user-purge="${escapeHtml(cluster.id || "")}">영구 삭제</button>
                 `
                 : `
+                  <button class="secondary" data-user-grafana="${escapeHtml(cluster.id || "")}">Grafana</button>
                   <button data-user-rotate="${escapeHtml(cluster.id || "")}">토큰 재발급</button>
                   <button class="secondary" data-user-delete="${escapeHtml(cluster.id || "")}">휴지통</button>
                 `
@@ -1397,6 +1398,28 @@ async function rotateUserClusterToken(clusterId) {
   setOutput("#setupInstallCommand", body.cluster.install_command || "");
   await loadUserClusters();
   showToast("토큰 재발급 완료");
+}
+
+async function openClusterGrafana(clusterId) {
+  const grafanaWindow = window.open("about:blank", "_blank");
+  if (grafanaWindow) {
+    grafanaWindow.opener = null;
+  }
+  const body = await apiJson(`/api/clusters/${encodeURIComponent(clusterId)}/grafana/provision`, {
+    method: "POST",
+  });
+  const url = body.grafana?.url || grafanaUrl;
+  if (!url) {
+    grafanaWindow?.close();
+    showToast("Grafana URL 설정 필요");
+    return;
+  }
+  if (grafanaWindow) {
+    grafanaWindow.location.href = url;
+  } else {
+    window.location.href = url;
+  }
+  showToast("Grafana 대시보드 준비 완료");
 }
 
 async function trashUserCluster(clusterId) {
@@ -1710,6 +1733,7 @@ $("#showDeletedClusters").addEventListener("change", () => {
 
 $("#userClusters").addEventListener("click", (event) => {
   const rotateButton = event.target.closest("[data-user-rotate]");
+  const grafanaButton = event.target.closest("[data-user-grafana]");
   const deleteButton = event.target.closest("[data-user-delete]");
   const restoreButton = event.target.closest("[data-user-restore]");
   const purgeButton = event.target.closest("[data-user-purge]");
@@ -1717,6 +1741,13 @@ $("#userClusters").addEventListener("click", (event) => {
     rotateUserClusterToken(rotateButton.dataset.userRotate).catch((error) => {
       showInlineAlert(error.message);
       showToast("토큰 재발급 실패");
+    });
+    return;
+  }
+  if (grafanaButton) {
+    openClusterGrafana(grafanaButton.dataset.userGrafana).catch((error) => {
+      showInlineAlert(error.message);
+      showToast("Grafana 준비 실패");
     });
     return;
   }

@@ -11,6 +11,8 @@ from typing import Any
 
 import httpx
 
+from app import storage
+
 
 GRAFANA_URL = os.getenv("GRAFANA_URL_INTERNAL", "http://grafana.monitoring.svc.cluster.local:3000").rstrip("/")
 AI_SERVER_PROXY_BASE_URL = os.getenv(
@@ -30,6 +32,9 @@ def provision_user(user_id: str, cluster_id: str, email: str) -> dict[str, Any]:
     normalized_email = str(email or "").strip().lower()
     if not normalized_user_id or not normalized_cluster_id or not normalized_email:
         raise ProvisioningError("user_id, cluster_id, and email are required")
+    existing = storage.get_grafana_provisioning(normalized_user_id, normalized_cluster_id)
+    if existing:
+        return existing
 
     auth = _grafana_auth()
     org_name = f"org-{normalized_user_id}"
@@ -50,7 +55,7 @@ def provision_user(user_id: str, cluster_id: str, email: str) -> dict[str, Any]:
 
             datasource_uid = _datasource_uid(normalized_cluster_id)
             datasource = _ensure_datasource(client, org_id, normalized_user_id, normalized_cluster_id, datasource_uid)
-            dashboard = _dashboard_payload(datasource_uid)
+            dashboard = _dashboard_payload(client, datasource_uid)
             dash_response = client.post(
                 "/api/dashboards/db",
                 headers={"X-Grafana-Org-Id": str(org_id)},
@@ -64,14 +69,26 @@ def provision_user(user_id: str, cluster_id: str, email: str) -> dict[str, Any]:
                 json={"loginOrEmail": normalized_email, "role": "Viewer"},
             )
             if user_response.status_code not in {200, 201, 409}:
-                raise ProvisioningError(f"Grafana org user add failed: {user_response.status_code} {user_response.text}")
+                if user_response.status_code == 404:
+                    _ensure_user(client, normalized_email)
+                    user_response = client.post(
+                        f"/api/orgs/{org_id}/users",
+                        json={"loginOrEmail": normalized_email, "role": "Viewer"},
+                    )
+                if user_response.status_code not in {200, 201, 409}:
+                    raise ProvisioningError(
+                        f"Grafana org user add failed: {user_response.status_code} {user_response.text}"
+                    )
 
-            return {
-                "org_id": org_id,
-                "org_name": org_name,
-                "datasource_uid": datasource.get("uid", datasource_uid),
-                "dashboard": dash_response.json(),
-            }
+            dashboard_body = dash_response.json()
+            return storage.save_grafana_provisioning(
+                user_id=normalized_user_id,
+                cluster_id=normalized_cluster_id,
+                org_id=org_id,
+                org_name=org_name,
+                datasource_uid=datasource.get("uid", datasource_uid),
+                dashboard_url=str(dashboard_body.get("url", "")),
+            )
     except Exception as error:
         if created_org and org_id is not None:
             _rollback_org(org_id, auth)
@@ -134,18 +151,67 @@ def _ensure_datasource(
     return response.json().get("datasource") or response.json()
 
 
-def _dashboard_payload(datasource_uid: str) -> dict[str, Any]:
-    if DASHBOARD_TEMPLATE_PATH.exists():
-        dashboard = json.loads(DASHBOARD_TEMPLATE_PATH.read_text(encoding="utf-8"))
-    else:
-        dashboard = {
-            "uid": "kubeowl-observability",
-            "title": "KubeOwl Observability",
-            "schemaVersion": 39,
-            "version": 1,
-            "panels": [],
-        }
+def _ensure_user(client: httpx.Client, email: str) -> None:
+    password = os.getenv("GRAFANA_DEFAULT_VIEWER_PASSWORD", "").strip() or hashlib.sha256(
+        f"{email}:{time.time()}".encode("utf-8")
+    ).hexdigest()
+    response = client.post(
+        "/api/admin/users",
+        json={
+            "name": email,
+            "email": email,
+            "login": email,
+            "password": password,
+        },
+    )
+    if response.status_code not in {200, 201, 409}:
+        raise ProvisioningError(f"Grafana user create failed: {response.status_code} {response.text}")
+
+
+def _dashboard_payload(client: httpx.Client, datasource_uid: str) -> dict[str, Any]:
+    dashboard = _load_master_dashboard(client) or _load_local_dashboard_template()
+    dashboard = _sanitize_dashboard_for_import(dashboard)
     return _replace_datasource_uid(dashboard, datasource_uid)
+
+
+def _load_master_dashboard(client: httpx.Client) -> dict[str, Any] | None:
+    master_uid = os.getenv("GRAFANA_MASTER_DASHBOARD_UID", "").strip()
+    if not master_uid:
+        return None
+    master_org_id = os.getenv("GRAFANA_MASTER_ORG_ID", "1").strip() or "1"
+    response = client.get(
+        f"/api/dashboards/uid/{master_uid}",
+        headers={"X-Grafana-Org-Id": master_org_id},
+    )
+    if response.status_code != 200:
+        raise ProvisioningError(
+            f"Grafana master dashboard fetch failed: {response.status_code} {response.text}"
+        )
+    dashboard = response.json().get("dashboard")
+    if not isinstance(dashboard, dict):
+        raise ProvisioningError("Grafana master dashboard response missing dashboard")
+    return dashboard
+
+
+def _load_local_dashboard_template() -> dict[str, Any]:
+    if DASHBOARD_TEMPLATE_PATH.exists():
+        return json.loads(DASHBOARD_TEMPLATE_PATH.read_text(encoding="utf-8"))
+    return {
+        "uid": "kubeowl-observability",
+        "title": "KubeOwl Observability",
+        "schemaVersion": 39,
+        "version": 1,
+        "panels": [],
+    }
+
+
+def _sanitize_dashboard_for_import(dashboard: dict[str, Any]) -> dict[str, Any]:
+    clean = json.loads(json.dumps(dashboard))
+    clean["id"] = None
+    clean["version"] = 0
+    if not clean.get("uid"):
+        clean["uid"] = "kubeowl-observability"
+    return clean
 
 
 def _replace_datasource_uid(value: Any, datasource_uid: str) -> Any:
