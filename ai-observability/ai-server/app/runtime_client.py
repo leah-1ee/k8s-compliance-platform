@@ -537,7 +537,11 @@ def get_runtime_summary(user_id: str = "") -> dict[str, Any]:
 def build_dashboard_summary(user_id: str = "") -> dict[str, Any]:
     summary = get_runtime_summary(user_id=user_id)
     last_sync = summary.get("last_seen_at") or summary.get("latest_event_at") or ""
-    active_policies = _count_gatekeeper_constraints()
+    if user_id:
+        applied_policy_count = storage.count_policy_apply_history(user_id=user_id, statuses={"applied"})
+        active_policies = {"count": applied_policy_count, "source": "user_policy_apply_history", "error": ""}
+    else:
+        active_policies = _count_gatekeeper_constraints()
     return {
         "active_policies": active_policies.get("count"),
         "active_policies_source": active_policies.get("source", "unknown"),
@@ -546,6 +550,69 @@ def build_dashboard_summary(user_id: str = "") -> dict[str, Any]:
         "runtime_events": int(summary.get("total_events", 0) or 0),
         "last_sync": last_sync,
     }
+
+
+def build_user_observability_summary(user_id: str) -> dict[str, Any]:
+    summary = get_runtime_summary(user_id=user_id)
+    clusters = storage.list_clusters(user_id=user_id, include_deleted=False)
+    recent_events = storage.list_events(limit=5, user_id=user_id)
+    active_clusters = [cluster for cluster in clusters if cluster.get("status") == "active"]
+    disabled_clusters = [cluster for cluster in clusters if cluster.get("status") == "disabled"]
+    return {
+        "scope": "user_owned_clusters",
+        "clusters": [
+            {
+                "id": cluster.get("id", ""),
+                "name": cluster.get("name", ""),
+                "kind": cluster.get("kind", "customer"),
+                "status": cluster.get("status", "active"),
+                "last_seen_at": cluster.get("last_seen_at", ""),
+                "event_count": int(cluster.get("event_count", 0) or 0),
+                "slack_enabled": bool(cluster.get("slack_enabled", True)),
+            }
+            for cluster in clusters
+        ],
+        "cluster_counts": {
+            "total": len(clusters),
+            "active": len(active_clusters),
+            "disabled": len(disabled_clusters),
+        },
+        "event_counts": {
+            "total": int(summary.get("total_events", 0) or 0),
+            "recent_24h": int(summary.get("recent_24h", 0) or 0),
+        },
+        "breakdowns": {
+            "severity": _top_items(summary.get("by_severity", {}), limit=6),
+            "rule": _top_items(summary.get("by_rule", {}), limit=6),
+            "namespace": _top_items(summary.get("by_namespace", {}), limit=6),
+            "action": _top_items(summary.get("by_action", {}), limit=6),
+        },
+        "recent_events": [
+            {
+                "id": event.get("id", ""),
+                "cluster": event.get("cluster", ""),
+                "cluster_id": event.get("cluster_id", ""),
+                "rule": event.get("rule", ""),
+                "severity": event.get("severity", ""),
+                "namespace": event.get("namespace", ""),
+                "pod_name": event.get("pod_name", ""),
+                "timestamp": event.get("timestamp", "") or event.get("created_at", ""),
+            }
+            for event in recent_events
+        ],
+        "policy_counts": {
+            "applied": storage.count_policy_apply_history(user_id=user_id, statuses={"applied"}),
+            "generated_guides": storage.count_policy_apply_history(user_id=user_id, statuses={"not_configured"}),
+        },
+        "last_sync": summary.get("last_seen_at") or summary.get("latest_event_at") or "",
+    }
+
+
+def _top_items(values: dict[str, int], limit: int = 5) -> list[dict[str, Any]]:
+    return [
+        {"label": str(label), "count": int(count or 0)}
+        for label, count in sorted(values.items(), key=lambda item: item[1], reverse=True)[:limit]
+    ]
 
 
 def _count_gatekeeper_constraints() -> dict[str, Any]:

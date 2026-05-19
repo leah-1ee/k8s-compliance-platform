@@ -19,9 +19,11 @@ from app.classifier import classify_event
 from app.policy_generator import generate_policy
 from app.policy_generator import SUPPORTED_POLICY_EXAMPLES, UnsupportedPolicyError
 from app import storage
+from app.grafana.proxy import router as grafana_proxy_router
 from app.runtime_client import (
     apply_policy_manifest,
     build_dashboard_summary,
+    build_user_observability_summary,
     build_report,
     get_runtime_event,
     list_runtime_events,
@@ -238,6 +240,7 @@ app.add_exception_handler(
 )
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.include_router(grafana_proxy_router)
 
 
 @app.middleware("http")
@@ -467,6 +470,15 @@ def dashboard_summary(compliance_ai_session: str | None = Cookie(default=None)) 
         return auth_error
     assert user is not None
     return build_dashboard_summary(user_id=user["id"])
+
+
+@app.get("/api/observability/summary")
+def user_observability_summary(compliance_ai_session: str | None = Cookie(default=None)) -> dict:
+    user, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
+    assert user is not None
+    return build_user_observability_summary(user_id=user["id"])
 
 
 @app.get("/runtime-events/{event_id}")

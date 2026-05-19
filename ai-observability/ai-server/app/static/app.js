@@ -304,23 +304,83 @@ function renderDashboardSummary(summary = {}) {
       : String(summary.active_policies);
   $("#activePoliciesMetricDetail").textContent =
     summary.active_policies_error
-      ? `Gatekeeper API error: ${summary.active_policies_error}`
-      : summary.active_policies_source === "kubernetes"
-      ? "Live Gatekeeper constraints"
-      : "Gatekeeper API unavailable";
+      ? `Policy history error: ${summary.active_policies_error}`
+      : summary.active_policies_source === "user_policy_apply_history"
+      ? "Applied in your clusters"
+      : "Your applied policies";
   $("#recentViolationsMetric").textContent = String(summary.recent_violations ?? 0);
   $("#runtimeEventsMetric").textContent = String(summary.runtime_events ?? 0);
   $("#lastSyncMetric").textContent = formatRelativeTime(summary.last_sync || "");
   $("#lastSyncMetricDetail").textContent = summary.last_sync ? "Cluster telemetry" : "No cluster sync yet";
 }
 
+function renderObservabilityList(selector, items, emptyText) {
+  const list = $(selector);
+  if (!list) {
+    return;
+  }
+  if (!items.length) {
+    list.innerHTML = `<li>${escapeHtml(emptyText)}</li>`;
+    return;
+  }
+  list.innerHTML = items
+    .map((item) => `<li><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.count)}</strong></li>`)
+    .join("");
+}
+
+function renderUserObservability(summary = {}) {
+  if (!$("#ownedClusterMetric")) {
+    return;
+  }
+  const clusters = summary.clusters || [];
+  const clusterCounts = summary.cluster_counts || {};
+  const eventCounts = summary.event_counts || {};
+  const breakdowns = summary.breakdowns || {};
+  $("#ownedClusterMetric").textContent = authState.authenticated
+    ? `${clusterCounts.active || 0} active / ${clusterCounts.total || 0} total`
+    : "로그인 후 클러스터 상태를 확인할 수 있습니다.";
+  renderObservabilityList(
+    "#ownedClusterList",
+    clusters.slice(0, 6).map((cluster) => ({
+      label: `${cluster.name || "unknown-cluster"} · ${cluster.status || "active"}`,
+      count: cluster.event_count || 0,
+    })),
+    authState.authenticated ? "등록된 클러스터 없음" : "로그인 필요",
+  );
+  $("#runtimeMetricDetail").textContent = authState.authenticated
+    ? `${eventCounts.recent_24h || 0} events in the last 24h / ${eventCounts.total || 0} total`
+    : "사용자 소유 클러스터에서 수집된 이벤트만 집계합니다.";
+  renderObservabilityList(
+    "#severityBreakdownList",
+    breakdowns.severity || [],
+    authState.authenticated ? "수집된 이벤트 없음" : "로그인 필요",
+  );
+  const topSignals = [
+    ...(breakdowns.rule || []).slice(0, 3).map((item) => ({ label: `Rule: ${item.label}`, count: item.count })),
+    ...(breakdowns.namespace || []).slice(0, 3).map((item) => ({ label: `Namespace: ${item.label}`, count: item.count })),
+  ];
+  $("#topSignalsDetail").textContent = authState.authenticated
+    ? "Rules and namespaces scoped to your clusters"
+    : "규칙과 네임스페이스를 사용자 범위 안에서 요약합니다.";
+  renderObservabilityList(
+    "#topSignalsList",
+    topSignals,
+    authState.authenticated ? "수집된 신호 없음" : "로그인 필요",
+  );
+}
+
 async function refreshDashboardSummary() {
   if (!authState.authenticated) {
     renderDashboardSummary({});
+    renderUserObservability({});
     return;
   }
-  const summary = await apiJson("/dashboard-summary");
+  const [summary, observability] = await Promise.all([
+    apiJson("/dashboard-summary"),
+    apiJson("/api/observability/summary"),
+  ]);
   renderDashboardSummary(summary);
+  renderUserObservability(observability);
 }
 
 function runtimeEventLabel(event) {
@@ -1914,6 +1974,7 @@ async function logout() {
   renderSlackSettings();
   renderPolicyApplyPanel();
   renderDashboardSummary({});
+  renderUserObservability({});
   selectedRuntimeEvent = null;
   renderSelectedRuntimeEventState("ready");
   $("#runtimeEvents").innerHTML = "";

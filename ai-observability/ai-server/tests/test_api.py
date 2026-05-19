@@ -1277,15 +1277,12 @@ def test_runtime_features_require_login():
     assert client.get("/resource-manifest?namespace=default&pod=test-pod").status_code == 401
     assert client.post("/analyze-runtime-event/missing-event").status_code == 401
     assert client.get("/dashboard-summary").status_code == 401
+    assert client.get("/api/observability/summary").status_code == 401
     assert client.get("/compliance-report").status_code == 401
     assert client.post("/api/clusters/missing-cluster/policy-applies", json={"manifest": "kind: Pod"}).status_code == 401
 
 
-def test_dashboard_summary_uses_live_counts(monkeypatch):
-    monkeypatch.setattr(
-        "app.runtime_client._count_gatekeeper_constraints",
-        lambda: {"count": 7, "source": "kubernetes", "error": ""},
-    )
+def test_dashboard_summary_uses_user_scoped_policy_and_event_counts():
     owner = storage.upsert_user(
         provider="dev",
         provider_subject="dashboard-summary-owner@example.test",
@@ -1293,6 +1290,14 @@ def test_dashboard_summary_uses_live_counts(monkeypatch):
     )
     session = storage.create_session(owner["id"])
     cluster = storage.create_cluster("dashboard-summary-cluster", user_id=owner["id"])
+    storage.save_policy_apply_history(
+        user_id=owner["id"],
+        cluster_id=cluster["id"],
+        policy_type="gatekeeper_constraint",
+        policy_name="require-owner",
+        manifest="apiVersion: constraints.gatekeeper.sh/v1beta1\nkind: K8sRequiredLabels\nmetadata:\n  name: require-owner\n",
+        status="applied",
+    )
     event_time = datetime.now(timezone.utc).isoformat()
     storage.mark_cluster_seen(cluster["id"], event_time)
     client.post(
@@ -1311,11 +1316,62 @@ def test_dashboard_summary_uses_live_counts(monkeypatch):
     body = response.json()
 
     assert response.status_code == 200
-    assert body["active_policies"] == 7
-    assert body["active_policies_source"] == "kubernetes"
+    assert body["active_policies"] == 1
+    assert body["active_policies_source"] == "user_policy_apply_history"
     assert body["runtime_events"] >= 1
     assert body["recent_violations"] >= 1
     assert body["last_sync"] == event_time
+
+
+def test_user_observability_summary_is_scoped_to_owned_clusters():
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="observability-owner@example.test",
+        email="observability-owner@example.test",
+    )
+    other = storage.upsert_user(
+        provider="dev",
+        provider_subject="observability-other@example.test",
+        email="observability-other@example.test",
+    )
+    session = storage.create_session(owner["id"])
+    owner_cluster = storage.create_cluster("observability-owned", user_id=owner["id"])
+    other_cluster = storage.create_cluster("observability-other", user_id=other["id"])
+    client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {owner_cluster['token']}"},
+        json={
+            "event": {
+                "time": datetime.now(timezone.utc).isoformat(),
+                "rule": "Owner Runtime Signal",
+                "priority": "Critical",
+                "output_fields": {"k8s.ns.name": "owned-ns", "k8s.pod.name": "owned-pod"},
+            },
+        },
+    )
+    client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {other_cluster['token']}"},
+        json={
+            "event": {
+                "time": datetime.now(timezone.utc).isoformat(),
+                "rule": "Other Runtime Signal",
+                "priority": "Critical",
+                "output_fields": {"k8s.ns.name": "other-ns", "k8s.pod.name": "other-pod"},
+            },
+        },
+    )
+
+    response = client.get("/api/observability/summary", cookies={"compliance_ai_session": session})
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["scope"] == "user_owned_clusters"
+    assert body["cluster_counts"]["total"] == 1
+    assert [cluster["name"] for cluster in body["clusters"]] == ["observability-owned"]
+    assert body["event_counts"]["total"] == 1
+    assert {item["label"] for item in body["breakdowns"]["rule"]} == {"Owner Runtime Signal"}
+    assert {item["label"] for item in body["breakdowns"]["namespace"]} == {"owned-ns"}
 
 
 def test_policy_apply_rejects_cluster_owned_by_other_user():

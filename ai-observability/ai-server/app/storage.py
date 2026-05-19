@@ -467,6 +467,27 @@ def list_policy_apply_history(user_id: str = "", cluster_id: str = "", limit: in
     return [_row_to_policy_apply_history(row) for row in rows]
 
 
+def count_policy_apply_history(user_id: str = "", statuses: set[str] | None = None) -> int:
+    init_db()
+    filters: list[str] = []
+    params: list[Any] = []
+    if user_id:
+        filters.append("user_id = ?")
+        params.append(user_id)
+    normalized_statuses = sorted(str(status or "").strip() for status in (statuses or set()) if str(status or "").strip())
+    if normalized_statuses:
+        placeholders = ", ".join("?" for _ in normalized_statuses)
+        filters.append(f"status IN ({placeholders})")
+        params.extend(normalized_statuses)
+    where = f"WHERE {' AND '.join(filters)}" if filters else ""
+    with _connect() as conn:
+        row = conn.execute(
+            f"SELECT COUNT(DISTINCT manifest_hash) AS count FROM policy_apply_history {where}",
+            params,
+        ).fetchone()
+    return int(row["count"] or 0)
+
+
 def create_cluster(name: str, kind: str = "customer", user_id: str = "") -> dict[str, Any]:
     init_db()
     normalized = _normalize_cluster_name(name)

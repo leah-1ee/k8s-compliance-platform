@@ -952,6 +952,7 @@ h2 {
 .grafana-dashboard-card li {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   min-height: 28px;
   padding: 0 10px;
@@ -961,6 +962,19 @@ h2 {
   color: var(--secondary-text);
   font-size: 12px;
   font-weight: 760;
+}
+
+.grafana-dashboard-card li span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grafana-dashboard-card li strong {
+  flex: 0 0 auto;
+  color: var(--primary-text);
+  font-size: 12px;
 }
 
 .grafana-dashboard-card li::before {
