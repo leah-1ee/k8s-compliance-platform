@@ -210,6 +210,13 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function highlightEditableCommand(value) {
+  return escapeHtml(value).replaceAll(
+    "alice@example.com",
+    '<span class="command-editable-value" contenteditable="true" spellcheck="false">alice@example.com</span>',
+  );
+}
+
 function shortEventId(event) {
   const id = String(event?.id || "");
   return id ? id.slice(0, 8) : "no-id";
@@ -693,7 +700,7 @@ function renderPolicyFallbackSteps(fallback = {}) {
                     <button class="secondary" data-copy-policy-step="${targetId}" type="button">복사</button>
                   </span>
                 </summary>
-                <pre id="${targetId}">${escapeHtml(step.command)}</pre>
+                <pre id="${targetId}" class="policy-apply-command" contenteditable="true" spellcheck="false">${highlightEditableCommand(step.command)}</pre>
               </details>
             `;
           })
@@ -712,14 +719,18 @@ function renderPolicyApplyResult(result) {
   const status = result?.status || "unknown";
   badge.textContent = status;
   badge.className = `badge compact ${status === "applied" ? "ready" : status === "not_configured" ? "medium" : "error"}`;
+  const isKubectlGuide = status === "not_configured";
   const rows = (result.resources || [])
     .map(
       (item) => `
         <div class="policy-apply-resource">
           <strong>${escapeHtml(item.order || "-")}. ${escapeHtml(item.kind || "Unknown")} / ${escapeHtml(item.name || "-")}</strong>
           <p>
-            dry-run=${escapeHtml(item.dry_run_status || "skipped")} ·
-            apply=${escapeHtml(item.apply_status || "skipped")}
+            ${
+              isKubectlGuide
+                ? "kubectl 단계에서 실행 예정"
+                : `dry-run=${escapeHtml(item.dry_run_status || "skipped")} · apply=${escapeHtml(item.apply_status || "skipped")}`
+            }
             ${item.namespace ? ` · ns=${escapeHtml(item.namespace)}` : ""}
           </p>
           ${item.error ? `<pre>${escapeHtml(item.error)}</pre>` : ""}
@@ -1563,7 +1574,7 @@ document.addEventListener("click", (event) => {
   event.preventDefault();
   event.stopPropagation();
   const target = document.getElementById(copyButton.dataset.copyPolicyStep || "");
-  copyText(target?.textContent || "")
+  copyText(target?.innerText || target?.textContent || "")
     .then(() => showToast("kubectl 단계 복사 완료"))
     .catch((error) => showToast(error.message));
 });

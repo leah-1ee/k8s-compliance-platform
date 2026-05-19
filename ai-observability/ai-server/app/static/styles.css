@@ -36,6 +36,8 @@
   --code-text: #dbeafe;
   --code-muted: #94a3b8;
   --code-empty: #64748b;
+  --code-editable-text: #ef4444;
+  --code-editable-bg: rgba(239, 68, 68, 0.12);
   --status-danger-bg: #fef2f2;
   --status-danger-border: #fecaca;
   --status-warn-bg: #fff7ed;
@@ -109,6 +111,8 @@
   --code-text: #dbeafe;
   --code-muted: #a1a1aa;
   --code-empty: #8b8b8b;
+  --code-editable-text: #fca5a5;
+  --code-editable-bg: rgba(248, 113, 113, 0.16);
   --status-danger-bg: rgba(248, 113, 113, 0.16);
   --status-danger-border: rgba(248, 113, 113, 0.42);
   --status-warn-bg: rgba(251, 191, 36, 0.16);
@@ -1553,6 +1557,27 @@ select:focus {
 .policy-apply-step pre {
   border-top: 1px solid var(--line);
   border-radius: 0;
+  background: var(--code-bg);
+  color: var(--code-text);
+  outline: none;
+}
+
+.policy-apply-step pre:focus {
+  box-shadow: inset 0 0 0 2px var(--focus);
+}
+
+.command-editable-value {
+  display: inline;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: var(--code-editable-bg);
+  color: var(--code-editable-text);
+  font-weight: 850;
+  outline: none;
+}
+
+.command-editable-value:focus {
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 .policy-apply-error {
