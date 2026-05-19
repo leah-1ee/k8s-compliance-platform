@@ -4,8 +4,7 @@ import secrets
 import shlex
 from contextvars import ContextVar
 from pathlib import Path
-from urllib.parse import quote
-from urllib.parse import urlencode, urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
 
 import httpx
 from fastapi import Cookie, FastAPI, Header, Request
@@ -726,12 +725,11 @@ def provision_cluster_grafana(
         provisioning = provision_user(user["id"], cluster["id"], user.get("email", ""))
     except ProvisioningError as error:
         return JSONResponse(status_code=502, content={"error": str(error)})
-    dashboard_path = str(provisioning.get("dashboard_url") or "/d/kubeowl-observability/kubeowl-observability")
-    if not dashboard_path.startswith("/"):
-        dashboard_path = f"/{dashboard_path}"
     org_id = provisioning.get("org_id")
-    redirect_to = quote(dashboard_path, safe="/?=&")
-    grafana_url = f"/grafana-ui/org/switch/{org_id}?redirectTo={redirect_to}" if org_id else f"/grafana-ui{dashboard_path}"
+    grafana_url = _grafana_dashboard_url(
+        str(provisioning.get("dashboard_url") or "/d/kubeowl-observability/kubeowl-observability"),
+        org_id,
+    )
     return {
         "status": "provisioned",
         "cluster": {
@@ -744,6 +742,20 @@ def provision_cluster_grafana(
             "url": grafana_url,
         },
     }
+
+
+def _grafana_dashboard_url(dashboard_url: str, org_id: int | str | None) -> str:
+    normalized = str(dashboard_url or "").strip() or "/d/kubeowl-observability/kubeowl-observability"
+    if not normalized.startswith("/"):
+        normalized = f"/{normalized}"
+    if not normalized.startswith("/grafana-ui/"):
+        normalized = f"/grafana-ui{normalized}"
+    if not org_id:
+        return normalized
+    parts = urlsplit(normalized)
+    query = [(key, value) for key, value in parse_qsl(parts.query, keep_blank_values=True) if key != "orgId"]
+    query.append(("orgId", str(org_id)))
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 
 @app.post("/api/clusters/{cluster_id}/policy-applies")

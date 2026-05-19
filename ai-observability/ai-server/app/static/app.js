@@ -8,7 +8,6 @@ let latestReportText = "";
 let latestReportHtml = "";
 let latestManifestCommand = "";
 let selectedRuntimeEvent = null;
-let grafanaUrl = "";
 let authState = { authenticated: false, user: null, auth: { google_configured: false, dev_enabled: false } };
 let userClusters = [];
 let slackSettings = { webhook_url: "", configured: false };
@@ -1135,7 +1134,7 @@ function renderUserClusters() {
         const isDeleted = cluster.status === "deleted";
         return `
         <div class="cluster-row">
-          <div>
+          <div class="cluster-row-copy">
             <strong>${escapeHtml(cluster.name || "unknown-cluster")}</strong>
             <p>
               status=${escapeHtml(cluster.status || "active")} ·
@@ -1153,7 +1152,15 @@ function renderUserClusters() {
                 : `
                   <button class="secondary" data-user-grafana="${escapeHtml(cluster.id || "")}">Grafana</button>
                   <button data-user-rotate="${escapeHtml(cluster.id || "")}">토큰 재발급</button>
-                  <button class="secondary" data-user-delete="${escapeHtml(cluster.id || "")}">휴지통</button>
+                  <button class="danger-icon-button" data-user-delete="${escapeHtml(cluster.id || "")}" aria-label="휴지통으로 이동" title="휴지통으로 이동">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M3 6h18"></path>
+                      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                      <path d="M10 11v6"></path>
+                      <path d="M14 11v6"></path>
+                    </svg>
+                  </button>
                 `
             }
           </div>
@@ -1408,7 +1415,7 @@ async function openClusterGrafana(clusterId) {
   const body = await apiJson(`/api/clusters/${encodeURIComponent(clusterId)}/grafana/provision`, {
     method: "POST",
   });
-  const url = body.grafana?.url || grafanaUrl;
+  const url = body.grafana?.url || "";
   if (!url) {
     grafanaWindow?.close();
     showToast("Grafana URL 설정 필요");
@@ -1920,13 +1927,6 @@ $("#logoutButton").addEventListener("click", () => {
     .catch((error) => showToast(error.message));
 });
 
-$("#grafanaLink").addEventListener("click", (event) => {
-  if (!grafanaUrl) {
-    event.preventDefault();
-    showToast("Grafana URL 설정 필요");
-  }
-});
-
 $("#themeToggle").addEventListener("click", () => {
   toggleTheme();
 });
@@ -1954,12 +1954,7 @@ $("#landingPolicyButton").addEventListener("click", () => {
 async function loadConfig() {
   const response = await fetch("/config");
   const config = await response.json();
-  grafanaUrl = config.grafana_url || "";
-  if (grafanaUrl) {
-    $("#grafanaLink").href = grafanaUrl;
-    $("#grafanaLink").target = "_blank";
-    $("#grafanaLink").rel = "noreferrer";
-  }
+  void config;
 }
 
 async function loadAuthStatus() {

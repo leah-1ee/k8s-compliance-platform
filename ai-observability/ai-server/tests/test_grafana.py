@@ -154,7 +154,7 @@ def test_cluster_grafana_provision_endpoint_calls_provisioner(monkeypatch):
     }
     assert body["status"] == "provisioned"
     assert body["grafana"]["org_id"] == 42
-    assert body["grafana"]["url"].startswith("/grafana-ui/org/switch/42")
+    assert body["grafana"]["url"] == "/grafana-ui/d/kubeowl-observability/kubeowl-observability?orgId=42"
 
 
 def test_cluster_grafana_provision_requires_cluster_ownership(monkeypatch):
@@ -225,6 +225,35 @@ def test_grafana_ui_proxy_injects_auth_proxy_headers(monkeypatch):
     assert captured["headers"]["X-WEBAUTH-USER"] == "grafana-ui-proxy@example.test"
     assert captured["headers"]["X-WEBAUTH-EMAIL"] == "grafana-ui-proxy@example.test"
     assert captured["headers"]["X-WEBAUTH-NAME"] == "Grafana Viewer"
+
+
+def test_grafana_ui_proxy_headers_are_ascii_safe_for_non_ascii_names(monkeypatch):
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="grafana-ui-korean@example.test",
+        email="grafana-ui-korean@example.test",
+        name="홍길동",
+    )
+    session = storage.create_session(user["id"])
+    captured = {}
+
+    async def fake_forward(request, upstream_path, user):
+        headers = ui_proxy._request_headers(request, user)
+        captured["headers"] = headers
+        return httpx.Response(200, text="grafana ok")
+
+    monkeypatch.setattr(ui_proxy, "_forward_grafana_request", fake_forward)
+
+    response = client.get(
+        "/grafana-ui/d/kubeowl-observability/kubeowl-observability",
+        cookies={"compliance_ai_session": session},
+    )
+
+    assert response.status_code == 200
+    assert captured["headers"]["X-WEBAUTH-USER"] == "grafana-ui-korean@example.test"
+    assert captured["headers"]["X-WEBAUTH-NAME"] == "grafana-ui-korean@example.test"
+    for value in captured["headers"].values():
+        value.encode("ascii")
 
 
 def test_dashboard_payload_fetches_master_dashboard_and_rewrites_datasource(monkeypatch):

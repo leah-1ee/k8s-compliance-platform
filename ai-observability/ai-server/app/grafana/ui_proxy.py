@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import unicodedata
 from typing import Any
 
 import httpx
@@ -64,19 +65,26 @@ async def _forward_grafana_request(request: Request, upstream_path: str, user: d
 
 
 def _request_headers(request: Request, user: dict[str, Any]) -> dict[str, str]:
+    email = _ascii_header_value(user.get("email") or user.get("id") or "")
+    name = _ascii_header_value(user.get("name") or user.get("email") or "") or email
     headers: dict[str, str] = {
-        "X-WEBAUTH-USER": str(user.get("email") or user.get("id") or ""),
-        "X-WEBAUTH-EMAIL": str(user.get("email") or ""),
-        "X-WEBAUTH-NAME": str(user.get("name") or user.get("email") or ""),
-        "X-Forwarded-Host": request.headers.get("host", ""),
-        "X-Forwarded-Proto": request.url.scheme,
+        "X-WEBAUTH-USER": email,
+        "X-WEBAUTH-EMAIL": email,
+        "X-WEBAUTH-NAME": name,
+        "X-Forwarded-Host": _ascii_header_value(request.headers.get("host", "")),
+        "X-Forwarded-Proto": _ascii_header_value(request.url.scheme),
         "X-Forwarded-Prefix": "/grafana-ui",
     }
     for key in ("accept", "accept-encoding", "content-type", "cookie", "user-agent"):
         value = request.headers.get(key)
         if value:
-            headers[key] = value
+            headers[key] = _ascii_header_value(value)
     return headers
+
+
+def _ascii_header_value(value: Any) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    return normalized.encode("ascii", "ignore").decode("ascii").strip()
 
 
 def _response_headers(response: httpx.Response) -> dict[str, str]:

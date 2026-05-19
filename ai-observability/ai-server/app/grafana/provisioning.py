@@ -50,6 +50,7 @@ def provision_user(user_id: str, cluster_id: str, email: str) -> dict[str, Any]:
             else:
                 org_id = int(org["id"])
 
+            _switch_org(client, org_id)
             datasource_uid = _datasource_uid(normalized_cluster_id)
             datasource = _ensure_datasource(client, org_id, normalized_user_id, normalized_cluster_id, datasource_uid)
             dashboard_urls = _import_dashboards(client, org_id, datasource_uid)
@@ -105,6 +106,12 @@ def _get_org(client: httpx.Client, org_name: str) -> dict[str, Any] | None:
     return response.json()
 
 
+def _switch_org(client: httpx.Client, org_id: int) -> None:
+    response = client.post(f"/api/user/using/{org_id}")
+    if response.status_code != 200:
+        raise ProvisioningError(f"Grafana org switch failed: {response.status_code} {response.text}")
+
+
 def _ensure_datasource(
     client: httpx.Client,
     org_id: int,
@@ -132,7 +139,8 @@ def _ensure_datasource(
     }
     if existing.status_code == 200:
         datasource = existing.json()
-        response = client.put(f"/api/datasources/{datasource['id']}", headers=headers, json=payload)
+        existing_uid = datasource.get("uid") or datasource_uid
+        response = client.put(f"/api/datasources/uid/{existing_uid}", headers=headers, json=payload)
     elif existing.status_code == 404:
         response = client.post("/api/datasources", headers=headers, json=payload)
     else:

@@ -88,6 +88,9 @@ Next build/deploy tag for current AI server/UI changes: `docker.io/leeon3345/com
 - TASK-11 UI hardening done locally: policy fallback guide now explains up front that the AI server cannot directly apply to user clusters, splits kubectl commands into editable/copyable steps, uses supplied arrow icons, improves light-mode code contrast, and labels fallback resources as pending kubectl execution instead of `skipped`.
 - TASK-11 Cluster Setup cleanup done locally: user trash view is intended to show deleted clusters only, deleted clusters can be restored or permanently deleted, and deleted clusters are purged automatically after 3 days.
 - TASK-12 created: Google OAuth live activation and admin console cleanup are next; validation and docs are intentionally last.
+- TASK-13 done locally/VM-iterated: secure Grafana OSS multi-tenant observability implemented with Prometheus ClusterIP, Grafana ClusterIP behind KubeOwl `/grafana-ui/` auth proxy, Prometheus proxy query injection, per-user Grafana org provisioning, proxy-backed datasource, multi-dashboard master copy via `GRAFANA_MASTER_DASHBOARD_UIDS`, audit logging, rate limiting, and tests.
+- TASK-13 VM findings fixed locally: NetworkPolicy needs namespaceSelector + podSelector because ai-server runs in `compliance-system` while Prometheus/Grafana run in `monitoring`; Grafana 13 datasource update needs UID endpoint; auth proxy headers must be ASCII-safe for Korean display names; dashboard opening should use `/grafana-ui/d/...?...orgId=<user-org>` instead of `/org/switch`.
+- TASK-13 UI follow-up done locally: removed topbar global Grafana button, kept Grafana access on per-cluster rows, changed cluster row actions to vertical layout, and replaced the user trash action text with a red icon-only button.
 - TASK-07 note: no AI server code or UI changed; no new AI server image tag is required
 - Tests: `63 passed, 61 warnings` in `ai-observability/ai-server/tests`; `node --check ai-observability/ai-server/app/static/app.js` passes
 
@@ -163,12 +166,12 @@ Next build/deploy tag for current AI server/UI changes: `docker.io/leeon3345/com
 
 ## Remaining Tasks (priority order)
 
-1. **TASK-11 0.1.20 rollout and smoke (P0)** — build/push `docker.io/leeon3345/compliance-ai-server:0.1.20`, roll out `deploy/ai-classifier`, hard-refresh UI, and verify policy fallback guide plus Cluster Setup trash/permanent delete behavior.
+1. **TASK-14 Admin Grafana Access (P0)** — add `/admin` admin-only Grafana entrypoint for master/admin dashboards while keeping normal users on per-cluster `/grafana-ui/` Viewer org flow.
 2. **TASK-12 Google OAuth live activation (P0)** — after Google Console signup and real credentials exist, create real `ai-google-oauth` secret, switch off dev-login, and smoke-test the live Google login/callback/logout flow.
 3. **TASK-12 Admin page cleanup/refactor (P1)** — add first-class admin archive/restore/permanent-delete UX for test clusters, improve table filtering/search, and separate user/cluster/event operations.
 4. **Demo data cleanup controls (P1)** — provide safe cleanup for old test clusters/events/apply history after admin actions are implemented.
-5. **Grafana cleanup (P2)** — decide whether the visible `Grafana Overview` dashboard is external/default or should be removed/renamed; keep repo JSON/ConfigMaps as source of truth.
-6. **Final verification (P3)** — verify one end-to-end story: generate/apply Gatekeeper policy via fallback, trigger/observe violation, show Runtime Detection event, run Violation Detail, generate AI Report PDF, and show Grafana dashboards.
+5. **Grafana cleanup (P2)** — decide whether the visible `Grafana Overview` dashboard should be imported as a master dashboard or retired; keep repo JSON/ConfigMaps as source of truth.
+6. **Final verification (P3)** — verify one end-to-end story: generate/apply Gatekeeper policy via fallback, trigger/observe violation, show Runtime Detection event, run Violation Detail, generate AI Report PDF, and show user-scoped Grafana dashboards.
 7. **Final docs (P4)** — document zrok stabilization, OAuth setup/rollback, image tag/deploy procedure, SQLite/Grafana backup and persistence, Grafana dashboard apply commands, demo data cleanup, and user-cluster RBAC expectations.
 
 ## Do Not Change (fixed decisions)
@@ -194,8 +197,13 @@ ai-observability/ai-server/app/static/index.html
 ai-observability/ai-server/app/static/app.js
 ai-observability/ai-server/app/static/styles.css
 ai-observability/ai-server/app/static/assets/kubeowl-logo.png
+ai-observability/ai-server/app/grafana/
 ai-observability/ai-server/tests/test_api.py
+ai-observability/ai-server/tests/test_grafana.py
+ai-observability/ai-server/tests/test_promql_inject.py
+ai-observability/ai-server/tests/test_proxy_auth.py
 ai-observability/dashboards/grafana/
+./k8s/
 ai-observability/k8s/ai-server.yaml
 ai-observability/docs/ai-server-test/task6-manifest-snapshot/
 ai-observability/docs/ai-server-test/task7-policy-falco-hygiene/
@@ -217,6 +225,8 @@ cloud-deploy/ai-server.yaml
 .context/Task9.md
 .context/Task10.md
 .context/Task12.md
+.context/Task13.md
+.context/Task14.md
 ```
 
-Last AI server test result: `63 passed, 61 warnings` after policy fallback guide hardening, editable kubectl commands, user trash deleted-only/permanent-delete cleanup, and 3-day deleted-cluster auto purge
+Last AI server test result: `85 passed, 67 warnings` after TASK-13 Grafana auth proxy, multi-dashboard provisioning, and user Grafana UX cleanup.

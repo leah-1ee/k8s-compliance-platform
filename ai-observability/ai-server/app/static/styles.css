@@ -576,10 +576,6 @@ body:has(#landingIntro:not([hidden])) .workspace {
   display: none;
 }
 
-body.logged-out #grafanaLink {
-  display: none;
-}
-
 .landing-intro {
   display: grid;
   gap: clamp(1.5rem, 3vw, 3rem);
@@ -1855,20 +1851,58 @@ pre[data-empty="true"] {
 
 .cluster-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(108px, auto);
   gap: 12px;
-  align-items: center;
+  align-items: start;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--card-soft);
 }
 
+.cluster-row-copy {
+  min-width: 0;
+}
+
+.cluster-row-copy strong,
+.cluster-row-copy p {
+  overflow-wrap: anywhere;
+}
+
 .cluster-row-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 8px;
-  justify-content: flex-end;
+  justify-items: stretch;
+  min-width: 108px;
+}
+
+.cluster-row-actions button {
+  width: 100%;
+  min-height: 36px;
+}
+
+.danger-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-color: #b91c1c;
+  background: #dc2626;
+  color: #fff;
+}
+
+.danger-icon-button:hover {
+  border-color: #991b1b;
+  background: #b91c1c;
+}
+
+.danger-icon-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .cluster-trash-toggle {
