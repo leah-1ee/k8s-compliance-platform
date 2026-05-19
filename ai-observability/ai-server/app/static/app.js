@@ -563,9 +563,17 @@ function ensurePolicyApplyPanel() {
     <div class="policy-apply-heading">
       <div>
         <h2>클러스터에 적용</h2>
-        <p>생성된 YAML을 선택한 활성 클러스터에 dry-run 검증 후 적용합니다.</p>
+        <p>중앙 서버가 직접 적용할 수 없으면, 사용자가 실행할 kubectl 적용 가이드를 생성합니다.</p>
       </div>
       <span id="policyApplyStatusBadge" class="badge compact">대기</span>
+    </div>
+    <div class="policy-apply-notice">
+      <strong>적용 방식</strong>
+      <ol>
+        <li>중앙 서버 적용이 설정된 클러스터는 dry-run 검증 후 적용합니다.</li>
+        <li>직접 적용이 설정되지 않은 클러스터는 권한 확인, RBAC, dry-run, apply 명령을 순서대로 보여줍니다.</li>
+        <li>터미널에서 <code>kubectl config current-context</code>로 대상 클러스터를 확인한 뒤 표시된 명령을 실행하세요.</li>
+      </ol>
     </div>
     <div class="policy-apply-controls">
       <label>
@@ -606,11 +614,11 @@ function renderPolicyApplyPanel() {
   }
   const hasPolicy = Boolean(latestPolicyManifestText.trim());
   const hasCluster = activeClusters.length > 0;
-  $("#applyGeneratedPolicy").disabled = !hasPolicy || !hasCluster;
+  $("#applyGeneratedPolicy").disabled = !hasPolicy;
   $("#policyApplyHint").textContent = hasPolicy
     ? hasCluster
-      ? "Gatekeeper validation constraint만 Live Gatekeeper constraints 지표에 반영됩니다."
-      : "활성 클러스터가 없습니다. Cluster Setup에서 클러스터를 등록하거나 복원 후 토큰을 재발급하세요."
+      ? "Gatekeeper validation constraint만 Live Gatekeeper constraints 지표에 반영됩니다. NetworkPolicy와 mutation은 별도 정책으로 표시됩니다."
+      : "선택 가능한 활성 클러스터가 없습니다. Cluster Setup에서 클러스터를 등록하거나 복원 후 토큰을 재발급하세요."
     : "정책을 생성하면 적용 대상을 선택할 수 있습니다.";
 }
 
@@ -1024,9 +1032,24 @@ async function applyGeneratedPolicy() {
     showToast("먼저 정책을 생성해 주세요");
     return;
   }
+  const activeClusters = userClusters.filter((cluster) => cluster.status === "active");
+  if (activeClusters.length === 0) {
+    renderPolicyApplyResult({
+      status: "not_ready",
+      error: "선택 가능한 활성 클러스터가 없습니다. Cluster Setup에서 클러스터를 등록하거나 복원 후 토큰을 재발급하세요.",
+      resources: [],
+    });
+    showToast("활성 클러스터 없음");
+    return;
+  }
   const clusterId = $("#policyApplyCluster")?.value || "";
   if (!clusterId) {
-    showToast("적용할 클러스터를 선택해 주세요");
+    renderPolicyApplyResult({
+      status: "not_ready",
+      error: "적용할 대상 클러스터를 먼저 선택해 주세요.",
+      resources: [],
+    });
+    showToast("대상 클러스터 선택 필요");
     return;
   }
   const cluster = userClusters.find((item) => item.id === clusterId);
@@ -1090,7 +1113,7 @@ function ensureSlackSettingsPanel() {
       <div class="slack-cluster-section">
         <div>
           <h3>클러스터별 알림</h3>
-          <p class="muted">High/Critical 런타임 이벤트만 Slack으로 전송합니다.</p>
+          <p class="muted slack-cluster-helper">High/Critical 런타임 이벤트만 Slack으로 전송합니다.</p>
         </div>
         <div id="slackClusterToggles" class="slack-cluster-list"></div>
       </div>
@@ -1120,7 +1143,7 @@ function renderSlackClusterToggles() {
     return;
   }
   if (!userClusters.length) {
-    container.innerHTML = '<p class="muted">Slack 알림을 켤 클러스터가 없습니다.</p>';
+    container.innerHTML = '<p class="muted slack-cluster-empty">Slack 알림을 켤 클러스터가 없습니다.</p>';
     return;
   }
   container.innerHTML = userClusters
