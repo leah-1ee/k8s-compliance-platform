@@ -1293,13 +1293,14 @@ def test_dashboard_summary_uses_live_counts(monkeypatch):
     )
     session = storage.create_session(owner["id"])
     cluster = storage.create_cluster("dashboard-summary-cluster", user_id=owner["id"])
-    storage.mark_cluster_seen(cluster["id"], "2026-05-18T10:00:00Z")
+    event_time = datetime.now(timezone.utc).isoformat()
+    storage.mark_cluster_seen(cluster["id"], event_time)
     client.post(
         "/ingest/falco-events",
         headers={"Authorization": f"Bearer {cluster['token']}"},
         json={
             "event": {
-                "time": "2026-05-18T09:30:00Z",
+                "time": event_time,
                 "rule": "Dashboard Summary Event",
                 "priority": "Warning",
             },
@@ -1314,7 +1315,7 @@ def test_dashboard_summary_uses_live_counts(monkeypatch):
     assert body["active_policies_source"] == "kubernetes"
     assert body["runtime_events"] >= 1
     assert body["recent_violations"] >= 1
-    assert body["last_sync"] == "2026-05-18T10:00:00Z"
+    assert body["last_sync"] == event_time
 
 
 def test_policy_apply_rejects_cluster_owned_by_other_user():
@@ -1632,6 +1633,54 @@ def test_admin_cluster_lifecycle():
     assert disable_response.status_code == 200
     assert disable_response.json()["cluster"]["status"] == "disabled"
 
+    trash_response = client.delete(
+        f"/admin/api/clusters/{cluster_id}",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+
+    assert trash_response.status_code == 200
+    assert trash_response.json()["cluster"]["status"] == "deleted"
+    assert trash_response.json()["cluster"]["deleted_at"]
+
+    rotate_deleted_response = client.post(
+        f"/admin/api/clusters/{cluster_id}/rotate-token",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    assert rotate_deleted_response.status_code == 404
+
+    deleted_list_response = client.get(
+        "/admin/api/clusters?status=deleted",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    assert any(item["id"] == cluster_id for item in deleted_list_response.json()["clusters"])
+
+    restore_response = client.post(
+        f"/admin/api/clusters/{cluster_id}/restore",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    assert restore_response.status_code == 200
+    assert restore_response.json()["cluster"]["status"] == "disabled"
+    assert restore_response.json()["cluster"]["deleted_at"] is None
+
+    trash_again_response = client.delete(
+        f"/admin/api/clusters/{cluster_id}",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    assert trash_again_response.status_code == 200
+
+    purge_response = client.delete(
+        f"/admin/api/clusters/{cluster_id}/permanent",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    assert purge_response.status_code == 200
+    assert purge_response.json()["status"] == "deleted"
+
+    purge_missing_response = client.delete(
+        f"/admin/api/clusters/{cluster_id}/permanent",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    assert purge_missing_response.status_code == 404
+
 
 def test_admin_dashboard_lists_users_and_event_counts():
     user = storage.upsert_user(
@@ -1641,6 +1690,7 @@ def test_admin_dashboard_lists_users_and_event_counts():
         name="Admin Dashboard User",
     )
     cluster = storage.create_cluster("admin-dashboard-cluster", user_id=user["id"])
+    storage.save_slack_settings(user["id"], "https://hooks.slack.com/services/T111/B222/ADMIN")
     client.post(
         "/ingest/falco-events",
         headers={"Authorization": f"Bearer {cluster['token']}"},
@@ -1667,11 +1717,13 @@ def test_admin_dashboard_lists_users_and_event_counts():
     assert listed_user["email"] == "admin-dashboard-user@example.test"
     assert listed_user["cluster_count"] == 1
     assert listed_user["active_cluster_count"] == 1
+    assert listed_user["deleted_cluster_count"] == 0
     assert listed_user["event_count"] == 1
     assert listed_user["last_seen_at"] == "2026-05-13T00:00:00Z"
+    assert listed_user["slack_configured"] is True
 
     clusters_response = client.get(
-        "/admin/api/clusters",
+        "/admin/api/clusters?q=admin-dashboard-user%40example.test&kind=customer&status=active",
         headers={"X-Admin-Token": "test-admin-token"},
     )
     clusters_body = clusters_response.json()
@@ -1689,6 +1741,7 @@ def test_admin_dashboard_lists_users_and_event_counts():
 
     assert user_clusters_response.status_code == 200
     assert user_clusters_body["user"]["email"] == "admin-dashboard-user@example.test"
+    assert user_clusters_body["slack"]["configured"] is True
     assert [item["id"] for item in user_clusters_body["clusters"]] == [cluster["id"]]
 
 

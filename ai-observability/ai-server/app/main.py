@@ -751,11 +751,26 @@ def admin() -> FileResponse:
 
 
 @app.get("/admin/api/clusters")
-def admin_list_clusters(x_admin_token: str | None = Header(default=None)):
+def admin_list_clusters(
+    include_deleted: bool = True,
+    deleted_only: bool = False,
+    status: str = "",
+    kind: str = "",
+    q: str = "",
+    x_admin_token: str | None = Header(default=None),
+):
     auth_error = require_admin(x_admin_token)
     if auth_error:
         return auth_error
-    return {"clusters": storage.list_clusters()}
+    return {
+        "clusters": storage.list_clusters(
+            include_deleted=include_deleted,
+            deleted_only=deleted_only,
+            status=status,
+            kind=kind,
+            query=q,
+        )
+    }
 
 
 @app.get("/admin/api/users")
@@ -774,7 +789,12 @@ def admin_list_user_clusters(user_id: str, x_admin_token: str | None = Header(de
     user = storage.get_user(user_id)
     if user is None:
         return JSONResponse(status_code=404, content={"error": "user not found"})
-    return {"user": _public_user(user), "clusters": storage.list_clusters(user_id=user_id)}
+    slack_settings = storage.get_slack_settings(user_id)
+    return {
+        "user": _public_user(user),
+        "slack": {"configured": bool(slack_settings.get("configured"))},
+        "clusters": storage.list_clusters(user_id=user_id, include_deleted=True),
+    }
 
 
 @app.post("/admin/api/clusters")
@@ -848,6 +868,39 @@ def admin_disable_cluster(cluster_id: str, x_admin_token: str | None = Header(de
     if cluster is None:
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
     return {"cluster": cluster}
+
+
+@app.delete("/admin/api/clusters/{cluster_id}")
+def admin_trash_cluster(cluster_id: str, x_admin_token: str | None = Header(default=None)):
+    auth_error = require_admin(x_admin_token)
+    if auth_error:
+        return auth_error
+    cluster = storage.admin_trash_cluster(cluster_id)
+    if cluster is None:
+        return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    return {"cluster": cluster}
+
+
+@app.post("/admin/api/clusters/{cluster_id}/restore")
+def admin_restore_cluster(cluster_id: str, x_admin_token: str | None = Header(default=None)):
+    auth_error = require_admin(x_admin_token)
+    if auth_error:
+        return auth_error
+    cluster = storage.admin_restore_cluster(cluster_id)
+    if cluster is None:
+        return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    return {"cluster": cluster}
+
+
+@app.delete("/admin/api/clusters/{cluster_id}/permanent")
+def admin_permanently_delete_cluster(cluster_id: str, x_admin_token: str | None = Header(default=None)):
+    auth_error = require_admin(x_admin_token)
+    if auth_error:
+        return auth_error
+    deleted = storage.admin_permanently_delete_cluster(cluster_id)
+    if not deleted:
+        return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    return {"status": "deleted"}
 
 
 @app.get("/resource-manifest")

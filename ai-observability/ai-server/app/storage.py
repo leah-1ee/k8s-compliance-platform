@@ -213,6 +213,11 @@ def list_users() -> list[dict[str, Any]]:
                    ) AS disabled_cluster_count,
                    (
                        SELECT COUNT(*)
+                       FROM clusters
+                       WHERE clusters.user_id = users.id AND clusters.status = 'deleted'
+                   ) AS deleted_cluster_count,
+                   (
+                       SELECT COUNT(*)
                        FROM events
                        WHERE events.cluster_id IN (
                            SELECT clusters.id FROM clusters WHERE clusters.user_id = users.id
@@ -222,12 +227,20 @@ def list_users() -> list[dict[str, Any]]:
                        SELECT MAX(clusters.last_seen_at)
                        FROM clusters
                        WHERE clusters.user_id = users.id
-                   ) AS last_seen_at
+                   ) AS last_seen_at,
+                   COALESCE((
+                       SELECT user_slack_settings.webhook_url != ''
+                       FROM user_slack_settings
+                       WHERE user_slack_settings.user_id = users.id
+                   ), 0) AS slack_configured
             FROM users
             ORDER BY COALESCE(users.last_login_at, users.created_at) DESC, users.created_at DESC
             """
         ).fetchall()
-    return [dict(row) for row in rows]
+    users = [dict(row) for row in rows]
+    for user in users:
+        user["slack_configured"] = bool(user.get("slack_configured"))
+    return users
 
 
 def get_slack_settings(user_id: str) -> dict[str, Any]:
@@ -475,21 +488,51 @@ def create_cluster(name: str, kind: str = "customer", user_id: str = "") -> dict
     return cluster
 
 
-def list_clusters(user_id: str = "", include_deleted: bool = False, deleted_only: bool = False) -> list[dict[str, Any]]:
+def list_clusters(
+    user_id: str = "",
+    include_deleted: bool = False,
+    deleted_only: bool = False,
+    status: str = "",
+    kind: str = "",
+    query: str = "",
+) -> list[dict[str, Any]]:
     init_db()
     purge_expired_deleted_clusters()
     normalized_user_id = str(user_id or "").strip()
+    normalized_status = str(status or "").strip().lower()
+    normalized_kind = str(kind or "").strip().lower()
+    normalized_query = str(query or "").strip().lower()
     params: list[Any] = []
-    where = ""
+    filters: list[str] = []
     if normalized_user_id:
-        where = "WHERE clusters.user_id = ?"
+        filters.append("clusters.user_id = ?")
         params.append(normalized_user_id)
-    if deleted_only:
-        deleted_filter = "clusters.status = 'deleted'"
-        where = f"{where} AND {deleted_filter}" if where else f"WHERE {deleted_filter}"
+    if normalized_status in {"active", "disabled", "deleted"}:
+        filters.append("clusters.status = ?")
+        params.append(normalized_status)
+    elif deleted_only:
+        filters.append("clusters.status = 'deleted'")
     elif not include_deleted:
-        deleted_filter = "clusters.status != 'deleted'"
-        where = f"{where} AND {deleted_filter}" if where else f"WHERE {deleted_filter}"
+        filters.append("clusters.status != 'deleted'")
+    if normalized_kind in {"demo", "customer", "source", "legacy"}:
+        filters.append("clusters.kind = ?")
+        params.append(normalized_kind)
+    if normalized_query:
+        filters.append(
+            """
+            (
+                LOWER(clusters.name) LIKE ?
+                OR LOWER(COALESCE(users.email, '')) LIKE ?
+                OR LOWER(COALESCE(users.name, '')) LIKE ?
+                OR LOWER(COALESCE(clusters.status, '')) LIKE ?
+                OR LOWER(COALESCE(clusters.kind, '')) LIKE ?
+                OR LOWER(COALESCE(clusters.last_seen_at, '')) LIKE ?
+            )
+            """
+        )
+        like_query = f"%{normalized_query}%"
+        params.extend([like_query, like_query, like_query, like_query, like_query, like_query])
+    where = f"WHERE {' AND '.join(filters)}" if filters else ""
     with _connect() as conn:
         rows = conn.execute(
             f"""
@@ -583,7 +626,7 @@ def rotate_cluster_token(cluster_id: str) -> dict[str, Any] | None:
             """
             UPDATE clusters
             SET token_hash = ?, status = 'active', deleted_at = NULL
-            WHERE id = ?
+            WHERE id = ? AND status != 'deleted'
             """,
             (_token_hash(token), cluster_id),
         )
@@ -599,7 +642,7 @@ def disable_cluster(cluster_id: str) -> dict[str, Any] | None:
     init_db()
     with _LOCK, _connect() as conn:
         cursor = conn.execute(
-            "UPDATE clusters SET status = 'disabled' WHERE id = ?",
+            "UPDATE clusters SET status = 'disabled' WHERE id = ? AND status != 'deleted'",
             (cluster_id,),
         )
     if cursor.rowcount == 0:
@@ -624,6 +667,23 @@ def trash_cluster(cluster_id: str, user_id: str) -> dict[str, Any] | None:
     return get_cluster(cluster_id)
 
 
+def admin_trash_cluster(cluster_id: str) -> dict[str, Any] | None:
+    init_db()
+    now = datetime.now(timezone.utc).isoformat()
+    with _LOCK, _connect() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE clusters
+            SET status = 'deleted', deleted_at = ?, token_hash = ''
+            WHERE id = ? AND status != 'deleted'
+            """,
+            (now, cluster_id),
+        )
+    if cursor.rowcount == 0:
+        return None
+    return get_cluster(cluster_id)
+
+
 def permanently_delete_cluster(cluster_id: str, user_id: str) -> bool:
     init_db()
     with _LOCK, _connect() as conn:
@@ -636,6 +696,21 @@ def permanently_delete_cluster(cluster_id: str, user_id: str) -> bool:
         conn.execute("DELETE FROM policy_apply_history WHERE cluster_id = ?", (cluster_id,))
         conn.execute("DELETE FROM events WHERE cluster_id = ?", (cluster_id,))
         conn.execute("DELETE FROM clusters WHERE id = ? AND user_id = ? AND status = 'deleted'", (cluster_id, user_id))
+    return True
+
+
+def admin_permanently_delete_cluster(cluster_id: str) -> bool:
+    init_db()
+    with _LOCK, _connect() as conn:
+        row = conn.execute(
+            "SELECT id FROM clusters WHERE id = ? AND status = 'deleted'",
+            (cluster_id,),
+        ).fetchone()
+        if row is None:
+            return False
+        conn.execute("DELETE FROM policy_apply_history WHERE cluster_id = ?", (cluster_id,))
+        conn.execute("DELETE FROM events WHERE cluster_id = ?", (cluster_id,))
+        conn.execute("DELETE FROM clusters WHERE id = ? AND status = 'deleted'", (cluster_id,))
     return True
 
 
@@ -673,6 +748,22 @@ def restore_cluster(cluster_id: str, user_id: str) -> dict[str, Any] | None:
             WHERE id = ? AND user_id = ? AND status = 'deleted'
             """,
             (cluster_id, user_id),
+        )
+    if cursor.rowcount == 0:
+        return None
+    return get_cluster(cluster_id)
+
+
+def admin_restore_cluster(cluster_id: str) -> dict[str, Any] | None:
+    init_db()
+    with _LOCK, _connect() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE clusters
+            SET status = 'disabled', deleted_at = NULL
+            WHERE id = ? AND status = 'deleted'
+            """,
+            (cluster_id,),
         )
     if cursor.rowcount == 0:
         return None
