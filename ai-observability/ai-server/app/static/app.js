@@ -562,25 +562,22 @@ function ensurePolicyApplyPanel() {
   panel.innerHTML = `
     <div class="policy-apply-heading">
       <div>
-        <h2>클러스터에 적용</h2>
-        <p>중앙 서버가 직접 적용할 수 없으면, 사용자가 실행할 kubectl 적용 가이드를 생성합니다.</p>
+        <h2>클러스터 적용 가이드</h2>
+        <p>생성된 정책을 사용자 클러스터 context에서 안전하게 적용할 kubectl 단계를 준비합니다.</p>
       </div>
       <span id="policyApplyStatusBadge" class="badge compact">대기</span>
     </div>
     <div class="policy-apply-notice">
-      <strong>적용 방식</strong>
-      <ol>
-        <li>중앙 서버 적용이 설정된 클러스터는 dry-run 검증 후 적용합니다.</li>
-        <li>직접 적용이 설정되지 않은 클러스터는 권한 확인, RBAC, dry-run, apply 명령을 순서대로 보여줍니다.</li>
-        <li>터미널에서 <code>kubectl config current-context</code>로 대상 클러스터를 확인한 뒤 표시된 명령을 실행하세요.</li>
-      </ol>
+      <strong>사용자 클러스터 적용 안내</strong>
+      <p>현재 AI 서버는 사용자 클러스터에 직접 Kubernetes API apply 권한을 갖지 않습니다. 아래에서 생성되는 단계별 명령을 대상 클러스터 context에서 실행하세요.</p>
+      <p>터미널에서 <code>kubectl config current-context</code>로 대상 클러스터를 확인한 뒤 권한 확인, 필요 시 RBAC, dry-run, apply 순서로 진행합니다.</p>
     </div>
     <div class="policy-apply-controls">
       <label>
         대상 클러스터
         <select id="policyApplyCluster"></select>
       </label>
-      <button id="applyGeneratedPolicy" class="primary" type="button">클러스터에 적용</button>
+      <button id="applyGeneratedPolicy" class="primary" type="button">적용 가이드 생성</button>
     </div>
     <div id="policyApplyHint" class="policy-apply-hint"></div>
     <div id="policyApplyResult" class="policy-apply-result" hidden></div>
@@ -617,9 +614,90 @@ function renderPolicyApplyPanel() {
   $("#applyGeneratedPolicy").disabled = !hasPolicy;
   $("#policyApplyHint").textContent = hasPolicy
     ? hasCluster
-      ? "Gatekeeper validation constraint만 Live Gatekeeper constraints 지표에 반영됩니다. NetworkPolicy와 mutation은 별도 정책으로 표시됩니다."
+      ? "Gatekeeper validation constraint만 Live Gatekeeper constraints 지표에 반영됩니다. 적용 권한은 사용자 kubeconfig context에서 확인합니다."
       : "선택 가능한 활성 클러스터가 없습니다. Cluster Setup에서 클러스터를 등록하거나 복원 후 토큰을 재발급하세요."
     : "정책을 생성하면 적용 대상을 선택할 수 있습니다.";
+}
+
+function fallbackCommandSteps(fallback = {}) {
+  const steps = [
+    {
+      key: "permission",
+      label: "1. 권한 확인",
+      description: "현재 kubeconfig 계정이 Gatekeeper 리소스를 읽고 생성/수정할 수 있는지 확인합니다.",
+      command: fallback.permission_check_command,
+      open: true,
+    },
+    {
+      key: "rbac",
+      label: "2. 필요 시 RBAC",
+      description: "권한 확인이 실패하면 클러스터 관리자가 먼저 실행하는 예시 권한 부여 명령입니다.",
+      command: fallback.admin_rbac_command,
+      open: false,
+    },
+    {
+      key: "dry-run",
+      label: "3. dry-run 검증",
+      description: "실제 리소스를 만들기 전에 API 서버 검증만 수행합니다.",
+      command: fallback.dry_run_command,
+      open: false,
+    },
+    {
+      key: "apply",
+      label: "4. 실제 apply",
+      description: "dry-run이 성공한 뒤 같은 클러스터 context에서 실행합니다.",
+      command: fallback.apply_command,
+      open: false,
+    },
+  ];
+  return steps.filter((step) => String(step.command || "").trim());
+}
+
+function renderPolicyFallbackSteps(fallback = {}) {
+  const steps = fallbackCommandSteps(fallback);
+  if (steps.length === 0 && !fallback.combined_command) {
+    return "";
+  }
+  const fallbackSteps = steps.length
+    ? steps
+    : [
+        {
+          key: "combined",
+          label: "kubectl 명령",
+          description: "대상 클러스터 context에서 순서대로 실행합니다.",
+          command: fallback.combined_command,
+          open: true,
+        },
+      ];
+  return `
+    <div class="policy-apply-fallback">
+      <div class="policy-apply-fallback-heading">
+        <div>
+          <strong>단계별 kubectl 적용</strong>
+          <p>각 단계의 명령을 따로 복사해 순서대로 실행하세요.</p>
+        </div>
+      </div>
+      <div class="policy-apply-steps">
+        ${fallbackSteps
+          .map((step, index) => {
+            const targetId = `policyApplyFallbackStep${index}`;
+            return `
+              <details class="policy-apply-step" ${step.open ? "open" : ""}>
+                <summary>
+                  <span>
+                    <strong>${escapeHtml(step.label)}</strong>
+                    <small>${escapeHtml(step.description)}</small>
+                  </span>
+                  <button class="secondary" data-copy-policy-step="${targetId}" type="button">복사</button>
+                </summary>
+                <pre id="${targetId}">${escapeHtml(step.command)}</pre>
+              </details>
+            `;
+          })
+          .join("")}
+      </div>
+    </div>
+  `;
 }
 
 function renderPolicyApplyResult(result) {
@@ -646,20 +724,17 @@ function renderPolicyApplyResult(result) {
       `,
     )
     .join("");
-  const fallback = result.fallback?.combined_command
-    ? `
-      <div class="policy-apply-fallback">
-        <div class="policy-apply-fallback-heading">
-          <strong>kubectl fallback</strong>
-          <button class="secondary" data-copy-policy-fallback type="button">복사</button>
-        </div>
-        <pre id="policyApplyFallbackCommand">${escapeHtml(result.fallback.combined_command)}</pre>
-      </div>
-    `
+  const fallback = renderPolicyFallbackSteps(result.fallback || {});
+  const error = result.error && status !== "not_configured"
+    ? `<p class="policy-apply-error">${escapeHtml(result.error)}</p>`
+    : "";
+  const notConfiguredNote = result.error && status === "not_configured"
+    ? `<p class="policy-apply-note">${escapeHtml(result.error)}</p>`
     : "";
   container.hidden = false;
   container.innerHTML = `
-    ${result.error ? `<p class="policy-apply-error">${escapeHtml(result.error)}</p>` : ""}
+    ${error}
+    ${notConfiguredNote}
     ${rows || '<p class="muted">리소스 결과가 없습니다.</p>'}
     ${fallback}
   `;
@@ -1054,13 +1129,13 @@ async function applyGeneratedPolicy() {
   }
   const cluster = userClusters.find((item) => item.id === clusterId);
   const clusterName = cluster?.name || "selected cluster";
-  if (!window.confirm(`${clusterName} 클러스터에 생성된 정책을 dry-run 검증 후 적용할까요?`)) {
+  if (!window.confirm(`${clusterName} 클러스터에서 실행할 단계별 kubectl 적용 가이드를 생성할까요?`)) {
     return;
   }
   const button = $("#applyGeneratedPolicy");
   const previousText = button.textContent;
   button.disabled = true;
-  button.textContent = "적용 중...";
+  button.textContent = "가이드 생성 중...";
   try {
     const result = await apiJson(`/api/clusters/${encodeURIComponent(clusterId)}/policy-applies`, {
       method: "POST",
@@ -1071,7 +1146,7 @@ async function applyGeneratedPolicy() {
       await refreshDashboardSummary();
       showToast("정책 적용 완료");
     } else if (result.status === "not_configured") {
-      showToast("kubectl fallback 사용 필요");
+      showToast("kubectl 적용 가이드 준비 완료");
     } else {
       showToast("정책 적용 결과 확인 필요");
     }
@@ -1478,13 +1553,15 @@ document.addEventListener("click", (event) => {
 });
 
 document.addEventListener("click", (event) => {
-  const copyButton = event.target.closest("[data-copy-policy-fallback]");
+  const copyButton = event.target.closest("[data-copy-policy-step]");
   if (!copyButton) {
     return;
   }
-  const target = $("#policyApplyFallbackCommand");
+  event.preventDefault();
+  event.stopPropagation();
+  const target = document.getElementById(copyButton.dataset.copyPolicyStep || "");
   copyText(target?.textContent || "")
-    .then(() => showToast("fallback 명령 복사 완료"))
+    .then(() => showToast("kubectl 단계 복사 완료"))
     .catch((error) => showToast(error.message));
 });
 

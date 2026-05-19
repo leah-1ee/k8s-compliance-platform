@@ -1386,6 +1386,14 @@ select:focus {
   font-weight: 820;
 }
 
+.policy-apply-notice p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .policy-apply-notice ol {
   display: grid;
   gap: 5px;
@@ -1438,17 +1446,88 @@ select:focus {
   background: var(--card-soft);
 }
 
+.policy-apply-fallback-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.policy-apply-fallback-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.policy-apply-steps {
+  display: grid;
+  gap: 8px;
+}
+
+.policy-apply-step {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  overflow: hidden;
+}
+
+.policy-apply-step summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.policy-apply-step summary::-webkit-details-marker {
+  display: none;
+}
+
+.policy-apply-step summary > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.policy-apply-step summary strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.policy-apply-step summary small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.policy-apply-step summary button {
+  flex: 0 0 auto;
+}
+
 .policy-apply-resource pre,
-.policy-apply-fallback pre {
+.policy-apply-step pre {
   margin: 0;
   max-height: 260px;
   border-radius: 8px;
+}
+
+.policy-apply-step pre {
+  border-top: 1px solid var(--line);
+  border-radius: 0;
 }
 
 .policy-apply-error {
   margin: 0;
   color: var(--danger);
   font-weight: 720;
+}
+
+.policy-apply-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
 }
 
 .card-heading {
