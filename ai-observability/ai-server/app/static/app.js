@@ -296,7 +296,9 @@ function renderDashboardSummary(summary = {}) {
       ? "-"
       : String(summary.active_policies);
   $("#activePoliciesMetricDetail").textContent =
-    summary.active_policies_source === "kubernetes"
+    summary.active_policies_error
+      ? `Gatekeeper API error: ${summary.active_policies_error}`
+      : summary.active_policies_source === "kubernetes"
       ? "Live Gatekeeper constraints"
       : "Gatekeeper API unavailable";
   $("#recentViolationsMetric").textContent = String(summary.recent_violations ?? 0);

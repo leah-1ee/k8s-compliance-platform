@@ -294,11 +294,121 @@ def _policy_apply_fallback(manifest: str) -> dict[str, str]:
     clean_manifest = str(manifest or "").strip()
     dry_run = _fallback_commands(clean_manifest, dry_run=True)
     apply = _fallback_commands(clean_manifest, dry_run=False)
+    permission_check = _policy_permission_check_command(clean_manifest)
+    admin_rbac = _policy_admin_rbac_command(clean_manifest)
     return {
+        "permission_check_command": permission_check,
+        "admin_rbac_command": admin_rbac,
         "dry_run_command": dry_run,
         "apply_command": apply,
-        "combined_command": f"{dry_run}\n\n{apply}",
+        "combined_command": "\n\n".join(
+            [
+                "# 1) 현재 kubeconfig 계정 권한 확인",
+                permission_check,
+                "# 2) 권한이 부족하면 클러스터 관리자가 먼저 실행",
+                admin_rbac,
+                "# 3) dry-run 검증",
+                dry_run,
+                "# 4) 실제 적용",
+                apply,
+            ]
+        ),
     }
+
+
+def _policy_permission_check_command(manifest: str) -> str:
+    namespaces = _manifest_namespaces(manifest)
+    namespace = sorted(namespaces)[0] if namespaces else "default"
+    commands = [
+        "kubectl auth can-i get constrainttemplates.templates.gatekeeper.sh",
+        "kubectl auth can-i create constrainttemplates.templates.gatekeeper.sh",
+        "kubectl auth can-i patch constrainttemplates.templates.gatekeeper.sh",
+        "kubectl auth can-i create '*' --api-group=constraints.gatekeeper.sh",
+        "kubectl auth can-i patch '*' --api-group=constraints.gatekeeper.sh",
+    ]
+    if _manifest_has_kind(manifest, "NetworkPolicy"):
+        commands.extend(
+            [
+                f"kubectl auth can-i create networkpolicies.networking.k8s.io -n {namespace}",
+                f"kubectl auth can-i patch networkpolicies.networking.k8s.io -n {namespace}",
+            ]
+        )
+    return "\n".join(commands)
+
+
+def _policy_admin_rbac_command(manifest: str) -> str:
+    include_network_policy = _manifest_has_kind(manifest, "NetworkPolicy")
+    network_rule = ""
+    if include_network_policy:
+        network_rule = """
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - networkpolicies
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch"""
+    return f"""kubectl apply -f - <<'KUBEOWL_RBAC_EOF'
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeowl-policy-applier
+rules:
+  - apiGroups:
+      - templates.gatekeeper.sh
+    resources:
+      - constrainttemplates
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+  - apiGroups:
+      - constraints.gatekeeper.sh
+    resources:
+      - "*"
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch{network_rule}
+KUBEOWL_RBAC_EOF
+
+# 예시: 현재 kubeconfig 사용자가 alice@example.com 이라면
+kubectl create clusterrolebinding kubeowl-policy-applier-alice --clusterrole=kubeowl-policy-applier --user=alice@example.com
+
+# 예시: ServiceAccount로 적용한다면
+kubectl create serviceaccount kubeowl-policy-applier -n default
+kubectl create clusterrolebinding kubeowl-policy-applier-sa --clusterrole=kubeowl-policy-applier --serviceaccount=default:kubeowl-policy-applier"""
+
+
+def _manifest_has_kind(manifest: str, kind: str) -> bool:
+    try:
+        return any(resource.get("kind") == kind for resource in _parse_policy_manifest(manifest))
+    except ValueError:
+        return False
+
+
+def _manifest_namespaces(manifest: str) -> set[str]:
+    namespaces = set()
+    try:
+        resources = _parse_policy_manifest(manifest)
+    except ValueError:
+        return namespaces
+    for resource in resources:
+        metadata = resource.get("metadata", {}) if isinstance(resource.get("metadata"), dict) else {}
+        namespace = str(metadata.get("namespace", "")).strip()
+        if namespace:
+            namespaces.add(namespace)
+    return namespaces
 
 
 def _fallback_commands(manifest: str, dry_run: bool) -> str:
@@ -445,6 +555,7 @@ def _count_gatekeeper_constraints() -> dict[str, Any]:
     if discovery.get("error"):
         return {"count": None, "source": "unavailable", "error": discovery["error"]}
     count = 0
+    errors = []
     for resource in discovery.get("body", {}).get("resources", []):
         if not isinstance(resource, dict) or "/" in str(resource.get("name", "")):
             continue
@@ -452,7 +563,13 @@ def _count_gatekeeper_constraints() -> dict[str, Any]:
             body = _kube_get(f"/apis/constraints.gatekeeper.sh/v1beta1/{resource['name']}")
             if not body.get("error"):
                 count += len(body.get("body", {}).get("items", []))
-    return {"count": count, "source": "kubernetes", "error": ""}
+            else:
+                errors.append(f"{resource['name']}: {body['error']}")
+    return {
+        "count": count,
+        "source": "kubernetes",
+        "error": "; ".join(errors[:3]),
+    }
 
 
 def record_gatekeeper_event(payload: dict[str, Any]) -> dict[str, Any]:
