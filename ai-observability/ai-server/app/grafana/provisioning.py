@@ -32,9 +32,6 @@ def provision_user(user_id: str, cluster_id: str, email: str) -> dict[str, Any]:
     normalized_email = str(email or "").strip().lower()
     if not normalized_user_id or not normalized_cluster_id or not normalized_email:
         raise ProvisioningError("user_id, cluster_id, and email are required")
-    existing = storage.get_grafana_provisioning(normalized_user_id, normalized_cluster_id)
-    if existing:
-        return existing
 
     auth = _grafana_auth()
     org_name = f"org-{normalized_user_id}"
@@ -55,14 +52,7 @@ def provision_user(user_id: str, cluster_id: str, email: str) -> dict[str, Any]:
 
             datasource_uid = _datasource_uid(normalized_cluster_id)
             datasource = _ensure_datasource(client, org_id, normalized_user_id, normalized_cluster_id, datasource_uid)
-            dashboard = _dashboard_payload(client, datasource_uid)
-            dash_response = client.post(
-                "/api/dashboards/db",
-                headers={"X-Grafana-Org-Id": str(org_id)},
-                json={"dashboard": dashboard, "overwrite": True},
-            )
-            if dash_response.status_code not in {200, 201}:
-                raise ProvisioningError(f"Grafana dashboard import failed: {dash_response.status_code} {dash_response.text}")
+            dashboard_urls = _import_dashboards(client, org_id, datasource_uid)
 
             user_response = client.post(
                 f"/api/orgs/{org_id}/users",
@@ -80,15 +70,16 @@ def provision_user(user_id: str, cluster_id: str, email: str) -> dict[str, Any]:
                         f"Grafana org user add failed: {user_response.status_code} {user_response.text}"
                     )
 
-            dashboard_body = dash_response.json()
-            return storage.save_grafana_provisioning(
+            mapping = storage.save_grafana_provisioning(
                 user_id=normalized_user_id,
                 cluster_id=normalized_cluster_id,
                 org_id=org_id,
                 org_name=org_name,
                 datasource_uid=datasource.get("uid", datasource_uid),
-                dashboard_url=str(dashboard_body.get("url", "")),
+                dashboard_url=dashboard_urls[0] if dashboard_urls else "",
             )
+            mapping["dashboard_urls"] = dashboard_urls
+            return mapping
     except Exception as error:
         if created_org and org_id is not None:
             _rollback_org(org_id, auth)
@@ -168,29 +159,68 @@ def _ensure_user(client: httpx.Client, email: str) -> None:
         raise ProvisioningError(f"Grafana user create failed: {response.status_code} {response.text}")
 
 
-def _dashboard_payload(client: httpx.Client, datasource_uid: str) -> dict[str, Any]:
-    dashboard = _load_master_dashboard(client) or _load_local_dashboard_template()
-    dashboard = _sanitize_dashboard_for_import(dashboard)
-    return _replace_datasource_uid(dashboard, datasource_uid)
-
-
-def _load_master_dashboard(client: httpx.Client) -> dict[str, Any] | None:
-    master_uid = os.getenv("GRAFANA_MASTER_DASHBOARD_UID", "").strip()
-    if not master_uid:
-        return None
-    master_org_id = os.getenv("GRAFANA_MASTER_ORG_ID", "1").strip() or "1"
-    response = client.get(
-        f"/api/dashboards/uid/{master_uid}",
-        headers={"X-Grafana-Org-Id": master_org_id},
-    )
-    if response.status_code != 200:
-        raise ProvisioningError(
-            f"Grafana master dashboard fetch failed: {response.status_code} {response.text}"
+def _import_dashboards(client: httpx.Client, org_id: int, datasource_uid: str) -> list[str]:
+    dashboard_urls: list[str] = []
+    for dashboard in _dashboard_payloads(client, datasource_uid):
+        dash_response = client.post(
+            "/api/dashboards/db",
+            headers={"X-Grafana-Org-Id": str(org_id)},
+            json={"dashboard": dashboard, "overwrite": True},
         )
-    dashboard = response.json().get("dashboard")
-    if not isinstance(dashboard, dict):
-        raise ProvisioningError("Grafana master dashboard response missing dashboard")
-    return dashboard
+        if dash_response.status_code not in {200, 201}:
+            raise ProvisioningError(
+                f"Grafana dashboard import failed: {dash_response.status_code} {dash_response.text}"
+            )
+        dashboard_url = str(dash_response.json().get("url", "")).strip()
+        if dashboard_url:
+            dashboard_urls.append(dashboard_url)
+    return dashboard_urls
+
+
+def _dashboard_payloads(client: httpx.Client, datasource_uid: str) -> list[dict[str, Any]]:
+    dashboards = _load_master_dashboards(client)
+    if not dashboards:
+        dashboards = [_load_local_dashboard_template()]
+    return [
+        _replace_datasource_uid(_sanitize_dashboard_for_import(dashboard), datasource_uid)
+        for dashboard in dashboards
+    ]
+
+
+def _load_master_dashboards(client: httpx.Client) -> list[dict[str, Any]]:
+    master_uids = _master_dashboard_uids()
+    if not master_uids:
+        return []
+    master_org_id = os.getenv("GRAFANA_MASTER_ORG_ID", "1").strip() or "1"
+    dashboards: list[dict[str, Any]] = []
+    for master_uid in master_uids:
+        response = client.get(
+            f"/api/dashboards/uid/{master_uid}",
+            headers={"X-Grafana-Org-Id": master_org_id},
+        )
+        if response.status_code != 200:
+            raise ProvisioningError(
+                f"Grafana master dashboard fetch failed for {master_uid}: {response.status_code} {response.text}"
+            )
+        dashboard = response.json().get("dashboard")
+        if not isinstance(dashboard, dict):
+            raise ProvisioningError(f"Grafana master dashboard response missing dashboard for {master_uid}")
+        dashboards.append(dashboard)
+    return dashboards
+
+
+def _master_dashboard_uids() -> list[str]:
+    raw = os.getenv("GRAFANA_MASTER_DASHBOARD_UIDS", "").strip()
+    if not raw:
+        raw = os.getenv("GRAFANA_MASTER_DASHBOARD_UID", "").strip()
+    seen: set[str] = set()
+    uids: list[str] = []
+    for item in raw.split(","):
+        uid = item.strip()
+        if uid and uid not in seen:
+            seen.add(uid)
+            uids.append(uid)
+    return uids
 
 
 def _load_local_dashboard_template() -> dict[str, Any]:

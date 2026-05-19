@@ -266,7 +266,8 @@ def test_dashboard_payload_fetches_master_dashboard_and_rewrites_datasource(monk
     monkeypatch.setenv("GRAFANA_MASTER_DASHBOARD_UID", "admin-master")
     monkeypatch.setenv("GRAFANA_MASTER_ORG_ID", "1")
 
-    dashboard = provisioning._dashboard_payload(FakeClient(), "user-datasource")
+    dashboards = provisioning._dashboard_payloads(FakeClient(), "user-datasource")
+    dashboard = dashboards[0]
 
     assert requested["path"] == "/api/dashboards/uid/admin-master"
     assert requested["headers"] == {"X-Grafana-Org-Id": "1"}
@@ -274,3 +275,51 @@ def test_dashboard_payload_fetches_master_dashboard_and_rewrites_datasource(monk
     assert dashboard["version"] == 0
     assert dashboard["panels"][0]["datasource"]["uid"] == "user-datasource"
     assert dashboard["panels"][0]["targets"][0]["datasource"]["uid"] == "user-datasource"
+
+
+def test_dashboard_payloads_support_multiple_master_uids(monkeypatch):
+    requested = []
+
+    class FakeClient:
+        def get(self, path, headers=None):
+            requested.append((path, headers))
+            uid = path.rsplit("/", 1)[-1]
+            return httpx.Response(
+                200,
+                json={
+                    "dashboard": {
+                        "id": 7,
+                        "uid": uid,
+                        "title": uid,
+                        "version": 15,
+                        "panels": [
+                            {
+                                "datasource": {
+                                    "type": "prometheus",
+                                    "uid": "admin-datasource",
+                                }
+                            }
+                        ],
+                    }
+                },
+            )
+
+    monkeypatch.setenv(
+        "GRAFANA_MASTER_DASHBOARD_UIDS",
+        "compliance-overview,runtime-detection,grafana-overview",
+    )
+    monkeypatch.setenv("GRAFANA_MASTER_ORG_ID", "1")
+
+    dashboards = provisioning._dashboard_payloads(FakeClient(), "user-datasource")
+
+    assert [dashboard["uid"] for dashboard in dashboards] == [
+        "compliance-overview",
+        "runtime-detection",
+        "grafana-overview",
+    ]
+    assert [item[0] for item in requested] == [
+        "/api/dashboards/uid/compliance-overview",
+        "/api/dashboards/uid/runtime-detection",
+        "/api/dashboards/uid/grafana-overview",
+    ]
+    assert all(dashboard["panels"][0]["datasource"]["uid"] == "user-datasource" for dashboard in dashboards)
