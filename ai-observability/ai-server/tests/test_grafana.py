@@ -256,6 +256,46 @@ def test_grafana_ui_proxy_headers_are_ascii_safe_for_non_ascii_names(monkeypatch
         value.encode("ascii")
 
 
+def test_admin_grafana_url_sets_admin_proxy_cookie(monkeypatch):
+    unauthorized = client.get("/admin/api/grafana/url")
+    assert unauthorized.status_code == 401
+
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", "false")
+    url_response = client.get(
+        "/admin/api/grafana/url",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    url_body = url_response.json()
+    admin_cookie = url_response.cookies.get("kubeowl_admin_grafana")
+
+    assert url_response.status_code == 200
+    assert url_body["grafana"]["url"] == "/grafana-ui/dashboards?orgId=1"
+    assert url_body["grafana"]["mode"] == "admin"
+    assert admin_cookie
+
+    captured = {}
+
+    async def fake_forward(request, upstream_path, user):
+        headers = ui_proxy._request_headers(request, user)
+        captured["upstream_path"] = upstream_path
+        captured["headers"] = headers
+        return httpx.Response(200, text="admin grafana ok")
+
+    monkeypatch.setattr(ui_proxy, "_forward_grafana_request", fake_forward)
+
+    grafana_response = client.get(
+        "/grafana-ui/dashboards?orgId=1",
+        cookies={"kubeowl_admin_grafana": admin_cookie},
+    )
+
+    assert grafana_response.status_code == 200
+    assert grafana_response.text == "admin grafana ok"
+    assert captured["upstream_path"] == "/grafana-ui/dashboards?orgId=1"
+    assert captured["headers"]["X-WEBAUTH-USER"] == "kubeowl-admin@local"
+    assert captured["headers"]["X-WEBAUTH-EMAIL"] == "kubeowl-admin@local"
+    assert captured["headers"]["X-WEBAUTH-NAME"] == "KubeOwl Admin"
+
+
 def test_dashboard_payload_fetches_master_dashboard_and_rewrites_datasource(monkeypatch):
     requested = {}
 

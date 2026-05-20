@@ -19,6 +19,27 @@ spec:
       interval: 15s
 
 ---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: compliance-ai-server
+  namespace: monitoring
+  labels:
+    release: monitoring
+    app.kubernetes.io/part-of: compliance-platform
+spec:
+  namespaceSelector:
+    matchNames:
+      - compliance-system
+  selector:
+    matchLabels:
+      app: ai-classifier
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+
+---
 apiVersion: v1
 kind: Service
 metadata:

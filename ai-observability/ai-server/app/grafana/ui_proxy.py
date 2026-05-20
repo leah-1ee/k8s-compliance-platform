@@ -9,6 +9,7 @@ from fastapi import APIRouter, Cookie, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 
 from app import storage
+from app.grafana.admin_session import admin_user_from_token
 
 
 GRAFANA_URL = os.getenv("GRAFANA_URL_INTERNAL", "http://grafana.monitoring.svc.cluster.local:3000").rstrip("/")
@@ -26,8 +27,11 @@ async def grafana_ui_proxy(
     request: Request,
     path: str,
     compliance_ai_session: str | None = Cookie(default=None),
+    kubeowl_admin_grafana: str | None = Cookie(default=None),
 ) -> Response:
-    user = storage.get_user_by_session(compliance_ai_session or "")
+    user = admin_user_from_token(kubeowl_admin_grafana)
+    if user is None:
+        user = storage.get_user_by_session(compliance_ai_session or "")
     if user is None:
         return JSONResponse(status_code=401, content={"error": "login required"})
 

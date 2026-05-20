@@ -1022,6 +1022,64 @@ def event_summary(user_id: str = "") -> dict[str, Any]:
     }
 
 
+def prometheus_metrics_snapshot() -> dict[str, Any]:
+    init_db()
+    with _connect() as conn:
+        runtime_events_total = conn.execute(
+            """
+            SELECT events.cluster_id AS cluster_id,
+                   clusters.name AS cluster_name,
+                   COALESCE(NULLIF(events.severity, ''), 'unknown') AS severity,
+                   COALESCE(NULLIF(events.source, ''), 'unknown') AS source,
+                   COUNT(*) AS value
+            FROM events
+            JOIN clusters ON clusters.id = events.cluster_id
+            WHERE clusters.status != 'deleted'
+            GROUP BY events.cluster_id, clusters.name, severity, source
+            ORDER BY clusters.name, severity, source
+            """
+        ).fetchall()
+        runtime_events_recent_24h = conn.execute(
+            """
+            SELECT events.cluster_id AS cluster_id,
+                   clusters.name AS cluster_name,
+                   COALESCE(NULLIF(events.severity, ''), 'unknown') AS severity,
+                   COUNT(*) AS value
+            FROM events
+            JOIN clusters ON clusters.id = events.cluster_id
+            WHERE clusters.status != 'deleted'
+              AND strftime('%s', COALESCE(events.timestamp, events.created_at)) >= strftime('%s', 'now', '-1 day')
+            GROUP BY events.cluster_id, clusters.name, severity
+            ORDER BY clusters.name, severity
+            """
+        ).fetchall()
+        cluster_last_seen = conn.execute(
+            """
+            SELECT id AS cluster_id, name AS cluster_name, last_seen_at
+            FROM clusters
+            WHERE status != 'deleted'
+              AND last_seen_at IS NOT NULL
+              AND last_seen_at != ''
+            ORDER BY name
+            """
+        ).fetchall()
+        active_clusters = conn.execute(
+            """
+            SELECT COALESCE(NULLIF(kind, ''), 'customer') AS cluster_kind, COUNT(*) AS value
+            FROM clusters
+            WHERE status = 'active'
+            GROUP BY cluster_kind
+            ORDER BY cluster_kind
+            """
+        ).fetchall()
+    return {
+        "runtime_events_total": [dict(row) for row in runtime_events_total],
+        "runtime_events_recent_24h": [dict(row) for row in runtime_events_recent_24h],
+        "cluster_last_seen": [dict(row) for row in cluster_last_seen],
+        "active_clusters": [dict(row) for row in active_clusters],
+    }
+
+
 def _connect() -> sqlite3.Connection:
     conn = sqlite3.connect(SQLITE_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row

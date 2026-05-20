@@ -100,6 +100,7 @@ def test_admin_is_served():
 
     assert response.status_code == 200
     assert "Compliance Admin" in response.text
+    assert "Admin Grafana" in response.text
     assert "클러스터 등록" in response.text
     assert "운영 요약" in response.text
     assert "사용자 목록" in response.text
@@ -216,6 +217,28 @@ def test_user_cluster_registration_returns_install_command():
     assert rotate_response.status_code == 200
     assert rotate_body["cluster"]["token"] != create_body["cluster"]["token"]
     assert "https://console.example.test/ingest/falco-events" in rotate_body["cluster"]["install_command"]
+
+
+def test_user_cluster_install_command_can_use_internal_ingest_url(monkeypatch):
+    monkeypatch.setenv("FALCO_INGEST_BASE_URL", "http://ai-server.compliance-system.svc.cluster.local:8000")
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="internal-ingest@example.test",
+        email="internal-ingest@example.test",
+    )
+    token = storage.create_session(user["id"])
+
+    response = client.post(
+        "/api/clusters",
+        cookies={"compliance_ai_session": token},
+        json={"name": "internal-ingest-cluster"},
+    )
+
+    assert response.status_code == 200
+    assert (
+        "http://ai-server.compliance-system.svc.cluster.local:8000/ingest/falco-events"
+        in response.json()["cluster"]["install_command"]
+    )
 
 
 def test_cluster_names_are_scoped_per_user():
@@ -1625,6 +1648,57 @@ def test_ingest_rejects_missing_cluster_token():
 
     assert response.status_code == 401
     assert response.json()["error"] == "valid cluster token required"
+
+
+def test_metrics_exports_trusted_sqlite_event_aggregates_without_raw_labels():
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="metrics-user@example.test",
+        email="metrics-user@example.test",
+    )
+    cluster = storage.create_cluster("metrics-cluster", user_id=user["id"])
+    event_time = datetime.now(timezone.utc).replace(microsecond=0)
+    client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster['token']}"},
+        json={
+            "event": {
+                "time": event_time.isoformat().replace("+00:00", "Z"),
+                "rule": "Sensitive Rule Name Should Not Become A Label",
+                "priority": "Critical",
+                "output_fields": {
+                    "k8s.ns.name": "prod",
+                    "k8s.pod.name": "sensitive-pod",
+                    "container.name": "sensitive-container",
+                    "user.name": "sensitive-user",
+                },
+            },
+        },
+    )
+
+    response = client.get("/metrics")
+    text = response.text
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert (
+        f'kubeowl_runtime_events_total{{cluster_id="{cluster["id"]}",cluster_name="metrics-cluster",'
+        'severity="high",source="sidekick"} 1'
+    ) in text
+    assert (
+        f'kubeowl_runtime_events_recent_24h{{cluster_id="{cluster["id"]}",cluster_name="metrics-cluster",'
+        'severity="high"} 1'
+    ) in text
+    assert (
+        f'kubeowl_cluster_last_seen_timestamp_seconds{{cluster_id="{cluster["id"]}",'
+        'cluster_name="metrics-cluster"} '
+    ) in text
+    assert 'kubeowl_clusters_active_total{cluster_kind="customer"}' in text
+    assert "Sensitive Rule Name" not in text
+    assert "sensitive-pod" not in text
+    assert "sensitive-container" not in text
+    assert "sensitive-user" not in text
+    assert "metrics-user@example.test" not in text
 
 
 def test_admin_cluster_lifecycle():

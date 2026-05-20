@@ -3,6 +3,7 @@ import os
 import secrets
 import shlex
 from contextvars import ContextVar
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
 
@@ -19,6 +20,7 @@ from app.classifier import classify_event
 from app.policy_generator import generate_policy
 from app.policy_generator import SUPPORTED_POLICY_EXAMPLES, UnsupportedPolicyError
 from app import storage
+from app.grafana.admin_session import ADMIN_GRAFANA_COOKIE_NAME, issue_admin_grafana_token
 from app.grafana.proxy import router as grafana_proxy_router
 from app.grafana.provisioning import ProvisioningError, provision_user
 from app.grafana.ui_proxy import router as grafana_ui_router
@@ -475,6 +477,60 @@ def dashboard_summary(compliance_ai_session: str | None = Cookie(default=None)) 
     return build_dashboard_summary(user_id=user["id"])
 
 
+@app.get("/metrics")
+def prometheus_metrics() -> Response:
+    snapshot = storage.prometheus_metrics_snapshot()
+    lines = [
+        "# HELP kubeowl_runtime_events_total SQLite-backed runtime events grouped by trusted cluster, severity, and source.",
+        "# TYPE kubeowl_runtime_events_total gauge",
+    ]
+    for row in snapshot["runtime_events_total"]:
+        lines.append(
+            "kubeowl_runtime_events_total"
+            f"{{{_metric_labels(row, ('cluster_id', 'cluster_name', 'severity', 'source'))}}} {int(row['value'])}"
+        )
+    lines.extend(
+        [
+            "# HELP kubeowl_runtime_events_recent_24h SQLite-backed runtime events from the last 24 hours grouped by trusted cluster and severity.",
+            "# TYPE kubeowl_runtime_events_recent_24h gauge",
+        ]
+    )
+    for row in snapshot["runtime_events_recent_24h"]:
+        lines.append(
+            "kubeowl_runtime_events_recent_24h"
+            f"{{{_metric_labels(row, ('cluster_id', 'cluster_name', 'severity'))}}} {int(row['value'])}"
+        )
+    lines.extend(
+        [
+            "# HELP kubeowl_cluster_last_seen_timestamp_seconds Last trusted cluster ingest timestamp in Unix seconds.",
+            "# TYPE kubeowl_cluster_last_seen_timestamp_seconds gauge",
+        ]
+    )
+    for row in snapshot["cluster_last_seen"]:
+        timestamp = _metric_timestamp_seconds(row.get("last_seen_at"))
+        if timestamp is None:
+            continue
+        lines.append(
+            "kubeowl_cluster_last_seen_timestamp_seconds"
+            f"{{{_metric_labels(row, ('cluster_id', 'cluster_name'))}}} {timestamp}"
+        )
+    lines.extend(
+        [
+            "# HELP kubeowl_clusters_active_total Active trusted clusters grouped by cluster kind.",
+            "# TYPE kubeowl_clusters_active_total gauge",
+        ]
+    )
+    for row in snapshot["active_clusters"]:
+        lines.append(
+            "kubeowl_clusters_active_total"
+            f"{{{_metric_labels(row, ('cluster_kind',))}}} {int(row['value'])}"
+        )
+    return Response(
+        content="\n".join(lines) + "\n",
+        headers={"Content-Type": "text/plain; version=0.0.4; charset=utf-8"},
+    )
+
+
 @app.get("/api/observability/summary")
 def user_observability_summary(compliance_ai_session: str | None = Cookie(default=None)) -> dict:
     user, auth_error = require_user(compliance_ai_session)
@@ -758,6 +814,43 @@ def _grafana_dashboard_url(dashboard_url: str, org_id: int | str | None) -> str:
     return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 
+def _admin_grafana_url() -> str:
+    configured = os.getenv("ADMIN_GRAFANA_PATH", "").strip()
+    normalized = configured or "/grafana-ui/dashboards"
+    if not normalized.startswith("/"):
+        normalized = f"/{normalized}"
+    if not normalized.startswith("/grafana-ui/"):
+        normalized = f"/grafana-ui{normalized}"
+    org_id = os.getenv("GRAFANA_MASTER_ORG_ID", "1").strip() or "1"
+    parts = urlsplit(normalized)
+    query = [(key, value) for key, value in parse_qsl(parts.query, keep_blank_values=True) if key != "orgId"]
+    query.append(("orgId", org_id))
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
+def _metric_labels(row: dict, keys: tuple[str, ...]) -> str:
+    return ",".join(f'{key}="{_metric_label_value(row.get(key, ""))}"' for key in keys)
+
+
+def _metric_label_value(value: object) -> str:
+    return str(value or "").replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
+
+
+def _metric_timestamp_seconds(value: object) -> int | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return int(parsed.timestamp())
+
+
 @app.post("/api/clusters/{cluster_id}/policy-applies")
 def apply_generated_policy_to_cluster(
     cluster_id: str,
@@ -859,6 +952,36 @@ def admin_list_user_clusters(user_id: str, x_admin_token: str | None = Header(de
         "slack": {"configured": bool(slack_settings.get("configured"))},
         "clusters": storage.list_clusters(user_id=user_id, include_deleted=True),
     }
+
+
+@app.get("/admin/api/grafana/url")
+def admin_grafana_url(request: Request, x_admin_token: str | None = Header(default=None)):
+    auth_error = require_admin(x_admin_token)
+    if auth_error:
+        return auth_error
+    token = issue_admin_grafana_token()
+    if not token:
+        return JSONResponse(status_code=503, content={"error": "admin token is not configured"})
+    org_id = os.getenv("GRAFANA_MASTER_ORG_ID", "1").strip() or "1"
+    response = JSONResponse(
+        content={
+            "grafana": {
+                "url": _admin_grafana_url(),
+                "org_id": org_id,
+                "mode": "admin",
+            }
+        }
+    )
+    response.set_cookie(
+        ADMIN_GRAFANA_COOKIE_NAME,
+        token,
+        max_age=600,
+        httponly=True,
+        secure=session_cookie_secure(request),
+        samesite="lax",
+        path="/grafana-ui",
+    )
+    return response
 
 
 @app.post("/admin/api/clusters")
@@ -1082,8 +1205,12 @@ def compliance_report(
 
 
 def _sidekick_install_command(request: Request, token: str) -> str:
-    public_base_url = os.getenv("PUBLIC_BASE_URL", str(request.base_url).rstrip("/")).rstrip("/")
-    ingest_url = f"{public_base_url}/ingest/falco-events"
+    ingest_base_url = (
+        os.getenv("FALCO_INGEST_BASE_URL", "").strip()
+        or os.getenv("PUBLIC_BASE_URL", "").strip()
+        or str(request.base_url).rstrip("/")
+    ).rstrip("/")
+    ingest_url = f"{ingest_base_url}/ingest/falco-events"
     return "\n".join(
         [
             "helm repo add falcosecurity https://falcosecurity.github.io/charts",

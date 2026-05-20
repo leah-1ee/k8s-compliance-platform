@@ -216,6 +216,13 @@
       </section>
 
       <section>
+        <h2>Admin Grafana</h2>
+        <div class="row">
+          <button class="primary" id="openAdminGrafana">Grafana 열기</button>
+        </div>
+      </section>
+
+      <section>
         <h2>클러스터 등록</h2>
         <div class="row">
           <label>
@@ -499,6 +506,29 @@
 
       document.querySelector("#applyClusterFilters").addEventListener("click", () => {
         loadAdminDashboard().catch((error) => setMessage(error.message));
+      });
+
+      document.querySelector("#openAdminGrafana").addEventListener("click", async () => {
+        const grafanaWindow = window.open("about:blank", "_blank");
+        if (grafanaWindow) {
+          grafanaWindow.opener = null;
+        }
+        try {
+          const body = await requestJson("/admin/api/grafana/url");
+          const url = body.grafana?.url || "";
+          if (!url) {
+            throw new Error("Grafana URL이 비어 있습니다.");
+          }
+          if (grafanaWindow) {
+            grafanaWindow.location.href = url;
+          } else {
+            window.location.href = url;
+          }
+          setMessage("Admin Grafana를 열었습니다.");
+        } catch (error) {
+          grafanaWindow?.close();
+          setMessage(error.message);
+        }
       });
 
       clusterSearch.addEventListener("keydown", (event) => {
