@@ -114,13 +114,21 @@ def _response_headers(response: httpx.Response) -> dict[str, str]:
 
 def _response_content(response: httpx.Response) -> bytes:
     content_type = response.headers.get("content-type", "")
-    if "text/html" not in content_type.lower():
+    lower_content_type = content_type.lower()
+    if not any(
+        item in lower_content_type
+        for item in ("text/html", "javascript", "text/css", "application/json")
+    ):
         return response.content
     try:
-        html = response.content.decode(response.encoding or "utf-8")
+        text = response.content.decode(response.encoding or "utf-8")
     except UnicodeDecodeError:
         return response.content
-    return _rewrite_html(html).encode(response.encoding or "utf-8")
+    if "text/html" in lower_content_type:
+        text = _rewrite_html(text)
+    else:
+        text = _rewrite_asset_text(text)
+    return text.encode(response.encoding or "utf-8")
 
 
 def _rewrite_html(html: str) -> str:
@@ -137,6 +145,21 @@ def _rewrite_html(html: str) -> str:
         '"appSubUrl":"/"': '"appSubUrl":"/grafana-ui"',
     }
     rewritten = html
+    for old, new in replacements.items():
+        rewritten = rewritten.replace(old, new)
+    return rewritten
+
+
+def _rewrite_asset_text(text: str) -> str:
+    replacements = {
+        '"/public/build/': '"/grafana-ui/public/build/',
+        "'/public/build/": "'/grafana-ui/public/build/",
+        "`/public/build/": "`/grafana-ui/public/build/",
+        '=/public/build/': '=/grafana-ui/public/build/',
+        '(/public/build/': '(/grafana-ui/public/build/',
+        'url(/public/': 'url(/grafana-ui/public/',
+    }
+    rewritten = text
     for old, new in replacements.items():
         rewritten = rewritten.replace(old, new)
     return rewritten

@@ -290,6 +290,34 @@ def test_grafana_ui_proxy_rewrites_html_asset_paths(monkeypatch):
     assert '"appSubUrl":"/grafana-ui"' in response.text
 
 
+def test_grafana_ui_proxy_rewrites_javascript_chunk_paths(monkeypatch):
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="grafana-ui-js@example.test",
+        email="grafana-ui-js@example.test",
+    )
+    session = storage.create_session(user["id"])
+
+    async def fake_forward(request, upstream_path, user):
+        return httpx.Response(
+            200,
+            text='__webpack_require__.p="/public/build/";import("/public/build/7651.js")',
+            headers={"content-type": "text/javascript; charset=utf-8"},
+        )
+
+    monkeypatch.setattr(ui_proxy, "_forward_grafana_request", fake_forward)
+
+    response = client.get(
+        "/grafana-ui/public/build/runtime.js",
+        cookies={"compliance_ai_session": session},
+    )
+
+    assert response.status_code == 200
+    assert '"/grafana-ui/public/build/"' in response.text
+    assert '"/grafana-ui/public/build/7651.js"' in response.text
+    assert '"/public/build/' not in response.text
+
+
 def test_grafana_ui_proxy_rewrites_root_relative_redirects():
     assert ui_proxy._rewrite_location("/login?redirectTo=%2F") == "/grafana-ui/login?redirectTo=%2F"
     assert ui_proxy._rewrite_location(f"{ui_proxy.GRAFANA_URL}/login") == "/grafana-ui/login"
