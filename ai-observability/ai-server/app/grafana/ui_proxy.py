@@ -45,9 +45,10 @@ async def grafana_ui_proxy(
     except httpx.HTTPError as error:
         return JSONResponse(status_code=502, content={"error": f"Grafana request failed: {error}"})
 
+    content = _response_content(response)
     headers = _response_headers(response)
     return Response(
-        content=response.content,
+        content=content,
         status_code=response.status_code,
         headers=headers,
         media_type=response.headers.get("content-type"),
@@ -109,6 +110,36 @@ def _response_headers(response: httpx.Response) -> dict[str, str]:
         else:
             headers[key] = value
     return headers
+
+
+def _response_content(response: httpx.Response) -> bytes:
+    content_type = response.headers.get("content-type", "")
+    if "text/html" not in content_type.lower():
+        return response.content
+    try:
+        html = response.content.decode(response.encoding or "utf-8")
+    except UnicodeDecodeError:
+        return response.content
+    return _rewrite_html(html).encode(response.encoding or "utf-8")
+
+
+def _rewrite_html(html: str) -> str:
+    replacements = {
+        '<base href="/">': '<base href="/grafana-ui/">',
+        '<base href="/grafana-ui//">': '<base href="/grafana-ui/">',
+        'src="/public/': 'src="/grafana-ui/public/',
+        'href="/public/': 'href="/grafana-ui/public/',
+        'content="/public/': 'content="/grafana-ui/public/',
+        'url(/public/': 'url(/grafana-ui/public/',
+        'src="public/': 'src="/grafana-ui/public/',
+        'href="public/': 'href="/grafana-ui/public/',
+        '"appSubUrl":""': '"appSubUrl":"/grafana-ui"',
+        '"appSubUrl":"/"': '"appSubUrl":"/grafana-ui"',
+    }
+    rewritten = html
+    for old, new in replacements.items():
+        rewritten = rewritten.replace(old, new)
+    return rewritten
 
 
 def _rewrite_location(value: str) -> str:

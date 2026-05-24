@@ -255,6 +255,41 @@ def test_grafana_ui_proxy_strips_subpath_for_static_assets(monkeypatch):
     assert captured["upstream_path"] == "/public/build/statPanel.3fd0656497f2451671cd.js"
 
 
+def test_grafana_ui_proxy_rewrites_html_asset_paths(monkeypatch):
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="grafana-ui-html@example.test",
+        email="grafana-ui-html@example.test",
+    )
+    session = storage.create_session(user["id"])
+
+    async def fake_forward(request, upstream_path, user):
+        return httpx.Response(
+            200,
+            text=(
+                '<html><head><base href="/">'
+                '<script src="public/build/runtime.js"></script>'
+                '<link href="/public/build/grafana.dark.css" rel="stylesheet">'
+                '<script>window.grafanaBootData={"settings":{"appSubUrl":""}}</script>'
+                "</head></html>"
+            ),
+            headers={"content-type": "text/html; charset=utf-8"},
+        )
+
+    monkeypatch.setattr(ui_proxy, "_forward_grafana_request", fake_forward)
+
+    response = client.get(
+        "/grafana-ui/",
+        cookies={"compliance_ai_session": session},
+    )
+
+    assert response.status_code == 200
+    assert '<base href="/grafana-ui/">' in response.text
+    assert 'src="/grafana-ui/public/build/runtime.js"' in response.text
+    assert 'href="/grafana-ui/public/build/grafana.dark.css"' in response.text
+    assert '"appSubUrl":"/grafana-ui"' in response.text
+
+
 def test_grafana_ui_proxy_rewrites_root_relative_redirects():
     assert ui_proxy._rewrite_location("/login?redirectTo=%2F") == "/grafana-ui/login?redirectTo=%2F"
     assert ui_proxy._rewrite_location(f"{ui_proxy.GRAFANA_URL}/login") == "/grafana-ui/login"
