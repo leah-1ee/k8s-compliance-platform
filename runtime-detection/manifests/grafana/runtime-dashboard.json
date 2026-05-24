@@ -11,7 +11,7 @@
   "panels": [
     {
       "title": "Runtime Compliance Score",
-      "description": "Overall compliance based on high-severity event rate",
+      "description": "Overall runtime posture based on stored high-severity KubeOwl events",
       "type": "gauge",
       "gridPos": {
         "h": 6,
@@ -21,7 +21,7 @@
       },
       "targets": [
         {
-          "expr": "100 - (((sum(compliance_falco_events_total{severity=\"high\"}) or vector(0)) / ((sum(compliance_falco_events_total) or vector(0)) + 1)) * 100)",
+          "expr": "100 - (((sum(kubeowl_runtime_events_total{severity=\"high\"}) or vector(0)) / ((sum(kubeowl_runtime_events_total) or vector(0)) + 1)) * 100)",
           "legendFormat": "Score",
           "datasource": {
             "type": "prometheus",
@@ -73,7 +73,7 @@
       },
       "targets": [
         {
-          "expr": "sum(compliance_falco_events_total) or vector(0)",
+          "expr": "sum(kubeowl_runtime_events_total) or vector(0)",
           "legendFormat": "Total",
           "datasource": {
             "type": "prometheus",
@@ -104,7 +104,7 @@
       },
       "targets": [
         {
-          "expr": "sum(compliance_falco_events_total{severity=\"high\"}) or vector(0)",
+          "expr": "sum(kubeowl_runtime_events_total{severity=\"high\"}) or vector(0)",
           "legendFormat": "High",
           "datasource": {
             "type": "prometheus",
@@ -137,7 +137,7 @@
       }
     },
     {
-      "title": "Auto-Isolations",
+      "title": "Tracked Clusters",
       "type": "stat",
       "gridPos": {
         "h": 3,
@@ -147,8 +147,8 @@
       },
       "targets": [
         {
-          "expr": "sum(compliance_network_isolations_total) or vector(0)",
-          "legendFormat": "Isolated",
+          "expr": "count(kubeowl_cluster_last_seen_timestamp_seconds) or vector(0)",
+          "legendFormat": "Tracked",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -180,7 +180,7 @@
       }
     },
     {
-      "title": "AI Fallback Rate",
+      "title": "Recent 24h Events",
       "type": "stat",
       "gridPos": {
         "h": 3,
@@ -190,8 +190,8 @@
       },
       "targets": [
         {
-          "expr": "((sum(compliance_ai_fallbacks_total) or vector(0)) / ((sum(compliance_ai_requests_total) or vector(0)) + 1)) * 100",
-          "legendFormat": "Fallback %",
+          "expr": "sum(kubeowl_runtime_events_recent_24h) or vector(0)",
+          "legendFormat": "Recent 24h",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -200,7 +200,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percent"
+          "unit": "short"
         }
       },
       "datasource": {
@@ -209,7 +209,7 @@
       }
     },
     {
-      "title": "Isolation Errors",
+      "title": "Last Seen Age",
       "type": "stat",
       "gridPos": {
         "h": 3,
@@ -219,8 +219,8 @@
       },
       "targets": [
         {
-          "expr": "sum(compliance_network_isolation_errors_total) or vector(0)",
-          "legendFormat": "Errors",
+          "expr": "time() - max(kubeowl_cluster_last_seen_timestamp_seconds)",
+          "legendFormat": "Seconds since last event",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -240,7 +240,8 @@
                 "value": 1
               }
             ]
-          }
+          },
+          "unit": "s"
         }
       },
       "datasource": {
@@ -249,7 +250,7 @@
       }
     },
     {
-      "title": "Server Uptime",
+      "title": "Clusters Reporting",
       "type": "stat",
       "gridPos": {
         "h": 3,
@@ -259,8 +260,8 @@
       },
       "targets": [
         {
-          "expr": "compliance_server_uptime_seconds or vector(0)",
-          "legendFormat": "Uptime",
+          "expr": "count(kubeowl_cluster_last_seen_timestamp_seconds) or vector(0)",
+          "legendFormat": "Reporting",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -269,7 +270,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s"
+          "unit": "short"
         }
       },
       "datasource": {
@@ -288,7 +289,7 @@
       },
       "targets": [
         {
-          "expr": "rate(compliance_falco_events_total{severity=\"high\"}[5m])",
+          "expr": "sum(kubeowl_runtime_events_total{severity=\"high\"}) or vector(0)",
           "legendFormat": "High",
           "datasource": {
             "type": "prometheus",
@@ -296,7 +297,7 @@
           }
         },
         {
-          "expr": "rate(compliance_falco_events_total{severity=\"medium\"}[5m])",
+          "expr": "sum(kubeowl_runtime_events_total{severity=\"medium\"}) or vector(0)",
           "legendFormat": "Medium",
           "datasource": {
             "type": "prometheus",
@@ -304,7 +305,7 @@
           }
         },
         {
-          "expr": "rate(compliance_falco_events_total{severity=\"low\"}[5m])",
+          "expr": "sum(kubeowl_runtime_events_total{severity=\"low\"}) or vector(0)",
           "legendFormat": "Low",
           "datasource": {
             "type": "prometheus",
@@ -314,7 +315,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "ops"
+          "unit": "short"
         },
         "overrides": [
           {
@@ -370,7 +371,7 @@
       }
     },
     {
-      "title": "Events by Rule",
+      "title": "Events by Cluster and Severity",
       "type": "barchart",
       "gridPos": {
         "h": 8,
@@ -380,8 +381,8 @@
       },
       "targets": [
         {
-          "expr": "topk(10, compliance_falco_events_by_rule_total)",
-          "legendFormat": "{{rule}}",
+          "expr": "sum by (cluster_name, severity) (kubeowl_runtime_events_total)",
+          "legendFormat": "{{cluster_name}} {{severity}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -394,7 +395,7 @@
       }
     },
     {
-      "title": "Events by Namespace",
+      "title": "Reporting Clusters",
       "type": "piechart",
       "gridPos": {
         "h": 8,
@@ -404,8 +405,8 @@
       },
       "targets": [
         {
-          "expr": "compliance_falco_events_by_namespace_total",
-          "legendFormat": "{{namespace}}",
+          "expr": "count by (cluster_name) (kubeowl_cluster_last_seen_timestamp_seconds)",
+          "legendFormat": "{{cluster_name}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -418,7 +419,7 @@
       }
     },
     {
-      "title": "Response Actions Distribution",
+      "title": "Events by Source",
       "type": "piechart",
       "gridPos": {
         "h": 8,
@@ -428,8 +429,8 @@
       },
       "targets": [
         {
-          "expr": "compliance_response_actions_total",
-          "legendFormat": "{{action}}",
+          "expr": "sum by (source) (kubeowl_runtime_events_total)",
+          "legendFormat": "{{source}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -442,8 +443,8 @@
       }
     },
     {
-      "title": "AI Classification Latency",
-      "type": "histogram",
+      "title": "Last Seen by Cluster",
+      "type": "barchart",
       "gridPos": {
         "h": 8,
         "w": 6,
@@ -452,8 +453,8 @@
       },
       "targets": [
         {
-          "expr": "rate(compliance_ai_latency_seconds_bucket[5m])",
-          "legendFormat": "{{le}}",
+          "expr": "kubeowl_cluster_last_seen_timestamp_seconds",
+          "legendFormat": "{{cluster_name}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -463,10 +464,15 @@
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeAsIso"
+        }
       }
     },
     {
-      "title": "Auto-Isolation Rate",
+      "title": "Stored Events by Severity",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
@@ -476,16 +482,8 @@
       },
       "targets": [
         {
-          "expr": "rate(compliance_network_isolations_total[5m])",
-          "legendFormat": "Isolations/sec",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          }
-        },
-        {
-          "expr": "rate(compliance_network_isolation_errors_total[5m])",
-          "legendFormat": "Errors/sec",
+          "expr": "sum by (severity) (kubeowl_runtime_events_total)",
+          "legendFormat": "{{severity}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -495,11 +493,16 @@
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
       }
     },
     {
-      "title": "ISMS-P Compliance Status",
-      "description": "Maps Falco rules to ISMS-P regulation items",
+      "title": "Runtime Events by Severity",
+      "description": "Stored KubeOwl runtime events grouped by severity",
       "type": "table",
       "gridPos": {
         "h": 8,
@@ -509,14 +512,14 @@
       },
       "targets": [
         {
-          "expr": "compliance_falco_events_by_rule_total",
-          "legendFormat": "{{rule}}",
-          "format": "table",
-          "instant": true,
+          "expr": "sum by (severity) (kubeowl_runtime_events_total)",
+          "legendFormat": "{{severity}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
-          }
+          },
+          "format": "table",
+          "instant": true
         }
       ],
       "transformations": [
@@ -524,7 +527,7 @@
           "id": "organize",
           "options": {
             "renameByName": {
-              "rule": "Falco Rule",
+              "severity": "Severity",
               "Value": "Total Events"
             }
           }
