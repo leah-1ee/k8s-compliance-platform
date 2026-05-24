@@ -68,6 +68,16 @@ grafana:
   persistence:
     enabled: false
 
+  # ai-server /grafana-ui 프록시가 전달하는 사용자 헤더를 신뢰한다.
+  grafana.ini:
+    auth.proxy:
+      enabled: true
+      header_name: X-WEBAUTH-USER
+      header_property: email
+      auto_sign_up: true
+      sync_ttl: 60
+      headers: "Email:X-WEBAUTH-EMAIL Name:X-WEBAUTH-NAME"
+
   sidecar:
     # sidecar 공통 리소스
     resources:
