@@ -367,19 +367,25 @@ def test_grafana_ui_proxy_serves_root_grafana_api_paths(monkeypatch):
         "/api/plugins/grafana-lokiexplore-app/settings",
         "/api/user/orgs",
         "/api/ds/query?ds_type=prometheus",
+        "/api/prometheus/grafana/api/v1/rules?dashboard_uid=compliance-overview",
         "/apis/dashboard.grafana.app/v1beta1/namespaces/default/dashboards",
         "/avatar/78d07744450b61186736ffc6f97b1082",
     ):
         response = client.get(path, cookies={"compliance_ai_session": session})
         assert response.status_code == 200
 
+    metrics_response = client.post("/api/frontend-metrics", cookies={"compliance_ai_session": session})
+    assert metrics_response.status_code == 200
+
     assert captured == [
         "/api/login/ping",
         "/api/plugins/grafana-lokiexplore-app/settings",
         "/api/user/orgs",
         "/api/ds/query?ds_type=prometheus",
+        "/api/prometheus/grafana/api/v1/rules?dashboard_uid=compliance-overview",
         "/apis/dashboard.grafana.app/v1beta1/namespaces/default/dashboards",
         "/avatar/78d07744450b61186736ffc6f97b1082",
+        "/api/frontend-metrics",
     ]
 
 

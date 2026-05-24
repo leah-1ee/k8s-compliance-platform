@@ -54,6 +54,14 @@ async def grafana_public_asset_proxy(
     methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
 )
 @router.api_route(
+    "/api/prometheus/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/frontend-metrics",
+    methods=["POST"],
+)
+@router.api_route(
     "/api/annotations",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
 )
