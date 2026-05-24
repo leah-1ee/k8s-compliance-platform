@@ -37,6 +37,48 @@ async def grafana_public_asset_proxy(
     )
 
 
+@router.api_route(
+    "/api/login/ping",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/plugins/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/user/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/ds/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/annotations",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/annotations/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/apis/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route("/avatar/{path:path}", methods=["GET"])
+async def grafana_root_api_proxy(
+    request: Request,
+    compliance_ai_session: str | None = Cookie(default=None),
+    kubeowl_admin_grafana: str | None = Cookie(default=None),
+) -> Response:
+    return await _proxy_grafana_path(
+        request=request,
+        path=request.url.path.lstrip("/"),
+        compliance_ai_session=compliance_ai_session,
+        kubeowl_admin_grafana=kubeowl_admin_grafana,
+    )
+
+
 @router.api_route("/grafana-ui/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def grafana_ui_proxy(
     request: Request,

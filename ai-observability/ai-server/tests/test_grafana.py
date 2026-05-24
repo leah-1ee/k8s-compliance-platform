@@ -347,6 +347,42 @@ def test_grafana_ui_proxy_serves_root_public_lazy_chunks(monkeypatch):
     assert captured["upstream_path"] == "/public/build/7651.06c4a6f267dfa91784a2.js"
 
 
+def test_grafana_ui_proxy_serves_root_grafana_api_paths(monkeypatch):
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="grafana-ui-root-api@example.test",
+        email="grafana-ui-root-api@example.test",
+    )
+    session = storage.create_session(user["id"])
+    captured = []
+
+    async def fake_forward(request, upstream_path, user):
+        captured.append(upstream_path)
+        return httpx.Response(200, json={"ok": True})
+
+    monkeypatch.setattr(ui_proxy, "_forward_grafana_request", fake_forward)
+
+    for path in (
+        "/api/login/ping",
+        "/api/plugins/grafana-lokiexplore-app/settings",
+        "/api/user/orgs",
+        "/api/ds/query?ds_type=prometheus",
+        "/apis/dashboard.grafana.app/v1beta1/namespaces/default/dashboards",
+        "/avatar/78d07744450b61186736ffc6f97b1082",
+    ):
+        response = client.get(path, cookies={"compliance_ai_session": session})
+        assert response.status_code == 200
+
+    assert captured == [
+        "/api/login/ping",
+        "/api/plugins/grafana-lokiexplore-app/settings",
+        "/api/user/orgs",
+        "/api/ds/query?ds_type=prometheus",
+        "/apis/dashboard.grafana.app/v1beta1/namespaces/default/dashboards",
+        "/avatar/78d07744450b61186736ffc6f97b1082",
+    ]
+
+
 def test_grafana_ui_proxy_rewrites_root_relative_redirects():
     assert ui_proxy._rewrite_location("/login?redirectTo=%2F") == "/grafana-ui/login?redirectTo=%2F"
     assert ui_proxy._rewrite_location(f"{ui_proxy.GRAFANA_URL}/login") == "/grafana-ui/login"
