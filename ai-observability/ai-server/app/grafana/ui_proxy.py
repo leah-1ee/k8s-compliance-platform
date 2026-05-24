@@ -35,9 +35,7 @@ async def grafana_ui_proxy(
     if user is None:
         return JSONResponse(status_code=401, content={"error": "login required"})
 
-    upstream_path = f"/grafana-ui/{path}".rstrip("/") if path else "/grafana-ui/"
-    if request.url.query:
-        upstream_path = f"{upstream_path}?{request.url.query}"
+    upstream_path = _upstream_path(path, request.url.query)
     try:
         response = await _forward_grafana_request(
             request,
@@ -79,11 +77,20 @@ def _request_headers(request: Request, user: dict[str, Any]) -> dict[str, str]:
         "X-Forwarded-Proto": _ascii_header_value(request.url.scheme),
         "X-Forwarded-Prefix": "/grafana-ui",
     }
-    for key in ("accept", "accept-encoding", "content-type", "cookie", "user-agent"):
+    for key in ("accept", "content-type", "cookie", "user-agent"):
         value = request.headers.get(key)
         if value:
             headers[key] = _ascii_header_value(value)
     return headers
+
+
+def _upstream_path(path: str, query: str) -> str:
+    upstream_path = f"/{path}".rstrip("/") if path else "/"
+    if not upstream_path:
+        upstream_path = "/"
+    if query:
+        upstream_path = f"{upstream_path}?{query}"
+    return upstream_path
 
 
 def _ascii_header_value(value: Any) -> str:
@@ -105,8 +112,9 @@ def _response_headers(response: httpx.Response) -> dict[str, str]:
 
 
 def _rewrite_location(value: str) -> str:
+    rewritten = value
     if value.startswith(GRAFANA_URL):
-        return value.replace(GRAFANA_URL, "", 1) or "/grafana-ui/"
-    if value.startswith("/") and not value.startswith("/grafana-ui"):
-        return f"/grafana-ui{value}"
-    return value
+        rewritten = value.replace(GRAFANA_URL, "", 1) or "/"
+    if rewritten.startswith("/") and not rewritten.startswith("/grafana-ui"):
+        return f"/grafana-ui{rewritten}"
+    return rewritten

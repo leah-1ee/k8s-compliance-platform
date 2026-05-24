@@ -221,10 +221,43 @@ def test_grafana_ui_proxy_injects_auth_proxy_headers(monkeypatch):
 
     assert response.status_code == 200
     assert response.text == "grafana ok"
-    assert captured["upstream_path"] == "/grafana-ui/d/kubeowl-observability/kubeowl-observability"
+    assert captured["upstream_path"] == "/d/kubeowl-observability/kubeowl-observability"
     assert captured["headers"]["X-WEBAUTH-USER"] == "grafana-ui-proxy@example.test"
     assert captured["headers"]["X-WEBAUTH-EMAIL"] == "grafana-ui-proxy@example.test"
     assert captured["headers"]["X-WEBAUTH-NAME"] == "Grafana Viewer"
+
+
+def test_grafana_ui_proxy_strips_subpath_for_static_assets(monkeypatch):
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="grafana-ui-asset@example.test",
+        email="grafana-ui-asset@example.test",
+    )
+    session = storage.create_session(user["id"])
+    captured = {}
+
+    async def fake_forward(request, upstream_path, user):
+        captured["upstream_path"] = upstream_path
+        return httpx.Response(
+            200,
+            text="console.log('stat panel')",
+            headers={"content-type": "text/javascript"},
+        )
+
+    monkeypatch.setattr(ui_proxy, "_forward_grafana_request", fake_forward)
+
+    response = client.get(
+        "/grafana-ui/public/build/statPanel.3fd0656497f2451671cd.js",
+        cookies={"compliance_ai_session": session},
+    )
+
+    assert response.status_code == 200
+    assert captured["upstream_path"] == "/public/build/statPanel.3fd0656497f2451671cd.js"
+
+
+def test_grafana_ui_proxy_rewrites_root_relative_redirects():
+    assert ui_proxy._rewrite_location("/login?redirectTo=%2F") == "/grafana-ui/login?redirectTo=%2F"
+    assert ui_proxy._rewrite_location(f"{ui_proxy.GRAFANA_URL}/login") == "/grafana-ui/login"
 
 
 def test_grafana_ui_proxy_headers_are_ascii_safe_for_non_ascii_names(monkeypatch):
@@ -290,7 +323,7 @@ def test_admin_grafana_url_sets_admin_proxy_cookie(monkeypatch):
 
     assert grafana_response.status_code == 200
     assert grafana_response.text == "admin grafana ok"
-    assert captured["upstream_path"] == "/grafana-ui/dashboards?orgId=1"
+    assert captured["upstream_path"] == "/dashboards?orgId=1"
     assert captured["headers"]["X-WEBAUTH-USER"] == "kubeowl-admin@local"
     assert captured["headers"]["X-WEBAUTH-EMAIL"] == "kubeowl-admin@local"
     assert captured["headers"]["X-WEBAUTH-NAME"] == "KubeOwl Admin"
