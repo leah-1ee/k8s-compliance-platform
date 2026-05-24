@@ -12,11 +12,13 @@ GRAFANA_LOCAL_PORT="${GRAFANA_LOCAL_PORT:-3001}"
 GRAFANA_TARGET_PORT="${GRAFANA_TARGET_PORT:-80}"
 RESPONSE_LOCAL_PORT="${RESPONSE_LOCAL_PORT:-5000}"
 RESPONSE_TARGET_PORT="${RESPONSE_TARGET_PORT:-5000}"
+ENABLE_DIRECT_GRAFANA_ZROK="${ENABLE_DIRECT_GRAFANA_ZROK:-false}"
 
 AI_SHARE_NAME="${AI_SHARE_NAME:-public:compliance-ai-console}"
 GRAFANA_SHARE_NAME="${GRAFANA_SHARE_NAME:-public:compliance-grafana}"
 AI_PUBLIC_URL="${AI_PUBLIC_URL:-https://compliance-ai-console.shares.zrok.io/ui}"
 GRAFANA_PUBLIC_URL="${GRAFANA_PUBLIC_URL:-https://compliance-grafana.shares.zrok.io}"
+GRAFANA_PROXY_PUBLIC_URL="${GRAFANA_PROXY_PUBLIC_URL:-https://compliance-ai-console.shares.zrok.io/grafana-ui/}"
 
 mkdir -p "${PID_DIR}" "${LOG_DIR}"
 
@@ -54,6 +56,22 @@ check_http() {
   done
 
   echo "[warn] ${name} not reachable yet: ${url}" >&2
+  return 1
+}
+
+check_http_status() {
+  local name="$1"
+  local url="$2"
+  local expected_pattern="$3"
+  local status
+
+  status="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 5 "${url}" || true)"
+  if echo "${status}" | grep -Eq "${expected_pattern}"; then
+    echo "[ok] ${name} reachable: ${url} status=${status}"
+    return 0
+  fi
+
+  echo "[warn] ${name} unexpected status=${status}: ${url}" >&2
   return 1
 }
 
@@ -203,8 +221,10 @@ require_command curl
 require_command grep
 require_file "${ZROK_BIN}"
 
-ensure_zrok_name "${GRAFANA_SHARE_NAME}"
 ensure_zrok_name "${AI_SHARE_NAME}"
+if [ "${ENABLE_DIRECT_GRAFANA_ZROK}" = "true" ]; then
+  ensure_zrok_name "${GRAFANA_SHARE_NAME}"
+fi
 
 start_bg grafana-port-forward \
   kubectl port-forward -n monitoring svc/monitoring-grafana \
@@ -218,19 +238,21 @@ start_bg ai-console-port-forward \
   kubectl port-forward -n compliance-system deploy/ai-classifier \
   "${AI_LOCAL_PORT}:${AI_TARGET_PORT}"
 
-# ★ 핵심 수정: -n 에 full_name (public:compliance-xxx) 그대로 전달
-start_zrok_share grafana-zrok "${GRAFANA_PUBLIC_URL}" \
-  "${ZROK_BIN}" share public "http://127.0.0.1:${GRAFANA_LOCAL_PORT}" \
-  -n "${GRAFANA_SHARE_NAME}"
-
 start_zrok_share ai-console-zrok "${AI_PUBLIC_URL}" \
   "${ZROK_BIN}" share public "http://127.0.0.1:${AI_LOCAL_PORT}" \
   -n "${AI_SHARE_NAME}"
 
+if [ "${ENABLE_DIRECT_GRAFANA_ZROK}" = "true" ]; then
+  start_zrok_share grafana-zrok "${GRAFANA_PUBLIC_URL}" \
+    "${ZROK_BIN}" share public "http://127.0.0.1:${GRAFANA_LOCAL_PORT}" \
+    -n "${GRAFANA_SHARE_NAME}"
+fi
+
 echo
 echo "Checking local endpoints..."
 check_http "AI Console local" "http://127.0.0.1:${AI_LOCAL_PORT}/ui"
-check_http "Grafana local" "http://127.0.0.1:${GRAFANA_LOCAL_PORT}"
+check_http_status "Grafana proxy local" "http://127.0.0.1:${AI_LOCAL_PORT}/grafana-ui/" "^(200|302|401)$" || true
+check_http_status "Grafana direct local" "http://127.0.0.1:${GRAFANA_LOCAL_PORT}" "^(200|302)$" || true
 check_http "Response server local" "http://127.0.0.1:${RESPONSE_LOCAL_PORT}/api/v1/events"
 
 echo
@@ -240,15 +262,20 @@ if ! check_http "AI Console zrok" "${AI_PUBLIC_URL}" 10 2; then
   exit 1
 fi
 
-if ! check_http "Grafana zrok" "${GRAFANA_PUBLIC_URL}" 10 2; then
-  print_log_tail "grafana-zrok"
-  exit 1
+if [ "${ENABLE_DIRECT_GRAFANA_ZROK}" = "true" ]; then
+  if ! check_http "Grafana direct zrok" "${GRAFANA_PUBLIC_URL}" 10 2; then
+    print_log_tail "grafana-zrok"
+    exit 1
+  fi
 fi
 
 echo
 echo "Demo tunnels started."
 echo "- AI Console: ${AI_PUBLIC_URL}"
-echo "- Grafana:    ${GRAFANA_PUBLIC_URL}"
+echo "- Grafana:    ${GRAFANA_PROXY_PUBLIC_URL} (via AI Console auth proxy)"
+if [ "${ENABLE_DIRECT_GRAFANA_ZROK}" = "true" ]; then
+  echo "- Grafana direct debug: ${GRAFANA_PUBLIC_URL}"
+fi
 echo "- Webhook:    http://127.0.0.1:${RESPONSE_LOCAL_PORT}/webhook"
 echo
 echo "Logs: ${LOG_DIR}"
