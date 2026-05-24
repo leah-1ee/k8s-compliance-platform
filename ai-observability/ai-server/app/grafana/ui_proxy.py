@@ -50,6 +50,26 @@ async def grafana_public_asset_proxy(
     methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
 )
 @router.api_route(
+    "/api/search",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/folders",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/folders/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/dashboards/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/browse/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
     "/api/ds/{path:path}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
 )
