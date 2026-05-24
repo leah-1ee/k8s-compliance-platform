@@ -22,12 +22,41 @@ async def grafana_ui_root() -> RedirectResponse:
     return RedirectResponse("/grafana-ui/", status_code=307)
 
 
+@router.api_route("/public/{path:path}", methods=["GET"])
+async def grafana_public_asset_proxy(
+    request: Request,
+    path: str,
+    compliance_ai_session: str | None = Cookie(default=None),
+    kubeowl_admin_grafana: str | None = Cookie(default=None),
+) -> Response:
+    return await _proxy_grafana_path(
+        request=request,
+        path=f"public/{path}",
+        compliance_ai_session=compliance_ai_session,
+        kubeowl_admin_grafana=kubeowl_admin_grafana,
+    )
+
+
 @router.api_route("/grafana-ui/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def grafana_ui_proxy(
     request: Request,
     path: str,
     compliance_ai_session: str | None = Cookie(default=None),
     kubeowl_admin_grafana: str | None = Cookie(default=None),
+) -> Response:
+    return await _proxy_grafana_path(
+        request=request,
+        path=path,
+        compliance_ai_session=compliance_ai_session,
+        kubeowl_admin_grafana=kubeowl_admin_grafana,
+    )
+
+
+async def _proxy_grafana_path(
+    request: Request,
+    path: str,
+    compliance_ai_session: str | None,
+    kubeowl_admin_grafana: str | None,
 ) -> Response:
     user = admin_user_from_token(kubeowl_admin_grafana)
     if user is None:

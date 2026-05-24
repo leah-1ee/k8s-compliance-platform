@@ -318,6 +318,35 @@ def test_grafana_ui_proxy_rewrites_javascript_chunk_paths(monkeypatch):
     assert '"/public/build/' not in response.text
 
 
+def test_grafana_ui_proxy_serves_root_public_lazy_chunks(monkeypatch):
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="grafana-ui-root-public@example.test",
+        email="grafana-ui-root-public@example.test",
+    )
+    session = storage.create_session(user["id"])
+    captured = {}
+
+    async def fake_forward(request, upstream_path, user):
+        captured["upstream_path"] = upstream_path
+        return httpx.Response(
+            200,
+            text="chunk ok",
+            headers={"content-type": "text/javascript; charset=utf-8"},
+        )
+
+    monkeypatch.setattr(ui_proxy, "_forward_grafana_request", fake_forward)
+
+    response = client.get(
+        "/public/build/7651.06c4a6f267dfa91784a2.js",
+        cookies={"compliance_ai_session": session},
+    )
+
+    assert response.status_code == 200
+    assert response.text == "chunk ok"
+    assert captured["upstream_path"] == "/public/build/7651.06c4a6f267dfa91784a2.js"
+
+
 def test_grafana_ui_proxy_rewrites_root_relative_redirects():
     assert ui_proxy._rewrite_location("/login?redirectTo=%2F") == "/grafana-ui/login?redirectTo=%2F"
     assert ui_proxy._rewrite_location(f"{ui_proxy.GRAFANA_URL}/login") == "/grafana-ui/login"
