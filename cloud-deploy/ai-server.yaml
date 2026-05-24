@@ -113,6 +113,8 @@ spec:
               value: "school-cloud"
             - name: PUBLIC_BASE_URL
               value: "https://compliance-ai-console.shares.zrok.io"
+            - name: GRAFANA_URL_INTERNAL
+              value: "http://monitoring-grafana.monitoring.svc.cluster.local:80"
             - name: SQLITE_PATH
               value: "/data/compliance-ai-server.sqlite3"
             - name: DEMO_CLUSTER_NAMES
