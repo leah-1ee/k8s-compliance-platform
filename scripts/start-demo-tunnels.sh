@@ -139,6 +139,11 @@ ensure_zrok_name() {
     return
   fi
 
+  if grep -Eq "createShareNameConflict|409" "${log_file}"; then
+    echo "[ok] zrok reserved name already exists ${namespace}:${name}"
+    return
+  fi
+
   if "${ZROK_BIN}" list names 2>/dev/null | grep -q "${name}"; then
     echo "[ok] zrok reserved name already exists ${namespace}:${name}"
     return
