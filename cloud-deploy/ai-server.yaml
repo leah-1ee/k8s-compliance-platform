@@ -115,6 +115,8 @@ spec:
               value: "https://compliance-ai-console.shares.zrok.io"
             - name: GRAFANA_URL_INTERNAL
               value: "http://monitoring-grafana.monitoring.svc.cluster.local:80"
+            - name: AI_SERVER_PROXY_BASE_URL
+              value: "http://ai-classifier.compliance-system.svc.cluster.local:8000"
             - name: GRAFANA_ADMIN_USER
               valueFrom:
                 secretKeyRef:
