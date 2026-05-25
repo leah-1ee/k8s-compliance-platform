@@ -1489,7 +1489,7 @@ function ensureAccountDeletionModal() {
             Slack 설정과 Grafana 프로비저닝 연결도 삭제되며, 런타임 이벤트·AI 리포트·정책 적용 기록은 감사 목적으로 유지됩니다.
           </p>
           <ul class="account-deletion-list">
-            <li>삭제된 계정은 `/ui`에서 더 이상 표시되지 않습니다.</li>
+            <li>삭제된 계정은 <code>/ui</code>에서 더 이상 표시되지 않습니다.</li>
             <li>관리자는 삭제 상태와 소유 클러스터를 계속 확인할 수 있습니다.</li>
             <li>복구가 필요한 경우 관리자에게 문의해야 합니다.</li>
           </ul>
