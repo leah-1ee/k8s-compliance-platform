@@ -123,6 +123,15 @@ def init_db() -> None:
                     FOREIGN KEY(cluster_id) REFERENCES clusters(id)
                 );
 
+                CREATE TABLE IF NOT EXISTS auth_login_events (
+                    id TEXT PRIMARY KEY,
+                    ip_hash TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    email TEXT NOT NULL,
+                    result TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp DESC);
                 CREATE INDEX IF NOT EXISTS idx_events_cluster ON events(cluster);
                 CREATE INDEX IF NOT EXISTS idx_events_namespace ON events(namespace);
@@ -147,6 +156,7 @@ def init_db() -> None:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_policy_apply_history_user ON policy_apply_history(user_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_policy_apply_history_cluster ON policy_apply_history(cluster_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_grafana_provisioning_user ON grafana_provisioning(user_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_login_events_ip_time ON auth_login_events(ip_hash, created_at)")
             _mark_env_demo_clusters(conn)
         _INITIALIZED = True
 
@@ -209,6 +219,57 @@ def get_user(user_id: str) -> dict[str, Any] | None:
     if row is None:
         return None
     return dict(row)
+
+
+def check_auth_account_limit(ip_hash: str, email: str, limit: int = 5, window_hours: int = 24) -> dict[str, Any]:
+    init_db()
+    normalized_ip_hash = str(ip_hash or "").strip()
+    normalized_email = str(email or "").strip().lower()
+    if not normalized_ip_hash or not normalized_email:
+        return {"allowed": True, "distinct_accounts": 0, "limit": max(1, int(limit or 5))}
+    normalized_limit = max(1, int(limit or 5))
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=max(1, int(window_hours or 24)))).isoformat()
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT email
+            FROM auth_login_events
+            WHERE ip_hash = ? AND created_at >= ?
+            """,
+            (normalized_ip_hash, cutoff),
+        ).fetchall()
+    emails = {str(row["email"] or "").strip().lower() for row in rows if row["email"]}
+    allowed = normalized_email in emails or len(emails) < normalized_limit
+    return {
+        "allowed": allowed,
+        "distinct_accounts": len(emails),
+        "limit": normalized_limit,
+    }
+
+
+def record_auth_login_event(ip_hash: str, provider: str, email: str, result: str) -> None:
+    init_db()
+    normalized_ip_hash = str(ip_hash or "").strip()
+    normalized_provider = str(provider or "").strip().lower() or "unknown"
+    normalized_email = str(email or "").strip().lower()
+    normalized_result = str(result or "").strip().lower() or "unknown"
+    if not normalized_ip_hash or not normalized_email:
+        return
+    with _LOCK, _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO auth_login_events (id, ip_hash, provider, email, result, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                f"auth-{uuid.uuid4().hex[:12]}",
+                normalized_ip_hash,
+                normalized_provider,
+                normalized_email,
+                normalized_result[:32],
+                _utc_now(),
+            ),
+        )
 
 
 def list_users() -> list[dict[str, Any]]:

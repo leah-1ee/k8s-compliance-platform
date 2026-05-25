@@ -2,6 +2,7 @@ import logging
 import os
 import secrets
 import shlex
+import hashlib
 from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
@@ -130,6 +131,67 @@ def public_base_url(request: Request) -> str:
 
 def oauth_redirect_uri(request: Request) -> str:
     return f"{public_base_url(request)}/auth/google/callback"
+
+
+def auth_abuse_limit() -> int:
+    raw = os.getenv("AUTH_DISTINCT_ACCOUNT_LIMIT_PER_IP", "5").strip()
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 5
+
+
+def auth_abuse_window_hours() -> int:
+    raw = os.getenv("AUTH_DISTINCT_ACCOUNT_WINDOW_HOURS", "24").strip()
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 24
+
+
+def client_ip_address(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip()
+    if request.client:
+        return request.client.host
+    return "unknown"
+
+
+def auth_ip_hash(request: Request) -> str:
+    salt = (
+        os.getenv("AUTH_ABUSE_SALT", "").strip()
+        or os.getenv("ADMIN_TOKEN", "").strip()
+        or os.getenv("JWT_SECRET", "").strip()
+        or "kubeowl-auth-abuse"
+    )
+    material = f"{salt}:{client_ip_address(request)}".encode("utf-8")
+    return hashlib.sha256(material).hexdigest()
+
+
+def auth_abuse_response(request: Request, provider: str, email: str) -> JSONResponse | None:
+    ip_hash = auth_ip_hash(request)
+    check = storage.check_auth_account_limit(
+        ip_hash=ip_hash,
+        email=email,
+        limit=auth_abuse_limit(),
+        window_hours=auth_abuse_window_hours(),
+    )
+    if check.get("allowed"):
+        return None
+    storage.record_auth_login_event(ip_hash, provider, email, "blocked_distinct_account_limit")
+    return JSONResponse(
+        status_code=403,
+        content={
+            "error": (
+                "too many distinct accounts used from this network. "
+                "Ask an administrator to verify this login."
+            ),
+            "reason": "distinct_account_limit",
+            "limit": check.get("limit"),
+            "distinct_accounts": check.get("distinct_accounts"),
+        },
+    )
 
 
 def session_cookie_secure(request: Request) -> bool:
@@ -364,11 +426,15 @@ def google_callback(
     except httpx.HTTPError as error:
         return JSONResponse(status_code=502, content={"error": f"Google OAuth request failed: {error}"})
 
+    email = str(profile.get("email", "")).strip().lower()
+    abuse_error = auth_abuse_response(request, "google", email)
+    if abuse_error:
+        return abuse_error
     try:
         user = storage.upsert_user(
             provider="google",
             provider_subject=str(profile.get("sub", "")),
-            email=str(profile.get("email", "")),
+            email=email,
             name=str(profile.get("name", "")),
             picture=str(profile.get("picture", "")),
         )
@@ -382,6 +448,7 @@ def google_callback(
         return JSONResponse(status_code=403, content={"error": str(error)})
     response = RedirectResponse("/ui", status_code=302)
     set_session_cookie(response, request, session_token)
+    storage.record_auth_login_event(auth_ip_hash(request), "google", email, "allowed")
     response.delete_cookie(
         OAUTH_STATE_COOKIE_NAME,
         httponly=True,
@@ -428,6 +495,9 @@ def dev_login(request: Request):
         return JSONResponse(status_code=503, content={"error": "dev auth is disabled"})
     email = os.getenv("DEV_AUTH_EMAIL", "demo@school.test").strip().lower()
     name = os.getenv("DEV_AUTH_NAME", "Demo User").strip()
+    abuse_error = auth_abuse_response(request, "dev", email)
+    if abuse_error:
+        return abuse_error
     try:
         user = storage.upsert_user(
             provider="dev",
@@ -444,6 +514,7 @@ def dev_login(request: Request):
         return JSONResponse(status_code=403, content={"error": str(error)})
     response = RedirectResponse("/ui", status_code=302)
     set_session_cookie(response, request, session_token)
+    storage.record_auth_login_event(auth_ip_hash(request), "dev", email, "allowed")
     return response
 
 

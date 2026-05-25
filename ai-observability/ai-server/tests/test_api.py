@@ -323,6 +323,29 @@ def test_dev_login_creates_session(monkeypatch):
     client.cookies.clear()
 
 
+def test_dev_login_blocks_many_distinct_accounts_from_same_ip(monkeypatch):
+    monkeypatch.setenv("DEV_AUTH_ENABLED", "true")
+    monkeypatch.setenv("AUTH_DISTINCT_ACCOUNT_LIMIT_PER_IP", "5")
+    monkeypatch.setenv("AUTH_DISTINCT_ACCOUNT_WINDOW_HOURS", "24")
+    headers = {"X-Forwarded-For": "203.0.113.77"}
+
+    for index in range(5):
+        monkeypatch.setenv("DEV_AUTH_EMAIL", f"ip-abuse-{index}@example.test")
+        response = client.get("/auth/dev-login", headers=headers, follow_redirects=False)
+        assert response.status_code == 302
+
+    monkeypatch.setenv("DEV_AUTH_EMAIL", "ip-abuse-extra@example.test")
+    blocked = client.get("/auth/dev-login", headers=headers, follow_redirects=False)
+    assert blocked.status_code == 403
+    assert blocked.json()["reason"] == "distinct_account_limit"
+    assert blocked.json()["limit"] == 5
+
+    monkeypatch.setenv("DEV_AUTH_EMAIL", "ip-abuse-0@example.test")
+    existing = client.get("/auth/dev-login", headers=headers, follow_redirects=False)
+    assert existing.status_code == 302
+    client.cookies.clear()
+
+
 def test_user_cluster_registration_requires_login():
     response = client.post("/api/clusters", json={"name": "login-required-cluster"})
 
