@@ -10,8 +10,8 @@
   "links": [],
   "panels": [
     {
-      "title": "Runtime Compliance Score",
-      "description": "Overall runtime posture based on stored high-severity KubeOwl events",
+      "title": "High-Severity Free Score",
+      "description": "100 minus the percentage of stored runtime events classified high severity; empty data stays 100.",
       "type": "gauge",
       "gridPos": {
         "h": 6,
@@ -21,7 +21,7 @@
       },
       "targets": [
         {
-          "expr": "100 - (((sum(kubeowl_runtime_events_total{severity=\"high\"}) or vector(0)) / ((sum(kubeowl_runtime_events_total) or vector(0)) + 1)) * 100)",
+          "expr": "100 - (((sum(kubeowl_runtime_events_total{severity=\"high\"}) or vector(0)) / clamp_min((sum(kubeowl_runtime_events_total) or vector(0)), 1)) * 100)",
           "legendFormat": "Score",
           "datasource": {
             "type": "prometheus",
@@ -392,6 +392,15 @@
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "sum"
+          ]
+        }
       }
     },
     {
@@ -416,6 +425,15 @@
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "right",
+          "values": [
+            "value"
+          ]
+        }
       }
     },
     {
@@ -440,11 +458,21 @@
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "right",
+          "values": [
+            "value"
+          ]
+        }
       }
     },
     {
-      "title": "Last Seen by Cluster",
-      "type": "barchart",
+      "title": "Last Event Age by Cluster",
+      "description": "Seconds since the latest stored runtime event for each reporting cluster.",
+      "type": "stat",
       "gridPos": {
         "h": 8,
         "w": 6,
@@ -453,7 +481,7 @@
       },
       "targets": [
         {
-          "expr": "kubeowl_cluster_last_seen_timestamp_seconds",
+          "expr": "time() - kubeowl_cluster_last_seen_timestamp_seconds",
           "legendFormat": "{{cluster_name}}",
           "datasource": {
             "type": "prometheus",
@@ -467,7 +495,19 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "dateTimeAsIso"
+          "unit": "s",
+          "decimals": 0
+        }
+      },
+      "options": {
+        "orientation": "horizontal",
+        "textMode": "value_and_name",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         }
       }
     },
