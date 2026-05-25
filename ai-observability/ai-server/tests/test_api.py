@@ -104,6 +104,8 @@ def test_admin_is_served():
     assert "KubeOwl Admin" in response.text
     assert "Admin Grafana" in response.text
     assert "data-enable" in response.text
+    assert "userSearch" in response.text
+    assert "search-highlight" in response.text
     assert "클러스터 등록" not in response.text
     assert "설치 명령어" not in response.text
     assert "운영 요약" in response.text
@@ -121,6 +123,8 @@ def test_docs_is_served():
     assert "Q&A" in response.text
     assert "Architecture Review" in response.text
     assert "Professor Questions" not in response.text
+    assert "Auth Abuse Guard" in response.text
+    assert "24시간 내 서로 다른 계정 5개" in response.text
     assert "AI Hallucination Guard" in response.text
     assert "ingest와 LLM 분석은 분리되어 있습니다." in response.text
     assert "중앙 KubeOwl 서버가 모든 사용자 클러스터의 관리자 kubeconfig를 보관" in response.text

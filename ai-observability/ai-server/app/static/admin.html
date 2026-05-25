@@ -329,6 +329,32 @@
       .user:first-child {
         margin-top: 0;
       }
+      .scroll-list {
+        display: grid;
+        gap: 12px;
+      }
+      .scroll-list.is-scrollable {
+        max-height: 520px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding-right: 8px;
+        scrollbar-color: rgba(8, 119, 242, 0.38) rgba(8, 119, 242, 0.08);
+        scrollbar-width: thin;
+      }
+      .scroll-list.is-scrollable .cluster,
+      .scroll-list.is-scrollable .user {
+        margin-top: 0;
+      }
+      .search-highlight {
+        border-radius: 5px;
+        background: rgba(250, 204, 21, 0.42);
+        color: #713f12;
+        padding: 0 3px;
+      }
+      body[data-theme="dark"] .search-highlight {
+        background: rgba(250, 204, 21, 0.28);
+        color: #fde68a;
+      }
       .cluster strong,
       .user strong {
         font-size: 17px;
@@ -415,6 +441,20 @@
         background: rgba(244, 251, 255, 0.7);
       }
       body[data-theme="dark"] .filters {
+        background: rgba(15, 23, 42, 0.62);
+      }
+      .user-search {
+        display: grid;
+        grid-template-columns: minmax(240px, 1fr) auto;
+        gap: 12px;
+        align-items: end;
+        margin-bottom: 16px;
+        padding: 14px;
+        border: 1px solid rgba(8, 119, 242, 0.14);
+        border-radius: 12px;
+        background: rgba(244, 251, 255, 0.7);
+      }
+      body[data-theme="dark"] .user-search {
         background: rgba(15, 23, 42, 0.62);
       }
       .actions {
@@ -530,6 +570,13 @@
 
       <section>
         <h2>사용자 목록</h2>
+        <div class="user-search">
+          <label>
+            사용자 검색
+            <input id="userSearch" placeholder="email, name, provider, status" />
+          </label>
+          <button id="clearUserSearch">초기화</button>
+        </div>
         <div id="users"></div>
       </section>
 
@@ -567,10 +614,12 @@
       const userDetailEl = document.querySelector("#userDetail");
       const adminSummary = document.querySelector("#adminSummary");
       const clusterSearch = document.querySelector("#clusterSearch");
+      const userSearch = document.querySelector("#userSearch");
       const statusFilter = document.querySelector("#statusFilter");
       const adminThemeToggle = document.querySelector("#adminThemeToggle");
       const adminThemeLabel = document.querySelector("#adminThemeLabel");
       let currentUserDetailId = "";
+      let adminUsers = [];
 
       tokenInput.value = localStorage.getItem("adminToken") || "";
       const savedTheme = localStorage.getItem("adminTheme") || "light";
@@ -596,6 +645,16 @@
           .replaceAll(">", "&gt;")
           .replaceAll('"', "&quot;")
           .replaceAll("'", "&#039;");
+      }
+
+      function highlightText(value, query) {
+        const escaped = escapeHtml(value);
+        const normalizedQuery = String(query || "").trim();
+        if (!normalizedQuery) {
+          return escaped;
+        }
+        const escapedQuery = escapeHtml(normalizedQuery);
+        return escaped.replaceAll(escapedQuery, `<mark class="search-highlight">${escapedQuery}</mark>`);
       }
 
       async function requestJson(url, options = {}) {
@@ -638,7 +697,8 @@
           clustersEl.innerHTML = '<p class="meta">조건에 맞는 클러스터가 없습니다.</p>';
           return;
         }
-        clustersEl.innerHTML = clusters.map((cluster) => {
+        const query = clusterSearch.value.trim();
+        const items = clusters.map((cluster) => {
           const status = cluster.status || "active";
           const deletedMeta = status === "deleted"
             ? ` · deleted_at=${escapeHtml(cluster.deleted_at || "-")} · <span class="danger-note">영구 삭제 가능</span>`
@@ -664,13 +724,13 @@
           }
           return `
             <div class="cluster">
-              <strong>${escapeHtml(cluster.name)}</strong>
+              <strong>${highlightText(cluster.name, query)}</strong>
               <span class="meta">
-                id=${escapeHtml(cluster.id)} ·
-                owner=${escapeHtml(cluster.user_email || "admin/unassigned")} ·
+                id=${highlightText(cluster.id, query)} ·
+                owner=${highlightText(cluster.user_email || "admin/unassigned", query)} ·
                 status=<span class="status-${escapeHtml(status)}">${escapeHtml(displayClusterStatus(status))}</span> ·
                 slack=${cluster.slack_enabled === false ? "off" : "on"} ·
-                last_seen=${escapeHtml(cluster.last_seen_at || "-")} ·
+                last_seen=${highlightText(cluster.last_seen_at || "-", query)} ·
                 events=${escapeHtml(cluster.event_count || 0)}
                 ${deletedMeta}
               </span>
@@ -678,6 +738,7 @@
             </div>
           `;
         }).join("");
+        clustersEl.innerHTML = `<div class="scroll-list ${clusters.length > 5 ? "is-scrollable" : ""}">${items}</div>`;
       }
 
       function renderSummary(users, clusters) {
@@ -692,22 +753,33 @@
       }
 
       function renderUsers(users) {
-        if (!users.length) {
+        const query = userSearch.value.trim();
+        const normalizedQuery = query.toLowerCase();
+        const filteredUsers = normalizedQuery
+          ? users.filter((user) => [
+              user.email,
+              user.name,
+              user.provider,
+              user.status,
+              user.id,
+            ].some((value) => String(value || "").toLowerCase().includes(normalizedQuery)))
+          : users;
+        if (!filteredUsers.length) {
           usersEl.innerHTML = '<p class="meta">등록된 사용자가 없습니다.</p>';
           return;
         }
-        usersEl.innerHTML = users.map((user) => {
+        const items = filteredUsers.map((user) => {
           const status = user.status || "active";
           const deletedMeta = status === "deleted"
             ? ` · deleted_at=${escapeHtml(user.deleted_at || "-")}`
             : "";
           return `
             <div class="user">
-              <strong>${escapeHtml(user.email)}</strong>
+              <strong>${highlightText(user.email, query)}</strong>
               <span class="meta">
-                id=${escapeHtml(user.id)} ·
-                provider=${escapeHtml(user.provider)} ·
-                name=${escapeHtml(user.name || "-")} ·
+                id=${highlightText(user.id, query)} ·
+                provider=${highlightText(user.provider, query)} ·
+                name=${highlightText(user.name || "-", query)} ·
                 status=<span class="status-${escapeHtml(status)}">${escapeHtml(displayUserStatus(status))}</span> ·
                 clusters=${escapeHtml(user.cluster_count || 0)} ·
                 active=${escapeHtml(user.active_cluster_count || 0)} ·
@@ -723,6 +795,7 @@
             </div>
           `;
         }).join("");
+        usersEl.innerHTML = `<div class="scroll-list ${filteredUsers.length > 5 ? "is-scrollable" : ""}">${items}</div>`;
       }
 
       function renderUserDetail(body) {
@@ -793,8 +866,9 @@
         const clusters = clusterBody.clusters || [];
         const summaryClusters = summaryClusterBody.clusters || [];
         const users = userBody.users || [];
+        adminUsers = users;
         renderSummary(users, summaryClusters);
-        renderUsers(users);
+        renderUsers(adminUsers);
         renderClusters(clusters);
         setMessage("관리자 대시보드를 불러왔습니다.");
       }
@@ -807,6 +881,11 @@
 
       document.querySelector("#refreshClusters").addEventListener("click", () => {
         loadAdminDashboard().catch((error) => setMessage(error.message));
+      });
+
+      document.querySelector("#clearUserSearch").addEventListener("click", () => {
+        userSearch.value = "";
+        renderUsers(adminUsers);
       });
 
       document.querySelector("#applyClusterFilters").addEventListener("click", () => {
@@ -864,6 +943,10 @@
         if (event.key === "Enter") {
           loadAdminDashboard().catch((error) => setMessage(error.message));
         }
+      });
+
+      userSearch.addEventListener("input", () => {
+        renderUsers(adminUsers);
       });
 
       clustersEl.addEventListener("click", async (event) => {

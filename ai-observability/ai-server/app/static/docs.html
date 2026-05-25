@@ -669,6 +669,11 @@
                 <span class="topic-main"><strong>Event Flow</strong><span>policy + runtime</span></span>
                 <span class="topic-arrow">›</span>
               </button>
+              <button class="topic-button" type="button" data-docs-topic="arch-auth-abuse">
+                <span class="topic-number">5</span>
+                <span class="topic-main"><strong>Auth Abuse Guard</strong><span>account suspension</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
             </div>
             <div class="topic-detail-wrap">
               <article class="topic-detail is-active" data-docs-panel="arch-cluster">
@@ -699,6 +704,17 @@
                   <div class="flow-step"><span>3</span><strong>Scoped Metrics</strong><p>사용자 클러스터 기준으로 집계합니다.</p></div>
                   <div class="flow-step"><span>4</span><strong>Grafana Proxy</strong><p>인증 프록시로 대시보드를 엽니다.</p></div>
                 </div>
+              </article>
+              <article class="topic-detail" data-docs-panel="arch-auth-abuse">
+                <span class="kicker">Login Abuse / Account Governance</span>
+                <h3>다중 계정 악용은 IP hash 기반 감지와 관리자 계정 정지로 제어합니다.</h3>
+                <ul>
+                  <li>같은 네트워크에서 24시간 내 서로 다른 계정 5개를 초과해 로그인하려 하면 추가 로그인을 차단합니다.</li>
+                  <li>IP 원문은 저장하지 않고 salt 기반 hash로 기록해 abuse 감지와 개인정보 노출 위험을 분리합니다.</li>
+                  <li>관리자는 사용자 상세에서 계정을 정지하거나 정지 해제할 수 있으며, 정지 시 기존 세션이 무효화되고 신규 로그인과 클러스터 생성이 막힙니다.</li>
+                  <li>상용 환경에서는 이 단계에 CAPTCHA, 휴대폰 인증, IdP risk signal을 붙여 추가 검증으로 확장할 수 있습니다.</li>
+                </ul>
+                <div class="topic-chips"><span>IP hash</span><span>5 accounts / 24h</span><span>account suspension</span><span>admin review</span></div>
               </article>
             </div>
           </div>
