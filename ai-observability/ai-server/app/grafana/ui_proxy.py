@@ -227,6 +227,13 @@ async def _proxy_grafana_path(
     except httpx.HTTPError as error:
         return JSONResponse(status_code=502, content={"error": f"Grafana request failed: {error}"})
 
+    if (
+        request.method.upper() == "GET"
+        and response.status_code == 404
+        and _is_grafana_splash_user_storage_path(path)
+    ):
+        return JSONResponse(content=_empty_grafana_user_storage(path))
+
     content = _response_content(response)
     headers = _response_headers(response)
     return Response(
@@ -280,6 +287,42 @@ def _upstream_path(path: str, query: str) -> str:
 def _is_grafana_live_path(path: str) -> bool:
     normalized = path.strip("/")
     return normalized == "api/live/ws" or normalized.startswith("api/live/")
+
+
+def _is_grafana_splash_user_storage_path(path: str) -> bool:
+    normalized = path.strip("/")
+    return (
+        normalized.startswith("apis/userstorage.grafana.app/")
+        and "/user-storage/grafana-splash-screen" in normalized
+    )
+
+
+def _empty_grafana_user_storage(path: str) -> dict[str, Any]:
+    parts = path.strip("/").split("/")
+    api_version = "userstorage.grafana.app/v0alpha1"
+    namespace = "default"
+    name = "grafana-splash-screen"
+    if len(parts) >= 3:
+        api_version = f"{parts[1]}/{parts[2]}"
+    if "namespaces" in parts:
+        index = parts.index("namespaces")
+        if index + 1 < len(parts):
+            namespace = parts[index + 1]
+    if "user-storage" in parts:
+        index = parts.index("user-storage")
+        if index + 1 < len(parts):
+            name = parts[index + 1]
+    return {
+        "apiVersion": api_version,
+        "kind": "UserStorage",
+        "metadata": {
+            "name": name,
+            "namespace": namespace,
+        },
+        "spec": {
+            "data": {},
+        },
+    }
 
 
 def _ascii_header_value(value: Any) -> str:

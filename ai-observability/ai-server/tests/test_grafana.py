@@ -594,6 +594,45 @@ def test_grafana_live_websocket_closes_cleanly():
     raise AssertionError("Grafana Live websocket should close cleanly")
 
 
+def test_grafana_ui_proxy_suppresses_missing_splash_user_storage(monkeypatch):
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="grafana-ui-splash-storage@example.test",
+        email="grafana-ui-splash-storage@example.test",
+    )
+    session = storage.create_session(user["id"])
+    captured = []
+
+    async def fake_forward(request, upstream_path, user):
+        captured.append(upstream_path)
+        return httpx.Response(404, json={"message": "not found"})
+
+    monkeypatch.setattr(ui_proxy, "_forward_grafana_request", fake_forward)
+
+    response = client.get(
+        "/apis/userstorage.grafana.app/v0alpha1/namespaces/org-2/user-storage/"
+        "grafana-splash-screen:ffn4cad28ctfke",
+        cookies={"compliance_ai_session": session},
+    )
+
+    assert response.status_code == 200
+    assert captured == [
+        "/apis/userstorage.grafana.app/v0alpha1/namespaces/org-2/user-storage/"
+        "grafana-splash-screen:ffn4cad28ctfke"
+    ]
+    assert response.json() == {
+        "apiVersion": "userstorage.grafana.app/v0alpha1",
+        "kind": "UserStorage",
+        "metadata": {
+            "name": "grafana-splash-screen:ffn4cad28ctfke",
+            "namespace": "org-2",
+        },
+        "spec": {
+            "data": {},
+        },
+    }
+
+
 def test_grafana_ui_proxy_rewrites_root_relative_redirects():
     assert ui_proxy._rewrite_location("/login?redirectTo=%2F") == "/grafana-ui/login?redirectTo=%2F"
     assert ui_proxy._rewrite_location(f"{ui_proxy.GRAFANA_URL}/login") == "/grafana-ui/login"
