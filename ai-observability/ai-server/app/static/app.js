@@ -1470,6 +1470,121 @@ async function setClusterSlack(clusterId, enabled) {
   renderSlackClusterToggles();
 }
 
+function ensureAccountDeletionModal() {
+  if ($("#accountDeletionModal")) {
+    return;
+  }
+  document.body.insertAdjacentHTML(
+    "beforeend",
+    `
+      <div class="account-deletion-modal" id="accountDeletionModal" hidden>
+        <div class="account-deletion-backdrop" data-account-delete-close></div>
+      <div class="account-deletion-dialog" role="dialog" aria-modal="true" aria-labelledby="accountDeletionTitle" aria-describedby="accountDeletionDescription">
+        <div class="account-deletion-heading">
+            <span class="badge error">Danger</span>
+            <h2 id="accountDeletionTitle">회원 탈퇴</h2>
+          </div>
+          <p id="accountDeletionDescription" class="account-deletion-copy">
+            탈퇴하면 현재 로그인 세션과 모든 사용자 클러스터 ingest token이 즉시 무효화됩니다.
+            Slack 설정과 Grafana 프로비저닝 연결도 삭제되며, 런타임 이벤트·AI 리포트·정책 적용 기록은 감사 목적으로 유지됩니다.
+          </p>
+          <ul class="account-deletion-list">
+            <li>삭제된 계정은 `/ui`에서 더 이상 표시되지 않습니다.</li>
+            <li>관리자는 삭제 상태와 소유 클러스터를 계속 확인할 수 있습니다.</li>
+            <li>복구가 필요한 경우 관리자에게 문의해야 합니다.</li>
+          </ul>
+          <label class="account-deletion-field">
+            확인을 위해 이메일을 입력하세요
+            <input id="accountDeletionConfirmEmail" type="email" autocomplete="off" placeholder="user@example.com" />
+          </label>
+          <p class="account-deletion-target" id="accountDeletionTarget">현재 계정: -</p>
+          <p class="account-deletion-error" id="accountDeletionError" hidden></p>
+          <div class="actions account-deletion-actions">
+            <button class="danger" id="confirmAccountDeletion" disabled>회원 탈퇴</button>
+            <button class="secondary" id="cancelAccountDeletion" type="button">취소</button>
+          </div>
+        </div>
+      </div>
+    `,
+  );
+}
+
+function updateAccountDeletionModalState() {
+  const modal = $("#accountDeletionModal");
+  if (!modal || modal.hidden) {
+    return;
+  }
+  const confirmInput = $("#accountDeletionConfirmEmail");
+  const confirmButton = $("#confirmAccountDeletion");
+  const target = (authState.user?.email || "").trim().toLowerCase();
+  const value = (confirmInput?.value || "").trim().toLowerCase();
+  if (confirmButton) {
+    confirmButton.disabled = !target || value !== target;
+  }
+  const targetLabel = $("#accountDeletionTarget");
+  if (targetLabel) {
+    targetLabel.textContent = `현재 계정: ${authState.user?.email || "-"}`;
+  }
+}
+
+function openAccountDeletionModal() {
+  ensureAccountDeletionModal();
+  const modal = $("#accountDeletionModal");
+  if (!modal || !authState.authenticated) {
+    return;
+  }
+  $("#accountDeletionError").hidden = true;
+  $("#accountDeletionError").textContent = "";
+  $("#accountDeletionConfirmEmail").value = "";
+  modal.hidden = false;
+  document.body.classList.add("is-modal-open");
+  updateAccountDeletionModalState();
+  window.setTimeout(() => {
+    $("#accountDeletionConfirmEmail")?.focus();
+  }, 0);
+}
+
+function closeAccountDeletionModal() {
+  const modal = $("#accountDeletionModal");
+  if (!modal) {
+    return;
+  }
+  modal.hidden = true;
+  document.body.classList.remove("is-modal-open");
+  $("#accountDeletionError").hidden = true;
+  $("#accountDeletionError").textContent = "";
+  $("#accountDeletionConfirmEmail").value = "";
+  updateAccountDeletionModalState();
+}
+
+async function deleteAccount() {
+  if (!authState.authenticated) {
+    showToast("로그인 후 사용할 수 있습니다");
+    return;
+  }
+  const confirmEmail = $("#accountDeletionConfirmEmail").value.trim();
+  const expectedEmail = (authState.user?.email || "").trim();
+  if (!confirmEmail || confirmEmail.toLowerCase() !== expectedEmail.toLowerCase()) {
+    $("#accountDeletionError").textContent = "이메일을 정확히 입력해 주세요.";
+    $("#accountDeletionError").hidden = false;
+    updateAccountDeletionModalState();
+    return;
+  }
+  $("#confirmAccountDeletion").disabled = true;
+  $("#confirmAccountDeletion").textContent = "삭제 중...";
+  try {
+    await apiJson("/api/account/delete", {
+      method: "POST",
+      body: JSON.stringify({ confirm_email: confirmEmail }),
+    });
+    sessionStorage.removeItem(SESSION_KEY);
+    closeAccountDeletionModal();
+    window.location.assign("/ui");
+  } finally {
+    $("#confirmAccountDeletion").textContent = "회원 탈퇴";
+  }
+}
+
 async function registerUserCluster() {
   const name = $("#setupClusterName").value.trim();
   if (!name) {
@@ -1744,6 +1859,7 @@ document.querySelectorAll(".tab").forEach((tab) => {
 });
 
 ensureSlackSettingsPanel();
+ensureAccountDeletionModal();
 ensurePolicyApplyPanel();
 
 $("#generatePolicy").addEventListener("click", () => {
@@ -1894,6 +2010,39 @@ $("#slackClusterToggles").addEventListener("change", (event) => {
       showInlineAlert(error.message);
       showToast("클러스터 Slack 설정 실패");
     });
+});
+
+$("#accountDeleteButton").addEventListener("click", () => {
+  openAccountDeletionModal();
+});
+
+$("#cancelAccountDeletion").addEventListener("click", () => {
+  closeAccountDeletionModal();
+});
+
+$("#accountDeletionConfirmEmail").addEventListener("input", () => {
+  updateAccountDeletionModalState();
+});
+
+$("#confirmAccountDeletion").addEventListener("click", () => {
+  deleteAccount().catch((error) => {
+    $("#accountDeletionError").textContent = error.message;
+    $("#accountDeletionError").hidden = false;
+    updateAccountDeletionModalState();
+    showToast("회원 탈퇴 실패");
+  });
+});
+
+$("#accountDeletionModal").addEventListener("click", (event) => {
+  if (event.target.closest("[data-account-delete-close]")) {
+    closeAccountDeletionModal();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !$("#accountDeletionModal").hidden) {
+    closeAccountDeletionModal();
+  }
 });
 
 ["#runtimeCluster", "#runtimeSource"].forEach((selector) => {
@@ -2063,6 +2212,7 @@ function renderAuthStatus() {
   const status = $("#authStatus");
   const loginLink = $("#loginLink");
   const devLoginLink = $("#devLoginLink");
+  const accountDeleteButton = $("#accountDeleteButton");
   const logoutButton = $("#logoutButton");
   document.body.classList.toggle("logged-out", !authState.authenticated);
   document.body.classList.toggle("logged-in", Boolean(authState.authenticated));
@@ -2070,6 +2220,7 @@ function renderAuthStatus() {
     status.textContent = authState.user?.email || "로그인됨";
     loginLink.hidden = true;
     devLoginLink.hidden = true;
+    accountDeleteButton.hidden = false;
     logoutButton.hidden = false;
     renderAuthGates();
     return;
@@ -2079,6 +2230,7 @@ function renderAuthStatus() {
   status.textContent = googleConfigured || devEnabled ? "로그인 필요" : "로그인 미설정";
   loginLink.hidden = !authState.auth?.google_configured;
   devLoginLink.hidden = !authState.auth?.dev_enabled;
+  accountDeleteButton.hidden = true;
   logoutButton.hidden = true;
   renderAuthGates();
 }
@@ -2088,6 +2240,7 @@ async function logout() {
   if (!response.ok) {
     throw new Error(await response.text());
   }
+  closeAccountDeletionModal();
   authState = { authenticated: false, user: null, auth: authState.auth };
   userClusters = [];
   slackSettings = { webhook_url: "", configured: false };

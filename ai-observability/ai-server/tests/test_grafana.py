@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import time
+from pathlib import Path
 
 import httpx
 from fastapi.testclient import TestClient
@@ -734,6 +735,24 @@ def test_admin_grafana_url_sets_admin_proxy_cookie(monkeypatch):
     assert url_response.status_code == 200
     assert url_body["grafana"]["url"] == "/grafana-ui/dashboards?orgId=1"
     assert url_body["grafana"]["mode"] == "admin"
+    assert url_body["grafana"]["scope"] == "admin-cluster"
+    assert url_body["grafana"]["links"] == [
+        {
+            "label": "전체 Grafana",
+            "description": "관리자 org의 모든 대시보드와 데이터소스를 확인합니다.",
+            "url": "/grafana-ui/dashboards?orgId=1",
+        },
+        {
+            "label": "Gatekeeper Compliance",
+            "description": "관리자 클러스터에서 수집한 정책 위반, 감사 지연, AI 분류 지표를 봅니다.",
+            "url": "/grafana-ui/d/compliance-overview/gatekeeper-compliance-overview?orgId=1",
+        },
+        {
+            "label": "Runtime Detection",
+            "description": "Falco/Sidekick 런타임 이벤트, 웹훅 보안, 클러스터별 이벤트 폭주를 봅니다.",
+            "url": "/grafana-ui/d/compliance-runtime-detection/runtime-detection?orgId=1",
+        },
+    ]
     assert admin_cookie
 
     captured = {}
@@ -873,6 +892,25 @@ def test_dashboard_payloads_can_disable_local_dashboard(monkeypatch):
     dashboards = provisioning._dashboard_payloads(FakeClient(), "user-datasource")
 
     assert [dashboard["uid"] for dashboard in dashboards] == ["compliance-overview"]
+
+
+def test_runtime_dashboard_surfaces_cluster_event_bursts():
+    repo_root = Path(__file__).resolve().parents[3]
+    dashboard_path = repo_root / "runtime-detection/manifests/grafana/runtime-dashboard.json"
+    configmap_path = repo_root / "runtime-detection/manifests/grafana/dashboard-configmap.yaml"
+    dashboard = json.loads(dashboard_path.read_text(encoding="utf-8"))
+    burst_panel = next(
+        (panel for panel in dashboard["panels"] if panel.get("title") == "Event Burst 5m by Cluster"),
+        None,
+    )
+
+    assert burst_panel is not None
+    assert burst_panel["gridPos"] == {"h": 3, "w": 12, "x": 12, "y": 3}
+    assert burst_panel["targets"][0]["expr"] == (
+        "topk(10, sum by (cluster_name) (increase(kubeowl_runtime_events_total[5m]))) or vector(0)"
+    )
+    assert "Falco 이벤트 폭증" in burst_panel["description"]
+    assert "Event Burst 5m by Cluster" in configmap_path.read_text(encoding="utf-8")
 
 
 def test_grafana_ui_proxy_rewrites_extended_asset_paths():

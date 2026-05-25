@@ -623,6 +623,10 @@ button.danger {
   box-shadow: none;
 }
 
+.account-delete-topbar-button {
+  min-width: 0;
+}
+
 .theme-toggle {
   min-width: 0;
 }
@@ -2811,6 +2815,98 @@ pre[data-empty="true"] {
 
 .slack-toggle-input:focus-visible + .slack-toggle {
   box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.account-deletion-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.account-deletion-modal[hidden] {
+  display: none;
+}
+
+.account-deletion-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 7, 18, 0.66);
+  backdrop-filter: blur(6px);
+}
+
+.account-deletion-dialog {
+  position: relative;
+  z-index: 1;
+  width: min(760px, 100%);
+  max-height: min(88vh, 780px);
+  overflow: auto;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.account-deletion-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.account-deletion-heading h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 860;
+}
+
+.account-deletion-copy {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.65;
+}
+
+.account-deletion-list {
+  margin: 16px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.account-deletion-field {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  color: var(--muted);
+  font-weight: 780;
+}
+
+.account-deletion-field input {
+  min-height: 44px;
+}
+
+.account-deletion-target {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.account-deletion-error {
+  margin: 12px 0 0;
+  color: var(--danger);
+  font-weight: 780;
+}
+
+.account-deletion-actions {
+  justify-content: flex-end;
+  margin: 18px 0 0;
+}
+
+body.is-modal-open {
+  overflow: hidden;
 }
 
 .analysis-card {

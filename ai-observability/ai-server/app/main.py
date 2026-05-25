@@ -373,9 +373,13 @@ def google_callback(
             picture=str(profile.get("picture", "")),
         )
     except ValueError as error:
-        return JSONResponse(status_code=400, content={"error": str(error)})
+        status_code = 403 if "deleted user account cannot sign in" in str(error) else 400
+        return JSONResponse(status_code=status_code, content={"error": str(error)})
 
-    session_token = storage.create_session(user["id"])
+    try:
+        session_token = storage.create_session(user["id"])
+    except ValueError as error:
+        return JSONResponse(status_code=403, content={"error": str(error)})
     response = RedirectResponse("/ui", status_code=302)
     set_session_cookie(response, request, session_token)
     response.delete_cookie(
@@ -397,6 +401,26 @@ def logout(request: Request, compliance_ai_session: str | None = Cookie(default=
     return response
 
 
+@app.post("/api/account/delete")
+def delete_account(
+    request: Request,
+    payload: dict,
+    compliance_ai_session: str | None = Cookie(default=None),
+) -> dict:
+    # 로그인 사용자가 자기 계정을 안전하게 탈퇴한다.
+    user, auth_error = require_user(compliance_ai_session)
+    if auth_error:
+        return auth_error
+    assert user is not None
+    confirm_email = str(payload.get("confirm_email", "")).strip().lower()
+    if not confirm_email or confirm_email != str(user.get("email", "")).strip().lower():
+        return JSONResponse(status_code=400, content={"error": "email confirmation required"})
+    deleted = storage.delete_user_account(user["id"])
+    response = JSONResponse({"status": "deleted", "user": _public_user(deleted)})
+    clear_session_cookie(response, request)
+    return response
+
+
 @app.get("/auth/dev-login")
 def dev_login(request: Request):
     # Google OAuth 설정 전 개발/시연용 로그인. 운영에서는 DEV_AUTH_ENABLED를 끈다.
@@ -412,8 +436,12 @@ def dev_login(request: Request):
             name=name,
         )
     except ValueError as error:
-        return JSONResponse(status_code=400, content={"error": str(error)})
-    session_token = storage.create_session(user["id"])
+        status_code = 403 if "deleted user account cannot sign in" in str(error) else 400
+        return JSONResponse(status_code=status_code, content={"error": str(error)})
+    try:
+        session_token = storage.create_session(user["id"])
+    except ValueError as error:
+        return JSONResponse(status_code=403, content={"error": str(error)})
     response = RedirectResponse("/ui", status_code=302)
     set_session_cookie(response, request, session_token)
     return response
@@ -835,6 +863,26 @@ def _admin_grafana_url() -> str:
     return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 
+def _admin_grafana_links(org_id: str) -> list[dict[str, str]]:
+    return [
+        {
+            "label": "전체 Grafana",
+            "description": "관리자 org의 모든 대시보드와 데이터소스를 확인합니다.",
+            "url": _admin_grafana_url(),
+        },
+        {
+            "label": "Gatekeeper Compliance",
+            "description": "관리자 클러스터에서 수집한 정책 위반, 감사 지연, AI 분류 지표를 봅니다.",
+            "url": _grafana_dashboard_url("/d/compliance-overview/gatekeeper-compliance-overview", org_id),
+        },
+        {
+            "label": "Runtime Detection",
+            "description": "Falco/Sidekick 런타임 이벤트, 웹훅 보안, 클러스터별 이벤트 폭주를 봅니다.",
+            "url": _grafana_dashboard_url("/d/compliance-runtime-detection/runtime-detection", org_id),
+        },
+    ]
+
+
 def _metric_labels(row: dict, keys: tuple[str, ...]) -> str:
     return ",".join(f'{key}="{_metric_label_value(row.get(key, ""))}"' for key in keys)
 
@@ -967,6 +1015,17 @@ def admin_list_user_clusters(user_id: str, x_admin_token: str | None = Header(de
     }
 
 
+@app.post("/admin/api/users/{user_id}/restore")
+def admin_restore_user(user_id: str, x_admin_token: str | None = Header(default=None)):
+    auth_error = require_admin(x_admin_token)
+    if auth_error:
+        return auth_error
+    user = storage.restore_user(user_id)
+    if user is None:
+        return JSONResponse(status_code=404, content={"error": "user not found"})
+    return {"user": _public_user(user)}
+
+
 @app.get("/admin/api/grafana/url")
 def admin_grafana_url(request: Request, x_admin_token: str | None = Header(default=None)):
     auth_error = require_admin(x_admin_token)
@@ -982,6 +1041,8 @@ def admin_grafana_url(request: Request, x_admin_token: str | None = Header(defau
                 "url": _admin_grafana_url(),
                 "org_id": org_id,
                 "mode": "admin",
+                "scope": "admin-cluster",
+                "links": _admin_grafana_links(org_id),
             }
         }
     )
@@ -1248,6 +1309,8 @@ def _public_user(user: dict | None) -> dict | None:
         "name": user.get("name", ""),
         "picture": user.get("picture", ""),
         "provider": user.get("provider", ""),
+        "status": user.get("status", "active"),
+        "deleted_at": user.get("deleted_at") or "",
     }
 
 

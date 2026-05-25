@@ -197,6 +197,27 @@
         line-height: 1.55;
         font-weight: 720;
       }
+      .admin-grafana-links {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        gap: 10px;
+      }
+      .admin-grafana-link {
+        display: grid;
+        gap: 4px;
+        width: 100%;
+        padding: 12px 14px;
+        text-align: left;
+      }
+      .admin-grafana-link strong {
+        color: inherit;
+      }
+      .admin-grafana-link span {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 760;
+      }
       .admin-grafana-logo {
         display: inline-grid;
         place-items: center;
@@ -485,11 +506,14 @@
             </span>
             <div>
               <h2>Admin Grafana</h2>
-              <p>관리자 대시보드에서 전체 수집 상태와 운영 지표를 확인합니다.</p>
+              <p>관리자 클러스터와 연결된 마스터 Grafana에서 전체 수집 상태와 운영 지표를 확인합니다.</p>
             </div>
           </div>
-          <div class="row">
-            <button class="primary" id="openAdminGrafana">Grafana 열기</button>
+          <div class="admin-grafana-links" id="adminGrafanaLinks">
+            <button class="primary admin-grafana-link" data-grafana-link="default">
+              <strong>전체 Grafana 열기</strong>
+              <span>관리자 org의 대시보드 목록으로 이동합니다.</span>
+            </button>
           </div>
         </section>
       </div>
@@ -546,6 +570,7 @@
       const statusFilter = document.querySelector("#statusFilter");
       const adminThemeToggle = document.querySelector("#adminThemeToggle");
       const adminThemeLabel = document.querySelector("#adminThemeLabel");
+      let currentUserDetailId = "";
 
       tokenInput.value = localStorage.getItem("adminToken") || "";
       const savedTheme = localStorage.getItem("adminTheme") || "light";
@@ -595,6 +620,15 @@
           active: "활성",
           disabled: "비활성",
           deleted: "휴지통",
+        };
+        return labels[status] || status;
+      }
+
+      function displayUserStatus(status) {
+        const labels = {
+          active: "활성",
+          disabled: "비활성",
+          deleted: "삭제됨",
         };
         return labels[status] || status;
       }
@@ -654,6 +688,10 @@
           return;
         }
         usersEl.innerHTML = users.map((user) => {
+          const status = user.status || "active";
+          const deletedMeta = status === "deleted"
+            ? ` · deleted_at=${escapeHtml(user.deleted_at || "-")}`
+            : "";
           return `
             <div class="user">
               <strong>${escapeHtml(user.email)}</strong>
@@ -661,6 +699,7 @@
                 id=${escapeHtml(user.id)} ·
                 provider=${escapeHtml(user.provider)} ·
                 name=${escapeHtml(user.name || "-")} ·
+                status=<span class="status-${escapeHtml(status)}">${escapeHtml(displayUserStatus(status))}</span> ·
                 clusters=${escapeHtml(user.cluster_count || 0)} ·
                 active=${escapeHtml(user.active_cluster_count || 0)} ·
                 disabled=${escapeHtml(user.disabled_cluster_count || 0)} ·
@@ -669,6 +708,7 @@
                 slack=${user.slack_configured ? "configured" : "off"} ·
                 last_seen=${escapeHtml(user.last_seen_at || "-")} ·
                 last_login=${escapeHtml(user.last_login_at || "-")}
+                ${deletedMeta}
               </span>
               <div class="actions"><button data-user-detail="${escapeHtml(user.id)}">상세 보기</button></div>
             </div>
@@ -678,6 +718,10 @@
 
       function renderUserDetail(body) {
         const clusters = body.clusters || [];
+        currentUserDetailId = body.user?.id || "";
+        const status = body.user?.status || "active";
+        const deletedAt = body.user?.deleted_at || "";
+        const totalEvents = clusters.reduce((sum, cluster) => sum + Number(cluster.event_count || 0), 0);
         const clusterList = clusters.length
           ? clusters.map((cluster) => `
               <div class="user-cluster">
@@ -692,15 +736,24 @@
               </div>
             `).join("")
           : '<p class="meta">사용자에게 귀속된 클러스터가 없습니다.</p>';
+        const restoreAction = status === "deleted"
+          ? `<button class="primary" data-user-restore="${escapeHtml(body.user?.id || "")}">계정 복구</button>`
+          : "";
         userDetailEl.innerHTML = `
           <div class="user">
             <strong>${escapeHtml(body.user?.email || "unknown user")}</strong>
             <span class="meta">
               id=${escapeHtml(body.user?.id || "-")} ·
               provider=${escapeHtml(body.user?.provider || "-")} ·
-              slack=${body.slack?.configured ? "configured" : "off"}
+              status=<span class="status-${escapeHtml(status)}">${escapeHtml(displayUserStatus(status))}</span> ·
+              slack=${body.slack?.configured ? "configured" : "off"} ·
+              clusters=${escapeHtml(clusters.length)} ·
+              events=${escapeHtml(totalEvents)}
+              ${deletedAt ? ` · deleted_at=${escapeHtml(deletedAt)}` : ""}
             </span>
+            ${status === "deleted" ? '<p class="meta">삭제된 계정입니다. 세션과 클러스터 토큰은 무효화되며, 이벤트와 정책 기록은 감사 목적으로 보존됩니다.</p>' : ""}
             <div class="user-clusters">${clusterList}</div>
+            <div class="actions user-detail-actions">${restoreAction}</div>
           </div>
         `;
       }
@@ -745,14 +798,29 @@
         loadAdminDashboard().catch((error) => setMessage(error.message));
       });
 
-      document.querySelector("#openAdminGrafana").addEventListener("click", async () => {
+      function renderAdminGrafanaLinks(links) {
+        const container = document.querySelector("#adminGrafanaLinks");
+        const safeLinks = Array.isArray(links) && links.length ? links : [];
+        container.innerHTML = safeLinks
+          .map((link, index) => `
+            <button class="${index === 0 ? "primary" : ""} admin-grafana-link" data-grafana-link="${index}">
+              <strong>${escapeHtml(link.label || "Grafana 열기")}</strong>
+              <span>${escapeHtml(link.description || link.url || "")}</span>
+            </button>
+          `)
+          .join("");
+      }
+
+      async function openAdminGrafana(linkIndex = 0) {
         const grafanaWindow = window.open("about:blank", "_blank");
         if (grafanaWindow) {
           grafanaWindow.opener = null;
         }
         try {
           const body = await requestJson("/admin/api/grafana/url");
-          const url = body.grafana?.url || "";
+          renderAdminGrafanaLinks(body.grafana?.links);
+          const links = Array.isArray(body.grafana?.links) ? body.grafana.links : [];
+          const url = links[linkIndex]?.url || body.grafana?.url || "";
           if (!url) {
             throw new Error("Grafana URL이 비어 있습니다.");
           }
@@ -766,6 +834,15 @@
           grafanaWindow?.close();
           setMessage(error.message);
         }
+      }
+
+      document.querySelector("#adminGrafanaLinks").addEventListener("click", (event) => {
+        const button = event.target.closest("[data-grafana-link]");
+        if (!button) {
+          return;
+        }
+        const linkIndex = Number.parseInt(button.dataset.grafanaLink || "0", 10);
+        openAdminGrafana(Number.isNaN(linkIndex) ? 0 : linkIndex);
       });
 
       clusterSearch.addEventListener("keydown", (event) => {
@@ -829,6 +906,24 @@
           const body = await requestJson(`/admin/api/users/${userId}/clusters`);
           renderUserDetail(body);
           setMessage("사용자 상세를 불러왔습니다.");
+        } catch (error) {
+          setMessage(error.message);
+        }
+      });
+
+      userDetailEl.addEventListener("click", async (event) => {
+        const restoreId = event.target.dataset.userRestore;
+        if (!restoreId) {
+          return;
+        }
+        try {
+          await requestJson(`/admin/api/users/${restoreId}/restore`, { method: "POST" });
+          await loadAdminDashboard();
+          if (currentUserDetailId === restoreId) {
+            const body = await requestJson(`/admin/api/users/${restoreId}/clusters`);
+            renderUserDetail(body);
+          }
+          setMessage("사용자 계정을 복구했습니다.");
         } catch (error) {
           setMessage(error.message);
         }

@@ -279,6 +279,61 @@
       }
     },
     {
+      "title": "Event Burst 5m by Cluster",
+      "description": "최근 5분 동안 클러스터별로 증가한 런타임 이벤트 수입니다. 특정 클러스터가 갑자기 치솟으면 Falco 이벤트 폭증, 공격, 설정 오류, 경고 피로 위험을 우선 확인합니다.",
+      "type": "barchart",
+      "gridPos": {
+        "h": 3,
+        "w": 12,
+        "x": 12,
+        "y": 3
+      },
+      "targets": [
+        {
+          "expr": "topk(10, sum by (cluster_name) (increase(kubeowl_runtime_events_total[5m]))) or vector(0)",
+          "legendFormat": "{{cluster_name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 200
+              }
+            ]
+          }
+        }
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "right"
+        }
+      }
+    },
+    {
       "title": "Events by Severity Over Time",
       "type": "timeseries",
       "gridPos": {

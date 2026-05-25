@@ -69,6 +69,8 @@ def test_ui_is_served():
     assert "xAI (Grok)" in response.text
     assert "Use my own API key" in response.text
     assert "Continue with Google" in response.text
+    assert "accountDeleteButton" in response.text
+    assert "회원 탈퇴" in response.text
     assert "PDF 다운로드" in response.text
     assert "개발 로그인" in response.text
     assert "Your API key is used only for requests in this session" in response.text
@@ -115,6 +117,24 @@ def test_docs_is_served():
     assert "설계" in response.text
     assert "기능" in response.text
     assert "보안" in response.text
+    assert "Q&A" in response.text
+    assert "Architecture Review" in response.text
+    assert "Professor Questions" not in response.text
+    assert "AI Hallucination Guard" in response.text
+    assert "ingest와 LLM 분석은 분리되어 있습니다." in response.text
+    assert "중앙 KubeOwl 서버가 모든 사용자 클러스터의 관리자 kubeconfig를 보관" in response.text
+    assert "YAML과 런타임 로그를 퍼블릭 LLM API로 보내면 내부 정보가 유출" in response.text
+    assert "CI/CD 단계에서 미리 막을 수 있습니까" in response.text
+    assert "Argo CD 또는 Flux와 연동" in response.text
+    assert "기존 정책과 새 AI 정책이 정면으로 충돌" in response.text
+    assert "kube-system이나 CNI까지 막아 클러스터가 멈추면" in response.text
+    assert "왜 컴플라이언스 플랫폼이라고 부릅니까" in response.text
+    assert "control catalog" in response.text
+    assert "Prompt Injection / Jailbreak" in response.text
+    assert "로그인한 모든 사용자가 cluster-wide Gatekeeper 정책을 배포" in response.text
+    assert "Platform Audit Trail" in response.text
+    assert "장기 관리자 kubeconfig를 평문 저장하는 구조는 피해야" in response.text
+    assert "deduplication과 correlation key" in response.text
     assert "zrok" in response.text
     assert "Grafana" in response.text
 
@@ -146,6 +166,77 @@ def test_me_reports_authenticated_session():
     assert body["authenticated"] is True
     assert body["user"]["email"] == "user@example.com"
     assert body["user"]["provider"] == "google"
+    assert body["user"]["status"] == "active"
+
+
+def test_account_deletion_revokes_session_and_cluster_access():
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="delete-me@example.test",
+        email="delete-me@example.test",
+        name="Delete Me",
+    )
+    token = storage.create_session(user["id"])
+    cluster = storage.create_cluster("delete-me-cluster", user_id=user["id"])
+    slack_settings = storage.save_slack_settings(user["id"], "https://hooks.slack.com/services/T111/B222/DELETE")
+    assert slack_settings["configured"] is True
+
+    delete_response = client.post(
+        "/api/account/delete",
+        cookies={"compliance_ai_session": token},
+        json={"confirm_email": "delete-me@example.test"},
+    )
+
+    assert delete_response.status_code == 200
+    assert delete_response.json()["status"] == "deleted"
+    assert storage.get_user(user["id"])["status"] == "deleted"
+    assert storage.get_cluster(cluster["id"])["status"] == "deleted"
+    assert storage.find_cluster_by_token(cluster["token"]) is None
+    assert storage.get_slack_settings(user["id"])["configured"] is False
+
+    me_response = client.get("/me", cookies={"compliance_ai_session": token})
+    assert me_response.status_code == 200
+    assert me_response.json()["authenticated"] is False
+
+    api_response = client.get("/api/clusters", cookies={"compliance_ai_session": token})
+    assert api_response.status_code == 401
+
+    ingest_response = client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster['token']}"},
+        json={"event": {"rule": "deleted-user-cluster", "priority": "Critical"}},
+    )
+    assert ingest_response.status_code == 401
+
+
+def test_deleted_user_cannot_log_in_again_and_admin_can_restore(monkeypatch):
+    monkeypatch.setenv("DEV_AUTH_ENABLED", "true")
+    monkeypatch.setenv("DEV_AUTH_EMAIL", "restore-me@example.test")
+    monkeypatch.setenv("DEV_AUTH_NAME", "Restore Me")
+
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="restore-me@example.test",
+        email="restore-me@example.test",
+        name="Restore Me",
+    )
+    storage.delete_user_account(user["id"])
+
+    deleted_login = client.get("/auth/dev-login", follow_redirects=False)
+    assert deleted_login.status_code == 403
+    assert "deleted user account cannot sign in" in deleted_login.json()["error"]
+
+    restore_response = client.post(
+        f"/admin/api/users/{user['id']}/restore",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    assert restore_response.status_code == 200
+    assert restore_response.json()["user"]["status"] == "active"
+    assert restore_response.json()["user"]["deleted_at"] == ""
+
+    restored_login = client.get("/auth/dev-login", follow_redirects=False)
+    assert restored_login.status_code == 302
+    assert restored_login.cookies.get("compliance_ai_session")
 
 
 def test_google_login_requires_oauth_configuration():
@@ -1858,6 +1949,7 @@ def test_admin_dashboard_lists_users_and_event_counts():
     assert users_response.status_code == 200
     listed_user = next(item for item in users_body["users"] if item["id"] == user["id"])
     assert listed_user["email"] == "admin-dashboard-user@example.test"
+    assert listed_user["status"] == "active"
     assert listed_user["cluster_count"] == 1
     assert listed_user["active_cluster_count"] == 1
     assert listed_user["deleted_cluster_count"] == 0
@@ -1884,6 +1976,7 @@ def test_admin_dashboard_lists_users_and_event_counts():
 
     assert user_clusters_response.status_code == 200
     assert user_clusters_body["user"]["email"] == "admin-dashboard-user@example.test"
+    assert user_clusters_body["user"]["status"] == "active"
     assert user_clusters_body["slack"]["configured"] is True
     assert [item["id"] for item in user_clusters_body["clusters"]] == [cluster["id"]]
 

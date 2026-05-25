@@ -48,6 +48,8 @@ def init_db() -> None:
                     email TEXT NOT NULL,
                     name TEXT,
                     picture TEXT,
+                    status TEXT NOT NULL DEFAULT 'active',
+                    deleted_at TEXT,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     last_login_at TEXT,
                     UNIQUE(provider, provider_subject)
@@ -131,6 +133,8 @@ def init_db() -> None:
             _ensure_column(conn, "clusters", "kind", "TEXT NOT NULL DEFAULT 'customer'")
             _ensure_column(conn, "clusters", "slack_enabled", "INTEGER NOT NULL DEFAULT 1")
             _ensure_column(conn, "clusters", "deleted_at", "TEXT")
+            _ensure_column(conn, "users", "status", "TEXT NOT NULL DEFAULT 'active'")
+            _ensure_column(conn, "users", "deleted_at", "TEXT")
             _ensure_column(conn, "events", "cluster_id", "TEXT")
             _ensure_column(conn, "events", "cluster_kind", "TEXT NOT NULL DEFAULT 'customer'")
             _ensure_cluster_name_scope(conn)
@@ -158,7 +162,8 @@ def upsert_user(provider: str, provider_subject: str, email: str, name: str = ""
     with _LOCK, _connect() as conn:
         row = conn.execute(
             """
-            SELECT id FROM users
+            SELECT id, status
+            FROM users
             WHERE provider = ? AND provider_subject = ?
             """,
             (normalized_provider, normalized_subject),
@@ -173,6 +178,8 @@ def upsert_user(provider: str, provider_subject: str, email: str, name: str = ""
                 (user_id, normalized_provider, normalized_subject, normalized_email, name, picture, now),
             )
         else:
+            if str(row["status"] or "active") == "deleted":
+                raise ValueError("deleted user account cannot sign in")
             user_id = row["id"]
             conn.execute(
                 """
@@ -192,7 +199,7 @@ def get_user(user_id: str) -> dict[str, Any] | None:
     with _connect() as conn:
         row = conn.execute(
             """
-            SELECT id, provider, provider_subject, email, name, picture, created_at, last_login_at
+            SELECT id, provider, provider_subject, email, name, picture, status, deleted_at, created_at, last_login_at
             FROM users
             WHERE id = ?
             """,
@@ -209,7 +216,8 @@ def list_users() -> list[dict[str, Any]]:
         rows = conn.execute(
             """
             SELECT users.id, users.provider, users.provider_subject, users.email, users.name,
-                   users.picture, users.created_at, users.last_login_at,
+                   users.picture, users.status, users.deleted_at,
+                   users.created_at, users.last_login_at,
                    (
                        SELECT COUNT(*)
                        FROM clusters
@@ -365,6 +373,9 @@ def save_slack_settings(user_id: str, webhook_url: str) -> dict[str, Any]:
 
 def create_session(user_id: str, ttl_days: int = 30) -> str:
     init_db()
+    user = get_user(user_id)
+    if user is None or str(user.get("status") or "active") == "deleted":
+        raise ValueError("deleted user account cannot sign in")
     token = secrets.token_urlsafe(32)
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(days=max(1, int(ttl_days or 30)))
@@ -388,10 +399,10 @@ def get_user_by_session(token: str) -> dict[str, Any] | None:
         row = conn.execute(
             """
             SELECT users.id, users.provider, users.provider_subject, users.email, users.name,
-                   users.picture, users.created_at, users.last_login_at
+                   users.picture, users.status, users.deleted_at, users.created_at, users.last_login_at
             FROM sessions
             JOIN users ON users.id = sessions.user_id
-            WHERE sessions.token_hash = ? AND sessions.expires_at > ?
+            WHERE sessions.token_hash = ? AND sessions.expires_at > ? AND users.status != 'deleted'
             """,
             (_token_hash(token), now),
         ).fetchone()
@@ -406,6 +417,61 @@ def delete_session(token: str) -> None:
         return
     with _LOCK, _connect() as conn:
         conn.execute("DELETE FROM sessions WHERE token_hash = ?", (_token_hash(token),))
+
+
+def delete_user_account(user_id: str) -> dict[str, Any] | None:
+    init_db()
+    normalized_user_id = str(user_id or "").strip()
+    if not normalized_user_id:
+        return None
+    now = _utc_now()
+    with _LOCK, _connect() as conn:
+        row = conn.execute("SELECT id FROM users WHERE id = ?", (normalized_user_id,)).fetchone()
+        if row is None:
+            return None
+        conn.execute("DELETE FROM sessions WHERE user_id = ?", (normalized_user_id,))
+        conn.execute("DELETE FROM user_slack_settings WHERE user_id = ?", (normalized_user_id,))
+        conn.execute("DELETE FROM grafana_provisioning WHERE user_id = ?", (normalized_user_id,))
+        conn.execute(
+            """
+            UPDATE clusters
+            SET status = 'deleted',
+                deleted_at = COALESCE(deleted_at, ?),
+                token_hash = ''
+            WHERE user_id = ?
+            """,
+            (now, normalized_user_id),
+        )
+        conn.execute(
+            """
+            UPDATE users
+            SET status = 'deleted',
+                deleted_at = COALESCE(deleted_at, ?)
+            WHERE id = ?
+            """,
+            (now, normalized_user_id),
+        )
+    return get_user(normalized_user_id)
+
+
+def restore_user(user_id: str) -> dict[str, Any] | None:
+    init_db()
+    normalized_user_id = str(user_id or "").strip()
+    if not normalized_user_id:
+        return None
+    with _LOCK, _connect() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE users
+            SET status = 'active',
+                deleted_at = NULL
+            WHERE id = ? AND status = 'deleted'
+            """,
+            (normalized_user_id,),
+        )
+    if cursor.rowcount == 0:
+        return None
+    return get_user(normalized_user_id)
 
 
 def save_event(event: dict[str, Any]) -> dict[str, Any]:
