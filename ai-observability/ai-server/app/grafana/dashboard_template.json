@@ -1,6 +1,7 @@
 {
   "uid": "kubeowl-observability",
   "title": "KubeOwl Observability",
+  "tags": ["kubeowl", "observability", "runtime"],
   "schemaVersion": 39,
   "version": 1,
   "refresh": "30s",
@@ -12,14 +13,14 @@
     {
       "id": 1,
       "type": "stat",
-      "title": "Targets Up",
+      "title": "Reporting Clusters",
       "datasource": {
         "type": "prometheus",
         "uid": "__DATASOURCE_UID__"
       },
       "targets": [
         {
-          "expr": "sum(up)",
+          "expr": "count(kubeowl_cluster_last_seen_timestamp_seconds)",
           "refId": "A"
         }
       ],

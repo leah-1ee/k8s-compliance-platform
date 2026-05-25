@@ -98,6 +98,43 @@ def test_prometheus_proxy_rewrites_query_and_writes_audit(monkeypatch, tmp_path)
     assert audit["status_code"] == 200
 
 
+def test_prometheus_proxy_rewrites_form_post(monkeypatch, tmp_path):
+    secret = "test-secret"
+    captured = {}
+
+    async def fake_forward(method, url, **kwargs):
+        captured["method"] = method
+        captured["url"] = url
+        captured["params"] = kwargs.get("params")
+        captured["content"] = kwargs.get("content")
+        captured["headers"] = kwargs.get("headers")
+        return httpx.Response(200, json={"status": "success"})
+
+    monkeypatch.setenv("JWT_SECRET", secret)
+    monkeypatch.setattr(proxy, "AUDIT_LOG_PATH", tmp_path / "audit.log")
+    monkeypatch.setattr(proxy, "_forward_request", fake_forward)
+    token = _jwt(secret, "user-form", "cluster-form")
+
+    response = client.post(
+        "/grafana/prometheus/cluster-form/api/v1/query_range",
+        data={
+            "query": "sum(kubeowl_runtime_events_total)",
+            "start": "1",
+            "end": "2",
+            "step": "1",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert captured["method"] == "POST"
+    assert captured["url"] == "http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query_range"
+    assert captured["params"] == []
+    assert captured["headers"]["content-type"].startswith("application/x-www-form-urlencoded")
+    assert b"query=sum%28kubeowl_runtime_events_total%7Bcluster_id%3D%22cluster-form%22%7D%29" in captured["content"]
+    assert b"start=1" in captured["content"]
+
+
 def test_prometheus_proxy_rejects_cluster_mismatch(monkeypatch, tmp_path):
     secret = "test-secret"
     monkeypatch.setenv("JWT_SECRET", secret)

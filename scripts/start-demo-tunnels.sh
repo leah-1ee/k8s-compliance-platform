@@ -232,14 +232,17 @@ if [ "${ENABLE_DIRECT_GRAFANA_ZROK}" = "true" ]; then
 fi
 
 start_bg grafana-port-forward \
+  "${ROOT_DIR}/scripts/run-zrok-share-loop.sh" grafana-port-forward \
   kubectl port-forward -n monitoring svc/monitoring-grafana \
   "${GRAFANA_LOCAL_PORT}:${GRAFANA_TARGET_PORT}"
 
 start_bg response-server-port-forward \
+  "${ROOT_DIR}/scripts/run-zrok-share-loop.sh" response-server-port-forward \
   kubectl port-forward -n compliance-system svc/response-server \
   "${RESPONSE_LOCAL_PORT}:${RESPONSE_TARGET_PORT}"
 
 start_bg ai-console-port-forward \
+  "${ROOT_DIR}/scripts/run-zrok-share-loop.sh" ai-console-port-forward \
   kubectl port-forward -n compliance-system deploy/ai-classifier \
   "${AI_LOCAL_PORT}:${AI_TARGET_PORT}"
 

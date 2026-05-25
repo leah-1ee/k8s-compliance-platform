@@ -76,11 +76,11 @@ def test_rate_limit_exceeded_returns_429(proxy_client, mock_prometheus):
 
     responses = [
         proxy_client.get(url, params={"query": "up"}, headers=headers)
-        for _ in range(61)
+        for _ in range(601)
     ]
 
-    assert all(response.status_code == 200 for response in responses[:60])
-    assert responses[60].status_code == 429
+    assert all(response.status_code == 200 for response in responses[:600])
+    assert responses[600].status_code == 429
 
 
 def _jwt(secret: str, user_id: str, cluster_id: str, exp: int | None = None) -> str:

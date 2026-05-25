@@ -4,12 +4,13 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, urlencode
 
 import httpx
 from fastapi import APIRouter, Request
@@ -21,6 +22,8 @@ from app.grafana.promql_inject import PromQLInjectionError, inject_cluster_label
 
 PROMETHEUS_URL = os.getenv("PROMETHEUS_URL", "http://prometheus.monitoring.svc.cluster.local:9090").rstrip("/")
 AUDIT_LOG_PATH = Path(os.getenv("GRAFANA_PROXY_AUDIT_LOG", "/var/log/proxy/audit.log"))
+PROMETHEUS_PROXY_RATE_LIMIT = os.getenv("GRAFANA_PROMETHEUS_PROXY_RATE_LIMIT", "600/minute")
+logger = logging.getLogger("ai-server.grafana.proxy")
 router = APIRouter()
 
 
@@ -35,7 +38,7 @@ limiter = Limiter(key_func=_rate_limit_key)
 
 
 @router.api_route("/grafana/prometheus/{cluster_id}/{path:path}", methods=["GET", "POST"])
-@limiter.limit("60/minute")
+@limiter.limit(PROMETHEUS_PROXY_RATE_LIMIT)
 async def prometheus_proxy(request: Request, cluster_id: str, path: str) -> Response:
     user_id = ""
     original_query = ""
@@ -64,7 +67,13 @@ async def prometheus_proxy(request: Request, cluster_id: str, path: str) -> Resp
                     parse_qsl(body.decode("utf-8"), keep_blank_values=True),
                     cluster_id,
                 )
-                response = await _forward_request("POST", outbound_url, params=params, data=data, headers=headers)
+                response = await _forward_request(
+                    "POST",
+                    outbound_url,
+                    params=params,
+                    content=urlencode(data).encode("utf-8"),
+                    headers=headers,
+                )
             else:
                 params, original_query, injected_query = _rewrite_query_params(params, cluster_id)
                 response = await _forward_request("POST", outbound_url, params=params, content=body, headers=headers)
@@ -85,6 +94,10 @@ async def prometheus_proxy(request: Request, cluster_id: str, path: str) -> Resp
     except httpx.HTTPError as error:
         status_code = 502
         return JSONResponse(status_code=status_code, content={"error": f"Prometheus request failed: {error}"})
+    except Exception as error:
+        logger.exception("Grafana Prometheus proxy failed cluster_id=%s path=%s", cluster_id, path)
+        status_code = 500
+        return JSONResponse(status_code=status_code, content={"error": f"Prometheus proxy failed: {error}"})
     finally:
         _write_audit_log(
             {
