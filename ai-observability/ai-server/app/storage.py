@@ -697,6 +697,8 @@ def list_audit_events(
     target_type: str = "",
     target_id: str = "",
     actor_user_id: str = "",
+    date_from: str = "",
+    date_to: str = "",
 ) -> list[dict[str, Any]]:
     init_db()
     normalized_limit = max(1, min(int(limit or 100), 500))
@@ -704,6 +706,8 @@ def list_audit_events(
     normalized_target_type = str(target_type or "").strip()
     normalized_target_id = str(target_id or "").strip()
     normalized_actor_user_id = str(actor_user_id or "").strip()
+    normalized_date_from = str(date_from or "").strip()
+    normalized_date_to = str(date_to or "").strip()
     filters: list[str] = []
     params: list[Any] = []
     if normalized_action:
@@ -718,6 +722,12 @@ def list_audit_events(
     if normalized_actor_user_id:
         filters.append("actor_user_id = ?")
         params.append(normalized_actor_user_id)
+    if normalized_date_from:
+        filters.append("date(created_at) >= date(?)")
+        params.append(normalized_date_from)
+    if normalized_date_to:
+        filters.append("date(created_at) <= date(?)")
+        params.append(normalized_date_to)
     where = f"WHERE {' AND '.join(filters)}" if filters else ""
     with _connect() as conn:
         rows = conn.execute(
@@ -740,6 +750,73 @@ def list_audit_events(
             event["details"] = {}
         events.append(event)
     return events
+
+
+def summarize_audit_events(
+    action: str = "",
+    target_type: str = "",
+    target_id: str = "",
+    actor_user_id: str = "",
+    date_from: str = "",
+    date_to: str = "",
+) -> dict[str, Any]:
+    init_db()
+    normalized_action = str(action or "").strip()
+    normalized_target_type = str(target_type or "").strip()
+    normalized_target_id = str(target_id or "").strip()
+    normalized_actor_user_id = str(actor_user_id or "").strip()
+    normalized_date_from = str(date_from or "").strip()
+    normalized_date_to = str(date_to or "").strip()
+    filters: list[str] = []
+    params: list[Any] = []
+    if normalized_action:
+        filters.append("action = ?")
+        params.append(normalized_action)
+    if normalized_target_type:
+        filters.append("target_type = ?")
+        params.append(normalized_target_type)
+    if normalized_target_id:
+        filters.append("target_id = ?")
+        params.append(normalized_target_id)
+    if normalized_actor_user_id:
+        filters.append("actor_user_id = ?")
+        params.append(normalized_actor_user_id)
+    if normalized_date_from:
+        filters.append("date(created_at) >= date(?)")
+        params.append(normalized_date_from)
+    if normalized_date_to:
+        filters.append("date(created_at) <= date(?)")
+        params.append(normalized_date_to)
+    where = f"WHERE {' AND '.join(filters)}" if filters else ""
+    with _connect() as conn:
+        total_row = conn.execute(f"SELECT COUNT(*) AS count FROM audit_events {where}", params).fetchone()
+        actor_rows = conn.execute(
+            f"""
+            SELECT actor_user_id, actor_email, COUNT(*) AS count, MAX(created_at) AS latest_at
+            FROM audit_events
+            {where}
+            GROUP BY actor_user_id, actor_email
+            ORDER BY count DESC, latest_at DESC
+            LIMIT 6
+            """,
+            params,
+        ).fetchall()
+        action_rows = conn.execute(
+            f"""
+            SELECT action, COUNT(*) AS count
+            FROM audit_events
+            {where}
+            GROUP BY action
+            ORDER BY count DESC, action ASC
+            LIMIT 6
+            """,
+            params,
+        ).fetchall()
+    return {
+        "total": int(total_row["count"] or 0),
+        "actors": [dict(row) for row in actor_rows],
+        "actions": [dict(row) for row in action_rows],
+    }
 
 
 def save_event(event: dict[str, Any]) -> dict[str, Any]:

@@ -105,6 +105,8 @@ def test_admin_is_served():
     assert "Admin Grafana" in response.text
     assert "감사 로그" in response.text
     assert "auditActionFilter" in response.text
+    assert "auditDateFromFilter" in response.text
+    assert "auditSummary" in response.text
     assert "data-enable" in response.text
     assert "userSearch" in response.text
     assert "search-highlight" in response.text
@@ -2040,16 +2042,28 @@ def test_audit_log_records_user_and_admin_writes():
     assert grafana_response.status_code == 200
 
     cluster_audit_response = client.get(
-        f"/admin/api/audit-events?target_id={cluster_id}",
+        f"/admin/api/audit-events?target_id={cluster_id}&date_from=2000-01-01&date_to=2999-12-31",
         headers={"X-Admin-Token": "test-admin-token"},
     )
     cluster_audit_body = cluster_audit_response.json()
 
     assert cluster_audit_response.status_code == 200
+    assert cluster_audit_body["audit_summary"]["total"] >= 2
+    assert any(actor["actor_email"] == user["email"] for actor in cluster_audit_body["audit_summary"]["actors"])
     cluster_events = {event["action"]: event for event in cluster_audit_body["audit_events"]}
     assert cluster_events["cluster.rotate_token"]["request_id"] == "req-audit-rotate"
     assert cluster_events["cluster.create"]["request_id"] == "req-audit-create"
     assert all("token" not in event["details"] for event in cluster_events.values())
+
+    empty_date_response = client.get(
+        f"/admin/api/audit-events?target_id={cluster_id}&date_to=2000-01-01",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    empty_date_body = empty_date_response.json()
+
+    assert empty_date_response.status_code == 200
+    assert empty_date_body["audit_events"] == []
+    assert empty_date_body["audit_summary"]["total"] == 0
 
     user_audit_response = client.get(
         f"/admin/api/audit-events?target_type=user&target_id={user['id']}",

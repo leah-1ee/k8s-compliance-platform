@@ -1586,6 +1586,8 @@ def admin_list_audit_events(
     target_type: str = "",
     target_id: str = "",
     actor_user_id: str = "",
+    date_from: str = "",
+    date_to: str = "",
     x_admin_token: str | None = Header(default=None),
 ):
     auth_error = require_admin(x_admin_token)
@@ -1598,7 +1600,17 @@ def admin_list_audit_events(
             target_type=target_type,
             target_id=target_id,
             actor_user_id=actor_user_id,
-        )
+            date_from=date_from,
+            date_to=date_to,
+        ),
+        "audit_summary": storage.summarize_audit_events(
+            action=action,
+            target_type=target_type,
+            target_id=target_id,
+            actor_user_id=actor_user_id,
+            date_from=date_from,
+            date_to=date_to,
+        ),
     }
 
 

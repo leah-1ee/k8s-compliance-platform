@@ -239,9 +239,41 @@
       }
       .audit-log-filters {
         display: grid;
-        grid-template-columns: minmax(220px, 1.5fr) minmax(180px, 1fr) minmax(180px, 1fr) auto;
+        grid-template-columns: minmax(220px, 1.5fr) repeat(4, minmax(150px, 1fr)) auto;
         gap: 12px;
         align-items: end;
+      }
+      .audit-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 10px;
+      }
+      .audit-summary-card {
+        min-width: 0;
+        border: 1px solid rgba(8, 119, 242, 0.16);
+        border-radius: 8px;
+        background:
+          radial-gradient(circle at 18% 0%, rgba(86, 204, 242, 0.18), transparent 34%),
+          rgba(255, 255, 255, 0.72);
+        padding: 13px 14px;
+      }
+      body[data-theme="dark"] .audit-summary-card {
+        background:
+          radial-gradient(circle at 18% 0%, rgba(56, 189, 248, 0.13), transparent 34%),
+          rgba(15, 23, 42, 0.76);
+      }
+      .audit-summary-card span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 820;
+        overflow-wrap: anywhere;
+      }
+      .audit-summary-card strong {
+        display: block;
+        margin-top: 5px;
+        color: var(--text);
+        font-size: 24px;
       }
       .audit-log-list {
         display: grid;
@@ -561,7 +593,8 @@
           padding: 16px 12px 36px;
         }
         .summary-grid,
-        .filters {
+        .filters,
+        .audit-log-filters {
           grid-template-columns: 1fr;
         }
       }
@@ -632,8 +665,17 @@
             대상 ID
             <input id="auditTargetIdFilter" placeholder="user-id, cluster-id" />
           </label>
+          <label>
+            시작일
+            <input id="auditDateFromFilter" type="date" />
+          </label>
+          <label>
+            종료일
+            <input id="auditDateToFilter" type="date" />
+          </label>
           <button id="refreshAuditLogs">감사 로그 새로고침</button>
         </div>
+        <div class="audit-summary-grid" id="auditSummary"></div>
         <div id="auditLogs"></div>
       </section>
 
@@ -696,6 +738,9 @@
       const auditActionFilter = document.querySelector("#auditActionFilter");
       const auditTargetTypeFilter = document.querySelector("#auditTargetTypeFilter");
       const auditTargetIdFilter = document.querySelector("#auditTargetIdFilter");
+      const auditDateFromFilter = document.querySelector("#auditDateFromFilter");
+      const auditDateToFilter = document.querySelector("#auditDateToFilter");
+      const auditSummaryEl = document.querySelector("#auditSummary");
       const refreshAuditLogsButton = document.querySelector("#refreshAuditLogs");
       const clusterSearch = document.querySelector("#clusterSearch");
       const userSearch = document.querySelector("#userSearch");
@@ -861,6 +906,33 @@
         auditLogsEl.innerHTML = `<div class="audit-log-list ${events.length > 8 ? "is-scrollable" : ""}">${items}</div>`;
       }
 
+      function renderAuditSummary(summary) {
+        const actors = Array.isArray(summary?.actors) ? summary.actors : [];
+        if (!actors.length) {
+          auditSummaryEl.innerHTML = `
+            <div class="audit-summary-card">
+              <span>감사 이벤트</span>
+              <strong>${escapeHtml(summary?.total || 0)}</strong>
+            </div>
+          `;
+          return;
+        }
+        const actorCards = actors.map((actor) => `
+          <div class="audit-summary-card">
+            <span>${escapeHtml(actor.actor_email || actor.actor_user_id || "unknown actor")}</span>
+            <strong>${escapeHtml(actor.count || 0)}</strong>
+            <span>latest=${escapeHtml(actor.latest_at || "-")}</span>
+          </div>
+        `).join("");
+        auditSummaryEl.innerHTML = `
+          <div class="audit-summary-card">
+            <span>감사 이벤트</span>
+            <strong>${escapeHtml(summary?.total || 0)}</strong>
+          </div>
+          ${actorCards}
+        `;
+      }
+
       function renderUsers(users) {
         const query = userSearch.value.trim();
         const normalizedQuery = query.toLowerCase();
@@ -977,11 +1049,18 @@
         if (auditTargetIdFilter.value.trim()) {
           params.set("target_id", auditTargetIdFilter.value.trim());
         }
+        if (auditDateFromFilter.value) {
+          params.set("date_from", auditDateFromFilter.value);
+        }
+        if (auditDateToFilter.value) {
+          params.set("date_to", auditDateToFilter.value);
+        }
         return `/admin/api/audit-events?${params.toString()}`;
       }
 
       async function loadAuditLogs() {
         const body = await requestJson(auditLogsUrl());
+        renderAuditSummary(body.audit_summary || {});
         renderAuditLogs(body.audit_events || []);
       }
 
@@ -1025,11 +1104,17 @@
         loadAuditLogs().catch((error) => setMessage(error.message));
       });
 
-      [auditActionFilter, auditTargetTypeFilter, auditTargetIdFilter].forEach((input) => {
+      [auditActionFilter, auditTargetTypeFilter, auditTargetIdFilter, auditDateFromFilter, auditDateToFilter].forEach((input) => {
         input.addEventListener("keydown", (event) => {
           if (event.key === "Enter") {
             loadAuditLogs().catch((error) => setMessage(error.message));
           }
+        });
+      });
+
+      [auditDateFromFilter, auditDateToFilter].forEach((input) => {
+        input.addEventListener("change", () => {
+          loadAuditLogs().catch((error) => setMessage(error.message));
         });
       });
 
