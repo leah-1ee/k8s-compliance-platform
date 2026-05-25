@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import unicodedata
 from typing import Any
 
@@ -15,6 +16,13 @@ from app.grafana.admin_session import admin_user_from_token
 GRAFANA_URL = os.getenv("GRAFANA_URL_INTERNAL", "http://grafana.monitoring.svc.cluster.local:3000").rstrip("/")
 SESSION_COOKIE_NAME = "compliance_ai_session"
 router = APIRouter()
+GRAFANA_PUBLIC_DIRS = ("build", "fonts", "img", "plugins", "app", "locales")
+GRAFANA_PUBLIC_PATH_RE = re.compile(
+    rf"(?<!/grafana-ui)/public/({'|'.join(GRAFANA_PUBLIC_DIRS)})/"
+)
+GRAFANA_RELATIVE_PUBLIC_PATH_RE = re.compile(
+    rf"(?P<prefix>[\"'`=(])public/({'|'.join(GRAFANA_PUBLIC_DIRS)})/"
+)
 
 
 @router.api_route("/grafana-ui", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
@@ -38,7 +46,39 @@ async def grafana_public_asset_proxy(
 
 
 @router.api_route(
+    "/api/access-control/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/datasources/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
     "/api/login/ping",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/frontend/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/library-elements/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/library-elements",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/live/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/org",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/org/{path:path}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
 )
 @router.api_route(
@@ -75,6 +115,18 @@ async def grafana_public_asset_proxy(
 )
 @router.api_route(
     "/api/prometheus/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/query-history/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/query-history",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/ruler/{path:path}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
 )
 @router.api_route(
@@ -250,18 +302,17 @@ def _rewrite_html(html: str) -> str:
     rewritten = html
     for old, new in replacements.items():
         rewritten = rewritten.replace(old, new)
-    return rewritten
+    return _rewrite_asset_text(rewritten)
 
 
 def _rewrite_asset_text(text: str) -> str:
-    rewritten = text
-    for asset_dir in ("build", "fonts", "img", "plugins", "app", "locales"):
-        for prefix in ('"', "'", "`", "=", "("):
-            old = f'{prefix}/public/{asset_dir}/'
-            new = f'{prefix}/grafana-ui/public/{asset_dir}/'
-            rewritten = rewritten.replace(old, new)
-
-    rewritten = rewritten.replace('url(/public/', 'url(/grafana-ui/public/')
+    rewritten = GRAFANA_PUBLIC_PATH_RE.sub(r"/grafana-ui/public/\1/", text)
+    rewritten = GRAFANA_RELATIVE_PUBLIC_PATH_RE.sub(r"\g<prefix>/grafana-ui/public/\2/", rewritten)
+    for asset_dir in GRAFANA_PUBLIC_DIRS:
+        rewritten = rewritten.replace(
+            f"\\/public\\/{asset_dir}\\/",
+            f"\\/grafana-ui\\/public\\/{asset_dir}\\/",
+        )
     return rewritten
 
 

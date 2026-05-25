@@ -1,4 +1,5 @@
 import base64
+import gzip
 import hashlib
 import hmac
 import json
@@ -133,6 +134,41 @@ def test_prometheus_proxy_rewrites_form_post(monkeypatch, tmp_path):
     assert captured["headers"]["content-type"].startswith("application/x-www-form-urlencoded")
     assert b"query=sum%28kubeowl_runtime_events_total%7Bcluster_id%3D%22cluster-form%22%7D%29" in captured["content"]
     assert b"start=1" in captured["content"]
+
+
+def test_prometheus_proxy_does_not_forward_decoded_body_encoding_headers(monkeypatch, tmp_path):
+    secret = "test-secret"
+
+    async def fake_forward(method, url, **kwargs):
+        return httpx.Response(
+            200,
+            content=gzip.compress(b'{"status":"success","data":{"result":[]}}'),
+            headers={
+                "content-type": "application/json",
+                "content-encoding": "gzip",
+                "content-length": "999",
+                "transfer-encoding": "chunked",
+                "cache-control": "no-store",
+            },
+        )
+
+    monkeypatch.setenv("JWT_SECRET", secret)
+    monkeypatch.setattr(proxy, "AUDIT_LOG_PATH", tmp_path / "audit.log")
+    monkeypatch.setattr(proxy, "_forward_request", fake_forward)
+    token = _jwt(secret, "user-headers", "cluster-headers")
+
+    response = client.post(
+        "/grafana/prometheus/cluster-headers/api/v1/query_range",
+        data={"query": "kubeowl_runtime_events_total", "start": "1", "end": "2", "step": "1"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert "content-encoding" not in response.headers
+    assert response.headers["content-length"] != "999"
+    assert "transfer-encoding" not in response.headers
+    assert response.json()["status"] == "success"
 
 
 def test_prometheus_proxy_rejects_cluster_mismatch(monkeypatch, tmp_path):
@@ -384,6 +420,32 @@ def test_grafana_ui_proxy_serves_root_public_lazy_chunks(monkeypatch):
     assert captured["upstream_path"] == "/public/build/7651.06c4a6f267dfa91784a2.js"
 
 
+def test_grafana_ui_proxy_serves_public_assets_without_auth_headers(monkeypatch):
+    captured = {}
+
+    async def fake_forward(request, upstream_path, user):
+        headers = ui_proxy._request_headers(request, user)
+        captured["upstream_path"] = upstream_path
+        captured["headers"] = headers
+        return httpx.Response(
+            200,
+            content=gzip.compress(b"asset ok"),
+            headers={"content-type": "application/javascript", "content-encoding": "gzip"},
+        )
+
+    monkeypatch.setattr(ui_proxy, "_forward_grafana_request", fake_forward)
+
+    response = client.get("/public/build/public-assets.js")
+
+    assert response.status_code == 200
+    assert response.text == "asset ok"
+    assert captured["upstream_path"] == "/public/build/public-assets.js"
+    assert "X-WEBAUTH-USER" not in captured["headers"]
+    assert "X-WEBAUTH-EMAIL" not in captured["headers"]
+    assert "X-WEBAUTH-NAME" not in captured["headers"]
+    assert "content-encoding" not in response.headers
+
+
 def test_grafana_ui_proxy_serves_root_grafana_api_paths(monkeypatch):
     user = storage.upsert_user(
         provider="dev",
@@ -400,7 +462,14 @@ def test_grafana_ui_proxy_serves_root_grafana_api_paths(monkeypatch):
     monkeypatch.setattr(ui_proxy, "_forward_grafana_request", fake_forward)
 
     for path in (
+        "/api/access-control/user/permissions",
+        "/api/datasources/uid/kubeowl-prom-test",
+        "/api/frontend/settings",
         "/api/login/ping",
+        "/api/library-elements?perPage=100",
+        "/api/live/ws",
+        "/api/org",
+        "/api/org/preferences",
         "/api/plugins/grafana-lokiexplore-app/settings",
         "/api/user/orgs",
         "/api/search?type=dash-db",
@@ -410,17 +479,26 @@ def test_grafana_ui_proxy_serves_root_grafana_api_paths(monkeypatch):
         "/api/browse/dashboards?sort=alpha-asc",
         "/api/ds/query?ds_type=prometheus",
         "/api/prometheus/grafana/api/v1/rules?dashboard_uid=compliance-overview",
+        "/api/query-history",
+        "/api/ruler/grafana/api/v1/rules",
         "/apis/dashboard.grafana.app/v1beta1/namespaces/default/dashboards",
         "/avatar/78d07744450b61186736ffc6f97b1082",
     ):
         response = client.get(path, cookies={"compliance_ai_session": session})
-        assert response.status_code == 200
+        assert response.status_code == 200, path
 
     metrics_response = client.post("/api/frontend-metrics", cookies={"compliance_ai_session": session})
     assert metrics_response.status_code == 200
 
     assert captured == [
+        "/api/access-control/user/permissions",
+        "/api/datasources/uid/kubeowl-prom-test",
+        "/api/frontend/settings",
         "/api/login/ping",
+        "/api/library-elements?perPage=100",
+        "/api/live/ws",
+        "/api/org",
+        "/api/org/preferences",
         "/api/plugins/grafana-lokiexplore-app/settings",
         "/api/user/orgs",
         "/api/search?type=dash-db",
@@ -430,6 +508,8 @@ def test_grafana_ui_proxy_serves_root_grafana_api_paths(monkeypatch):
         "/api/browse/dashboards?sort=alpha-asc",
         "/api/ds/query?ds_type=prometheus",
         "/api/prometheus/grafana/api/v1/rules?dashboard_uid=compliance-overview",
+        "/api/query-history",
+        "/api/ruler/grafana/api/v1/rules",
         "/apis/dashboard.grafana.app/v1beta1/namespaces/default/dashboards",
         "/avatar/78d07744450b61186736ffc6f97b1082",
         "/api/frontend-metrics",
@@ -632,4 +712,7 @@ def test_grafana_ui_proxy_rewrites_extended_asset_paths():
     assert ui_proxy._rewrite_asset_text('`/public/img/logo.png`') == '`/grafana-ui/public/img/logo.png`'
     assert ui_proxy._rewrite_asset_text('__webpack_public_path__="/public/build/";') == '__webpack_public_path__="/grafana-ui/public/build/";'
     assert ui_proxy._rewrite_asset_text('url(/public/fonts/roboto.woff2)') == 'url(/grafana-ui/public/fonts/roboto.woff2)'
-
+    assert ui_proxy._rewrite_asset_text('url("/public/fonts/roboto.woff2")') == 'url("/grafana-ui/public/fonts/roboto.woff2")'
+    assert ui_proxy._rewrite_asset_text("url('/public/img/logo.svg')") == "url('/grafana-ui/public/img/logo.svg')"
+    assert ui_proxy._rewrite_asset_text('"asset":"\\/public\\/build\\/runtime.js"') == '"asset":"\\/grafana-ui\\/public\\/build\\/runtime.js"'
+    assert ui_proxy._rewrite_asset_text('"/grafana-ui/public/build/app.js"') == '"/grafana-ui/public/build/app.js"'
