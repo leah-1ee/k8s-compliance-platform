@@ -120,6 +120,8 @@ function llmHeaders() {
   if (apiKey.length >= 8) {
     headers["X-LLM-Provider"] = $("#llmProvider").value;
     headers["X-LLM-API-Key"] = apiKey;
+  } else {
+    showInlineAlert("API key를 먼저 적용해 주세요.");
   }
   return headers;
 }
@@ -440,6 +442,13 @@ function setOutput(selector, value) {
   const element = $(selector);
   element.textContent = value;
   element.removeAttribute("data-empty");
+}
+
+function setReportLoading(isLoading) {
+  $("#reportLoading").hidden = !isLoading;
+  $("#reportLoadingText").textContent = "최근 Falco/Gatekeeper 이벤트를 집계하고 LLM 요약을 생성하고 있습니다.";
+  $("#generateReport").disabled = isLoading;
+  $("#generateReport").textContent = isLoading ? "생성 중..." : "리포트 생성";
 }
 
 function renderManifestGuidance(result = null) {
@@ -1101,16 +1110,8 @@ function renderLandingIntro() {
     return;
   }
   const isAuthenticated = Boolean(authState.authenticated);
-  const googleConfigured = Boolean(authState.auth?.google_configured);
-  const devEnabled = Boolean(authState.auth?.dev_enabled);
   landingIntro.hidden = isAuthenticated;
-  $("#landingLoginLink").hidden = isAuthenticated || !googleConfigured;
-  $("#landingDevLoginLink").hidden = isAuthenticated || !devEnabled;
-  const landingLoginNote = $("#landingLoginNote");
-  if (landingLoginNote) {
-    landingLoginNote.hidden = isAuthenticated || (!googleConfigured && !devEnabled);
-  }
-  $("#landingNoLoginMessage").hidden = isAuthenticated || googleConfigured || devEnabled;
+  $("#landingLoginLink").hidden = isAuthenticated;
   if (!isAuthenticated) {
     startLandingTypewriter();
   }
@@ -1716,43 +1717,50 @@ async function generateReport() {
     showToast("로그인 후 사용할 수 있습니다");
     return;
   }
+  setReportLoading(true);
   $("#reportResult").innerHTML = `
     <span class="badge loading">loading</span>
     <h2>리포트 생성 중</h2>
     <p>최근 Falco/Gatekeeper 이벤트를 집계하고 LLM 요약을 생성하고 있습니다.</p>
   `;
-  const response = await fetch("/compliance-report", {
-    headers: llmHeaders(),
-  });
-  const report = await response.json();
-  if (!response.ok) {
-    throw new Error(formatErrorMessage(report.error || report.detail || `HTTP ${response.status}`));
+  try {
+    const response = await fetch("/compliance-report", {
+      headers: llmHeaders(),
+    });
+    const report = await response.json();
+    if (!response.ok) {
+      throw new Error(formatErrorMessage(report.error || report.detail || `HTTP ${response.status}`));
+    }
+    latestReportText = JSON.stringify(report, null, 2);
+    const recommendations = (report.recommendations || [])
+      .map((item) => `<li>${escapeHtml(item)}</li>`)
+      .join("");
+    const topRules = (report.top_rules || [])
+      .map((item) => `<li>${escapeHtml(item.rule)}: ${escapeHtml(item.count)}</li>`)
+      .join("");
+    const llmSummary = report.llm_summary
+      ? `<div class="analysis-code-block"><p>${escapeHtml(report.llm_summary)}</p></div>`
+      : `<p>${escapeHtml(report.llm_error || "LLM 요약을 생성하지 못해 규칙 기반 리포트만 표시합니다.")}</p>`;
+    $("#reportResult").innerHTML = `
+      <span class="badge ${report.llm_used ? "ready" : "loading"}">${report.llm_used ? "LLM report" : "rule report"}</span>
+      <h2>AI 컴플라이언스 리포트</h2>
+      <p>generated_at: ${escapeHtml(report.generated_at || "")}</p>
+      <h3>LLM 요약</h3>
+      ${llmSummary}
+      <h3>상위 위반 Rule</h3>
+      <ul>${topRules || "<li>수집된 rule 없음</li>"}</ul>
+      <h3>권장 조치</h3>
+      <div class="analysis-code-block report-terminal-window">
+        <ul>${recommendations}</ul>
+      </div>
+      <div class="analysis-code-block report-terminal-window">
+        <pre><code>${escapeHtml(latestReportText)}</code></pre>
+      </div>
+    `;
+    latestReportHtml = $("#reportResult").innerHTML;
+  } finally {
+    setReportLoading(false);
   }
-  latestReportText = JSON.stringify(report, null, 2);
-  const recommendations = (report.recommendations || [])
-    .map((item) => `<li>${escapeHtml(item)}</li>`)
-    .join("");
-  const topRules = (report.top_rules || [])
-    .map((item) => `<li>${escapeHtml(item.rule)}: ${escapeHtml(item.count)}</li>`)
-    .join("");
-  const llmSummary = report.llm_summary
-    ? `<div class="analysis-code-block"><p>${escapeHtml(report.llm_summary)}</p></div>`
-    : `<p>${escapeHtml(report.llm_error || "LLM 요약을 생성하지 못해 규칙 기반 리포트만 표시합니다.")}</p>`;
-  $("#reportResult").innerHTML = `
-    <span class="badge ${report.llm_used ? "ready" : "loading"}">${report.llm_used ? "LLM report" : "rule report"}</span>
-    <h2>AI 컴플라이언스 리포트</h2>
-    <p>generated_at: ${escapeHtml(report.generated_at || "")}</p>
-    <h3>LLM 요약</h3>
-    ${llmSummary}
-    <h3>상위 위반 Rule</h3>
-    <ul>${topRules || "<li>수집된 rule 없음</li>"}</ul>
-    <h3>권장 조치</h3>
-    <ul>${recommendations}</ul>
-    <div class="analysis-code-block">
-      <pre><code>${escapeHtml(latestReportText)}</code></pre>
-    </div>
-  `;
-  latestReportHtml = $("#reportResult").innerHTML;
 }
 
 function downloadReportPdf() {
@@ -2134,15 +2142,41 @@ $("#useOwnApiKey").addEventListener("change", () => {
   }
 });
 
+$("#applyLlmApiKey").addEventListener("click", () => {
+  const apiKey = sanitizeApiKey($("#llmApiKey").value);
+  if (!$("#useOwnApiKey").checked) {
+    $("#useOwnApiKey").checked = true;
+    $("#byokFields").hidden = false;
+  }
+  if (!apiKey) {
+    sessionStorage.removeItem(SESSION_KEY);
+    showInlineAlert("API key를 입력한 뒤 적용해 주세요.");
+    showToast("API key 적용 실패");
+    return;
+  }
+  if (!isSecureContextForKey()) {
+    sessionStorage.removeItem(SESSION_KEY);
+    showInlineAlert("HTTPS 연결에서만 사용자 API key를 전송할 수 있습니다.");
+    showToast("API key 적용 실패");
+    return;
+  }
+  sessionStorage.setItem(SESSION_KEY, apiKey);
+  $("#llmApiKey").value = apiKey;
+  clearInlineAlert();
+  showToast("API key가 적용되었습니다");
+});
+
+$("#clearLlmApiKey").addEventListener("click", () => {
+  sessionStorage.removeItem(SESSION_KEY);
+  $("#llmApiKey").value = "";
+  clearInlineAlert();
+  showToast("API key를 초기화했습니다");
+});
+
 $("#llmApiKey").addEventListener("input", () => {
   const value = sanitizeApiKey($("#llmApiKey").value);
   if ($("#llmApiKey").value !== value) {
     $("#llmApiKey").value = value;
-  }
-  if (value) {
-    sessionStorage.setItem(SESSION_KEY, value);
-  } else {
-    sessionStorage.removeItem(SESSION_KEY);
   }
 });
 
@@ -2211,25 +2245,21 @@ async function loadAuthStatus() {
 function renderAuthStatus() {
   const status = $("#authStatus");
   const loginLink = $("#loginLink");
-  const devLoginLink = $("#devLoginLink");
   const accountDeleteButton = $("#accountDeleteButton");
   const logoutButton = $("#logoutButton");
   document.body.classList.toggle("logged-out", !authState.authenticated);
   document.body.classList.toggle("logged-in", Boolean(authState.authenticated));
   if (authState.authenticated) {
     status.textContent = authState.user?.email || "로그인됨";
+    status.hidden = false;
     loginLink.hidden = true;
-    devLoginLink.hidden = true;
     accountDeleteButton.hidden = false;
     logoutButton.hidden = false;
     renderAuthGates();
     return;
   }
-  const googleConfigured = Boolean(authState.auth?.google_configured);
-  const devEnabled = Boolean(authState.auth?.dev_enabled);
-  status.textContent = googleConfigured || devEnabled ? "로그인 필요" : "로그인 미설정";
-  loginLink.hidden = !authState.auth?.google_configured;
-  devLoginLink.hidden = !authState.auth?.dev_enabled;
+  status.hidden = true;
+  loginLink.hidden = false;
   accountDeleteButton.hidden = true;
   logoutButton.hidden = true;
   renderAuthGates();

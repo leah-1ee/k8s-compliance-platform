@@ -824,6 +824,7 @@ falco-sidekick-7f6c9d9b6c-jh2qx   <span class="ok">Running</span>
                   <li>Violation Detail은 rule, cluster, namespace, pod, container 맥락을 한 화면에 묶습니다.</li>
                   <li>분석 결과는 심각도 설명, 원인 요약, 권장 수정, 구체적 조치로 분리합니다.</li>
                   <li>AI Report는 최근 이벤트를 집계해 리포트 복사와 PDF 다운로드 흐름으로 넘깁니다.</li>
+                  <li>생성된 정책 산출물, Falco Sidekick 설치 명령, Event JSON, 리포트 코드 블록은 터미널 스타일 패널로 보여 복사와 검토를 빠르게 합니다.</li>
                 </ul>
                 <div class="topic-chips"><span>severity explain</span><span>root cause</span><span>recommended fix</span><span>PDF</span></div>
               </article>
@@ -832,6 +833,7 @@ falco-sidekick-7f6c9d9b6c-jh2qx   <span class="ok">Running</span>
                 <h3>팀 기본 키 대신 사용자의 LLM API key로 생성과 분석을 실행할 수 있습니다.</h3>
                 <ul>
                   <li>OpenAI, Anthropic, Google, xAI provider를 선택하고 같은 화면에서 개인 API key를 입력합니다.</li>
+                  <li>키는 입력만 해서는 적용되지 않고, 적용 버튼을 눌러야 현재 세션 요청에 반영됩니다.</li>
                   <li>개인 키는 정책 생성, LLM 검토, 위반 분석, AI Report처럼 LLM 호출이 필요한 요청에만 사용합니다.</li>
                   <li>서버 공용 rate limit에 막히거나 데모 환경에서 provider별 응답 차이를 비교해야 할 때 유용합니다.</li>
                   <li>키는 세션 요청에만 붙여 보내며, DB나 관리자 화면에 저장하지 않는 것을 기본 원칙으로 둡니다.</li>
@@ -876,6 +878,7 @@ falco-sidekick-7f6c9d9b6c-jh2qx   <span class="ok">Running</span>
                 <h3>사용자 화면은 로그인 세션과 클러스터 소유권을 기준으로 분리합니다.</h3>
                 <ul>
                   <li>일반 UI는 로그인 세션 쿠키를 기준으로 사용자와 클러스터를 식별합니다.</li>
+                  <li>초기 화면은 Sign in 버튼 하나로 진입하고, 로그인 완료 후에만 관리 버튼과 작업 영역이 열립니다.</li>
                   <li>클러스터 목록, 런타임 이벤트, 이벤트 상세, AI Report는 로그인한 사용자의 클러스터 범위로만 조회됩니다.</li>
                   <li>개발 로그인은 로컬/데모 모드에서만 켜고, 운영 환경에서는 Google OAuth 또는 별도 SSO로 제한합니다.</li>
                 </ul>
@@ -905,6 +908,7 @@ falco-sidekick-7f6c9d9b6c-jh2qx   <span class="ok">Running</span>
                 <h3>사용자 API key는 저장하지 않고 현재 요청의 LLM 호출에만 사용합니다.</h3>
                 <ul>
                   <li>키는 브라우저 세션에서 요청 헤더로만 전달하고 서버 DB에 저장하지 않습니다.</li>
+                  <li>입력 후 적용 버튼을 눌러야 세션 키가 활성화되고, 새로고침하면 다시 비어 있는 상태로 돌아갑니다.</li>
                   <li>입력된 키는 해당 사용자의 정책 생성, 위반 분석, 리포트 생성 요청에만 적용됩니다.</li>
                   <li>다른 사용자, 관리자 페이지, Grafana 대시보드로 키 값이 노출되지 않아야 합니다.</li>
                   <li>공개 URL이나 HTTP 환경에서 개인 키를 전송하지 않도록 HTTPS 프록시 뒤에서 사용하는 것을 권장합니다.</li>
@@ -1113,7 +1117,8 @@ scope=current browser session
                 <ul>
                   <li><strong>A.</strong> 보안 도구에서 LLM prompt injection은 실제 위협입니다. 그래서 KubeOwl은 LLM 답변을 그대로 권한 변경으로 실행하지 않는 구조를 기본값으로 둡니다.</li>
                   <li>정책 생성 결과는 지원 정책 유형, enforcementAction, namespace exclusion, Rego/YAML 구조 검증을 통과해야 하고, 공격성 있는 prompt override/jailbreak 문구는 서버에서 거부합니다.</li>
-                  <li>악성 프롬프트가 “방어막 해제” 성격의 정책을 만들면 policy intent classifier, denylist/allowlist, 위험 키워드 탐지, destructive-change warning으로 차단하거나 리뷰 단계로 넘기는 guardrail이 필요합니다.</li>
+                  <li>현재 구현은 키워드 기반 intent 판별, 지원 정책 allowlist, 위험 키워드 탐지, 시스템 네임스페이스 blast-radius warning으로 차단하거나 리뷰 단계로 넘깁니다.</li>
+                  <li>더 정교한 semantic classifier와 destructive-change 리뷰 게이트는 확장 여지로 남겨두고, 운영 반영은 가능한 한 human approval과 dry-run diff를 거치게 합니다.</li>
                   <li>최종 적용은 dry-run, diff, 승인 로그, 권한 있는 사용자 승인까지 거치도록 설계해야 하며, LLM은 결정을 내리는 주체가 아니라 보조 생성기입니다.</li>
                 </ul>
                 <div class="topic-chips"><span>jailbreak guard</span><span>intent classifier</span><span>human approval</span><span>dry-run diff</span></div>

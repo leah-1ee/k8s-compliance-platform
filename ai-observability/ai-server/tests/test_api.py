@@ -68,11 +68,9 @@ def test_ui_is_served():
     assert "Google (Gemini)" in response.text
     assert "xAI (Grok)" in response.text
     assert "Use my own API key" in response.text
-    assert "Continue with Google" in response.text
     assert "accountDeleteButton" in response.text
     assert "회원 탈퇴" in response.text
     assert "PDF 다운로드" in response.text
-    assert "개발 로그인" in response.text
     assert "Your API key is used only for requests in this session" in response.text
     assert "Cluster Setup" in response.text
     assert "로그인 후 런타임 위반을 확인할 수 있습니다." in response.text
@@ -95,6 +93,8 @@ def test_ui_is_served():
     assert "AI Report" in response.text
     assert 'data-copy-target="templateOutput"' in response.text
     assert 'aria-label="ConstraintTemplate 복사"' in response.text
+    assert "Sign in" in response.text
+    assert "applyLlmApiKey" in response.text
 
 
 def test_admin_is_served():
