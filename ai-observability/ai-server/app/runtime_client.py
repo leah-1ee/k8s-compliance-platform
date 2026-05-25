@@ -8,6 +8,7 @@ import httpx
 import yaml
 
 from app import storage
+from app.analyzer import _redact_for_llm
 from app.llm_client import LLMClient
 from app.policy_generator import _format_llm_http_error
 
@@ -30,6 +31,22 @@ INFRA_NAMESPACES = {
     "kube-flannel",
     "tigera-operator",
 }
+SYSTEM_NAMESPACE_GUARD = {
+    "kube-system",
+    "gatekeeper-system",
+    "monitoring",
+}
+HIGH_BLAST_RADIUS_POLICY_MARKERS = (
+    "nonroot",
+    "non-root",
+    "privileged",
+    "host",
+    "capabilities",
+    "hostpath",
+    "runas",
+    "lowport",
+    "port",
+)
 POLICY_APPLY_FIELD_MANAGER = "kubeowl-policy-apply"
 
 
@@ -122,6 +139,34 @@ def apply_policy_manifest(manifest: str, cluster: dict[str, Any]) -> dict[str, A
         "resources": resource_results,
         "fallback": _policy_apply_fallback(manifest) if apply_failed else {},
     }
+
+
+def policy_blast_radius_warnings(manifest: str) -> list[str]:
+    warnings: list[str] = []
+    for resource in _parse_policy_manifest(manifest):
+        kind = str(resource.get("kind") or "")
+        api_version = str(resource.get("apiVersion") or "")
+        metadata = resource.get("metadata") if isinstance(resource.get("metadata"), dict) else {}
+        spec = resource.get("spec") if isinstance(resource.get("spec"), dict) else {}
+        name = str(metadata.get("name") or "")
+        namespace = str(metadata.get("namespace") or "")
+        if api_version.startswith("constraints.gatekeeper.sh/"):
+            action = str(spec.get("enforcementAction") or "deny").lower()
+            identity = f"{kind} {name}".lower()
+            high_blast_radius = any(marker in identity for marker in HIGH_BLAST_RADIUS_POLICY_MARKERS)
+            match = spec.get("match") if isinstance(spec.get("match"), dict) else {}
+            excluded = {str(item) for item in match.get("excludedNamespaces", []) if item}
+            missing = sorted(SYSTEM_NAMESPACE_GUARD - excluded)
+            if action == "deny" and high_blast_radius and missing:
+                warnings.append(
+                    f"{kind}/{name or 'unnamed'} deny 정책이 시스템 네임스페이스 제외를 누락했습니다: "
+                    f"{', '.join(missing)}"
+                )
+        if kind == "NetworkPolicy" and namespace in SYSTEM_NAMESPACE_GUARD:
+            warnings.append(
+                f"NetworkPolicy/{name or 'unnamed'}가 시스템 네임스페이스 {namespace}에 적용됩니다."
+            )
+    return warnings
 
 
 def _parse_policy_manifest(manifest: str) -> list[dict[str, Any]]:
@@ -870,10 +915,11 @@ def _build_report_prompt(report: dict[str, Any]) -> str:
         "recommendations": report.get("recommendations", []),
         "events": report.get("events", [])[:10],
     }
+    redacted_report = _redact_for_llm(compact_report)
     return (
         "다음 Kubernetes 컴플라이언스 리포트 JSON을 운영자용으로 요약하세요.\n"
         "출력은 한국어 4~6문장으로 작성하고, 조치 우선순위를 포함하세요.\n\n"
-        f"{json.dumps(compact_report, ensure_ascii=False)}"
+        f"{json.dumps(redacted_report, ensure_ascii=False)}"
     )
 
 

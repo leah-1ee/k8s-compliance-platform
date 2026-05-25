@@ -19,7 +19,7 @@ from slowapi.util import get_remote_address
 from app.analyzer import analyze_violation
 from app.classifier import classify_event
 from app.policy_generator import generate_policy
-from app.policy_generator import SUPPORTED_POLICY_EXAMPLES, UnsupportedPolicyError
+from app.policy_generator import SUPPORTED_POLICY_EXAMPLES, UnsafePolicyPromptError, UnsupportedPolicyError
 from app import storage
 from app.grafana.admin_session import ADMIN_GRAFANA_COOKIE_NAME, issue_admin_grafana_token
 from app.grafana.proxy import router as grafana_proxy_router
@@ -32,6 +32,7 @@ from app.runtime_client import (
     build_report,
     get_runtime_event,
     list_runtime_events,
+    policy_blast_radius_warnings,
     record_falco_event,
     record_gatekeeper_event,
 )
@@ -1147,6 +1148,16 @@ def apply_generated_policy_to_cluster(
     manifest = str(payload.get("manifest", "")).strip()
     if not manifest:
         return JSONResponse(status_code=400, content={"error": "manifest is required"})
+    blast_radius_warnings = policy_blast_radius_warnings(manifest)
+    if blast_radius_warnings and not bool(payload.get("confirm_system_scope")):
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": "system namespace blast radius confirmation required",
+                "warnings": blast_radius_warnings,
+                "required_confirmation": "confirm_system_scope",
+            },
+        )
     try:
         result = apply_policy_manifest(manifest, cluster)
     except ValueError as error:
@@ -1861,7 +1872,7 @@ def generate(
             after=response.model_dump() if hasattr(response, "model_dump") else response.dict(),
         )
         return response
-    except UnsupportedPolicyError as error:
+    except (UnsupportedPolicyError, UnsafePolicyPromptError) as error:
         return JSONResponse(
             status_code=400,
             content={

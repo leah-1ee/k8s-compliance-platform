@@ -173,7 +173,9 @@ def _redact_for_llm(value):
         for key, item in value.items():
             key_text = str(key)
             key_lower = key_text.lower()
-            if SENSITIVE_KEY_RE.search(key_text):
+            if key_lower in {"by_namespace", "namespaces"} and isinstance(item, dict):
+                redacted[key] = {"[REDACTED_NAMESPACE]": sum(int(count or 0) for count in item.values())}
+            elif SENSITIVE_KEY_RE.search(key_text):
                 redacted[key] = "[REDACTED_SECRET]"
             elif key_lower in {"k8s.ns.name", "namespace"} or key_lower.endswith(".namespace"):
                 redacted[key] = "[REDACTED_NAMESPACE]"
@@ -189,6 +191,11 @@ def _redact_for_llm(value):
 
 def _redact_string_for_llm(value: str) -> str:
     redacted = PRIVATE_IP_RE.sub("[REDACTED_PRIVATE_IP]", value)
+    redacted = re.sub(
+        r"(?i)\b(token|password|passwd|secret|api[_-]?key|authorization|cookie|webhook)\s*[:= ]\s*[^,\s;]+",
+        lambda match: f"{match.group(1)} [REDACTED_SECRET]",
+        redacted,
+    )
 
     def replace_registry(match: re.Match[str]) -> str:
         host = match.group(1)

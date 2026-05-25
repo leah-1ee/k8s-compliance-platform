@@ -43,12 +43,24 @@ class UnsupportedPolicyError(ValueError):
         )
 
 
+class UnsafePolicyPromptError(ValueError):
+    """Raised when a request appears to override guardrails instead of asking for a policy."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "정책 생성 요청에 안전장치 우회 또는 지시 무시 문구가 포함되어 처리하지 않았습니다. "
+            "지원 정책군 안에서 필요한 보안 정책만 다시 요청하세요."
+        )
+
+
 def generate_policy(
     request: PolicyGenerationRequest,
     llm_provider: str | None = None,
     llm_api_key: str | None = None,
 ) -> PolicyGenerationResponse:
     # 정책 유형 판별
+    if _looks_like_prompt_injection(request.prompt):
+        raise UnsafePolicyPromptError()
     policy_kind = request.policy_kind or _detect_policy_kind(request.prompt)
     if policy_kind is None:
         raise UnsupportedPolicyError(request.prompt)
@@ -217,6 +229,25 @@ def _detect_policy_kind(prompt: str) -> PolicyKind | None:
     if "host" in normalized or "namespace" in normalized or "네임스페이스" in normalized:
         return "host-namespace"
     return None
+
+
+def _looks_like_prompt_injection(prompt: str) -> bool:
+    normalized = re.sub(r"\s+", " ", prompt.lower()).strip()
+    blocked_patterns = [
+        r"ignore (all )?(previous|prior|above|system|developer) (instructions|rules|messages)",
+        r"disregard (all )?(previous|prior|above|system|developer) (instructions|rules|messages)",
+        r"bypass (the )?(guardrails|safety|validation|policy validation)",
+        r"disable (the )?(guardrails|safety|validation|policy validation)",
+        r"reveal (the )?(system prompt|developer message|hidden instructions)",
+        r"show (the )?(system prompt|developer message|hidden instructions)",
+        r"jailbreak",
+        r"프롬프트를 무시",
+        r"이전 지시.*무시",
+        r"시스템.*프롬프트.*출력",
+        r"안전장치.*우회",
+        r"검증.*우회",
+    ]
+    return any(re.search(pattern, normalized) for pattern in blocked_patterns)
 
 
 def _complete_review(
