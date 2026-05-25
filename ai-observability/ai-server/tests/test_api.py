@@ -103,6 +103,8 @@ def test_admin_is_served():
     assert response.status_code == 200
     assert "KubeOwl Admin" in response.text
     assert "Admin Grafana" in response.text
+    assert "감사 로그" in response.text
+    assert "auditActionFilter" in response.text
     assert "data-enable" in response.text
     assert "userSearch" in response.text
     assert "search-highlight" in response.text

@@ -233,6 +233,65 @@
         width: 34px;
         height: 34px;
       }
+      .audit-log-card {
+        display: grid;
+        gap: 16px;
+      }
+      .audit-log-filters {
+        display: grid;
+        grid-template-columns: minmax(220px, 1.5fr) minmax(180px, 1fr) minmax(180px, 1fr) auto;
+        gap: 12px;
+        align-items: end;
+      }
+      .audit-log-list {
+        display: grid;
+        gap: 10px;
+      }
+      .audit-log-list.is-scrollable {
+        max-height: 540px;
+        overflow-y: auto;
+        padding-right: 8px;
+        overscroll-behavior: contain;
+      }
+      .audit-log-item {
+        display: grid;
+        gap: 8px;
+        padding: 14px 16px;
+        border: 1px solid rgba(8, 119, 242, 0.14);
+        border-radius: 12px;
+        background:
+          radial-gradient(circle at 0% 0%, rgba(86, 204, 242, 0.12), transparent 28%),
+          rgba(255, 255, 255, 0.72);
+      }
+      body[data-theme="dark"] .audit-log-item {
+        background:
+          radial-gradient(circle at 0% 0%, rgba(56, 189, 248, 0.1), transparent 28%),
+          rgba(15, 23, 42, 0.76);
+      }
+      .audit-log-item strong {
+        font-size: 15px;
+      }
+      .audit-log-meta {
+        color: var(--muted);
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+        font-size: 13px;
+      }
+      .audit-log-json {
+        margin: 0;
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: rgba(8, 17, 31, 0.94);
+        color: #dbeafe;
+        font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.5;
+        overflow: auto;
+      }
+      .audit-log-empty {
+        color: var(--muted);
+        font-weight: 760;
+      }
       label {
         display: grid;
         gap: 8px;
@@ -558,6 +617,26 @@
         </section>
       </div>
 
+      <section class="audit-log-card">
+        <h2>감사 로그</h2>
+        <div class="audit-log-filters">
+          <label>
+            액션 필터
+            <input id="auditActionFilter" placeholder="cluster.create, account.delete, grafana.admin_url_issue" />
+          </label>
+          <label>
+            대상 유형
+            <input id="auditTargetTypeFilter" placeholder="user, cluster, grafana, policy" />
+          </label>
+          <label>
+            대상 ID
+            <input id="auditTargetIdFilter" placeholder="user-id, cluster-id" />
+          </label>
+          <button id="refreshAuditLogs">감사 로그 새로고침</button>
+        </div>
+        <div id="auditLogs"></div>
+      </section>
+
       <section>
         <h2>운영 요약</h2>
         <div class="summary-grid" id="adminSummary">
@@ -613,6 +692,11 @@
       const usersEl = document.querySelector("#users");
       const userDetailEl = document.querySelector("#userDetail");
       const adminSummary = document.querySelector("#adminSummary");
+      const auditLogsEl = document.querySelector("#auditLogs");
+      const auditActionFilter = document.querySelector("#auditActionFilter");
+      const auditTargetTypeFilter = document.querySelector("#auditTargetTypeFilter");
+      const auditTargetIdFilter = document.querySelector("#auditTargetIdFilter");
+      const refreshAuditLogsButton = document.querySelector("#refreshAuditLogs");
       const clusterSearch = document.querySelector("#clusterSearch");
       const userSearch = document.querySelector("#userSearch");
       const statusFilter = document.querySelector("#statusFilter");
@@ -752,6 +836,31 @@
         `;
       }
 
+      function renderAuditLogs(events) {
+        if (!events.length) {
+          auditLogsEl.innerHTML = '<p class="audit-log-empty">조건에 맞는 감사 로그가 없습니다.</p>';
+          return;
+        }
+        const items = events.map((event) => {
+          const details = JSON.stringify(event.details || {}, null, 2);
+          return `
+            <article class="audit-log-item">
+              <strong>${escapeHtml(event.action || "-")} · ${escapeHtml(event.result || "success")}</strong>
+              <div class="audit-log-meta">
+                time=${escapeHtml(event.created_at || "-")} ·
+                actor=${escapeHtml(event.actor_email || event.actor_user_id || "-")} ·
+                target=<span class="pill">${escapeHtml(event.target_type || "-")}</span> ${escapeHtml(event.target_id || "-")} ·
+                request_id=${escapeHtml(event.request_id || "-")} ·
+                before_hash=${escapeHtml(event.before_hash || "-")} ·
+                after_hash=${escapeHtml(event.after_hash || "-")}
+              </div>
+              <pre class="audit-log-json">${escapeHtml(details)}</pre>
+            </article>
+          `;
+        }).join("");
+        auditLogsEl.innerHTML = `<div class="audit-log-list ${events.length > 8 ? "is-scrollable" : ""}">${items}</div>`;
+      }
+
       function renderUsers(users) {
         const query = userSearch.value.trim();
         const normalizedQuery = query.toLowerCase();
@@ -857,6 +966,25 @@
         return `/admin/api/clusters?${params.toString()}`;
       }
 
+      function auditLogsUrl() {
+        const params = new URLSearchParams({ limit: "50" });
+        if (auditActionFilter.value.trim()) {
+          params.set("action", auditActionFilter.value.trim());
+        }
+        if (auditTargetTypeFilter.value.trim()) {
+          params.set("target_type", auditTargetTypeFilter.value.trim());
+        }
+        if (auditTargetIdFilter.value.trim()) {
+          params.set("target_id", auditTargetIdFilter.value.trim());
+        }
+        return `/admin/api/audit-events?${params.toString()}`;
+      }
+
+      async function loadAuditLogs() {
+        const body = await requestJson(auditLogsUrl());
+        renderAuditLogs(body.audit_events || []);
+      }
+
       async function loadAdminDashboard() {
         const [clusterBody, summaryClusterBody, userBody] = await Promise.all([
           requestJson(clusterListUrl()),
@@ -870,6 +998,7 @@
         renderSummary(users, summaryClusters);
         renderUsers(adminUsers);
         renderClusters(clusters);
+        await loadAuditLogs();
         setMessage("관리자 대시보드를 불러왔습니다.");
       }
 
@@ -890,6 +1019,18 @@
 
       document.querySelector("#applyClusterFilters").addEventListener("click", () => {
         loadAdminDashboard().catch((error) => setMessage(error.message));
+      });
+
+      refreshAuditLogsButton.addEventListener("click", () => {
+        loadAuditLogs().catch((error) => setMessage(error.message));
+      });
+
+      [auditActionFilter, auditTargetTypeFilter, auditTargetIdFilter].forEach((input) => {
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            loadAuditLogs().catch((error) => setMessage(error.message));
+          }
+        });
       });
 
       function renderAdminGrafanaLinks(links) {
