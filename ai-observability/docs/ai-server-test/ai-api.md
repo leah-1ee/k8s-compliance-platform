@@ -50,6 +50,9 @@ Content-Type: application/json
 ## 개발 기준
 
 - 개인정보 및 토큰성 필드 마스킹
+- LLM 요청은 분석/요약 직전 redaction pipeline을 반드시 지난다
+- prompt injection 또는 jailbreak 류 정책 생성 요청은 서버에서 거부한다
+- 고위험 deny 정책은 시스템 네임스페이스 blast radius 확인을 요구한다
 - 응답 스키마 고정
 - 재현 가능한 규칙 기반 기본 분류
 - LLM 장애 시 대체 가능한 구조
