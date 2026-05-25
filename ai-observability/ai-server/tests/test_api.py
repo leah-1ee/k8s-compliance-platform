@@ -103,6 +103,7 @@ def test_admin_is_served():
     assert response.status_code == 200
     assert "KubeOwl Admin" in response.text
     assert "Admin Grafana" in response.text
+    assert "data-enable" in response.text
     assert "클러스터 등록" not in response.text
     assert "설치 명령어" not in response.text
     assert "운영 요약" in response.text
@@ -1866,6 +1867,13 @@ def test_admin_cluster_lifecycle():
 
     assert disable_response.status_code == 200
     assert disable_response.json()["cluster"]["status"] == "disabled"
+
+    enable_response = client.post(
+        f"/admin/api/clusters/{cluster_id}/enable",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    assert enable_response.status_code == 200
+    assert enable_response.json()["cluster"]["status"] == "active"
 
     trash_response = client.delete(
         f"/admin/api/clusters/{cluster_id}",

@@ -815,6 +815,18 @@ def disable_cluster(cluster_id: str) -> dict[str, Any] | None:
     return get_cluster(cluster_id)
 
 
+def enable_cluster(cluster_id: str) -> dict[str, Any] | None:
+    init_db()
+    with _LOCK, _connect() as conn:
+        cursor = conn.execute(
+            "UPDATE clusters SET status = 'active', deleted_at = NULL WHERE id = ? AND status = 'disabled'",
+            (cluster_id,),
+        )
+    if cursor.rowcount == 0:
+        return None
+    return get_cluster(cluster_id)
+
+
 def trash_cluster(cluster_id: str, user_id: str) -> dict[str, Any] | None:
     init_db()
     now = datetime.now(timezone.utc).isoformat()

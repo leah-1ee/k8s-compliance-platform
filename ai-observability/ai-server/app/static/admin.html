@@ -510,7 +510,7 @@
             </div>
           </div>
           <div class="admin-grafana-links" id="adminGrafanaLinks">
-            <button class="primary admin-grafana-link" data-grafana-link="default">
+            <button class="admin-grafana-link" data-grafana-link="default">
               <strong>전체 Grafana 열기</strong>
               <span>관리자 org의 대시보드 목록으로 이동합니다.</span>
             </button>
@@ -643,16 +643,25 @@
           const deletedMeta = status === "deleted"
             ? ` · deleted_at=${escapeHtml(cluster.deleted_at || "-")} · <span class="danger-note">영구 삭제 가능</span>`
             : "";
-          const actions = status === "deleted"
-            ? `
+          let actions = "";
+          if (status === "deleted") {
+            actions = `
               <button data-restore="${escapeHtml(cluster.id)}">복원</button>
               <button class="danger" data-purge="${escapeHtml(cluster.id)}">영구 삭제</button>
-            `
-            : `
+            `;
+          } else if (status === "disabled") {
+            actions = `
+              <button data-enable="${escapeHtml(cluster.id)}">활성화</button>
+              <button data-rotate="${escapeHtml(cluster.id)}">토큰 재발급</button>
+              <button class="danger" data-trash="${escapeHtml(cluster.id)}">휴지통</button>
+            `;
+          } else {
+            actions = `
               <button data-rotate="${escapeHtml(cluster.id)}">토큰 재발급</button>
               <button data-disable="${escapeHtml(cluster.id)}">비활성화</button>
               <button class="danger" data-trash="${escapeHtml(cluster.id)}">휴지통</button>
             `;
+          }
           return `
             <div class="cluster">
               <strong>${escapeHtml(cluster.name)}</strong>
@@ -803,7 +812,7 @@
         const safeLinks = Array.isArray(links) && links.length ? links : [];
         container.innerHTML = safeLinks
           .map((link, index) => `
-            <button class="${index === 0 ? "primary" : ""} admin-grafana-link" data-grafana-link="${index}">
+            <button class="admin-grafana-link" data-grafana-link="${index}">
               <strong>${escapeHtml(link.label || "Grafana 열기")}</strong>
               <span>${escapeHtml(link.description || link.url || "")}</span>
             </button>
@@ -853,11 +862,17 @@
 
       clustersEl.addEventListener("click", async (event) => {
         const rotateId = event.target.dataset.rotate;
+        const enableId = event.target.dataset.enable;
         const disableId = event.target.dataset.disable;
         const trashId = event.target.dataset.trash;
         const restoreId = event.target.dataset.restore;
         const purgeId = event.target.dataset.purge;
         try {
+          if (enableId) {
+            await requestJson(`/admin/api/clusters/${enableId}/enable`, { method: "POST" });
+            await loadAdminDashboard();
+            setMessage("클러스터를 활성화했습니다.");
+          }
           if (rotateId) {
             await requestJson(`/admin/api/clusters/${rotateId}/rotate-token`, { method: "POST" });
             await loadAdminDashboard();

@@ -1131,6 +1131,17 @@ def admin_disable_cluster(cluster_id: str, x_admin_token: str | None = Header(de
     return {"cluster": cluster}
 
 
+@app.post("/admin/api/clusters/{cluster_id}/enable")
+def admin_enable_cluster(cluster_id: str, x_admin_token: str | None = Header(default=None)):
+    auth_error = require_admin(x_admin_token)
+    if auth_error:
+        return auth_error
+    cluster = storage.enable_cluster(cluster_id)
+    if cluster is None:
+        return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    return {"cluster": cluster}
+
+
 @app.delete("/admin/api/clusters/{cluster_id}")
 def admin_trash_cluster(cluster_id: str, x_admin_token: str | None = Header(default=None)):
     auth_error = require_admin(x_admin_token)
