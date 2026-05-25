@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import unicodedata
@@ -25,6 +26,7 @@ GRAFANA_RELATIVE_PUBLIC_PATH_RE = re.compile(
     rf"(?P<prefix>[\"'`=(])public/({'|'.join(GRAFANA_PUBLIC_DIRS)})/"
 )
 GRAFANA_LIVE_WEBSOCKET_PATHS = {"/api/live/ws", "/grafana-ui/api/live/ws"}
+GRAFANA_RETRY_STATUS_CODES = {502, 503, 504}
 
 
 class GrafanaLiveWebSocketMiddleware:
@@ -248,12 +250,26 @@ async def _forward_grafana_request(request: Request, upstream_path: str, user: d
     body = await request.body()
     headers = _request_headers(request, user)
     async with httpx.AsyncClient(base_url=GRAFANA_URL, timeout=30, follow_redirects=False) as client:
-        return await client.request(
-            request.method,
-            upstream_path,
-            content=body if body else None,
-            headers=headers,
-        )
+        last_error: httpx.HTTPError | None = None
+        for attempt in range(3):
+            try:
+                response = await client.request(
+                    request.method,
+                    upstream_path,
+                    content=body if body else None,
+                    headers=headers,
+                )
+            except httpx.HTTPError as error:
+                last_error = error
+                if attempt == 2:
+                    raise
+            else:
+                if response.status_code not in GRAFANA_RETRY_STATUS_CODES or attempt == 2:
+                    return response
+            await asyncio.sleep(0.2 * (attempt + 1))
+    if last_error is not None:
+        raise last_error
+    raise httpx.HTTPError("Grafana request failed without a response")
 
 
 def _request_headers(request: Request, user: dict[str, Any]) -> dict[str, str]:

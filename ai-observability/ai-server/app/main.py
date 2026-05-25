@@ -264,6 +264,11 @@ def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/favicon.ico")
+def favicon() -> FileResponse:
+    return FileResponse(STATIC_DIR / "assets" / "kubeowl-logo.png", media_type="image/png")
+
+
 @app.get("/config")
 def config() -> dict[str, str]:
     # UI 설정

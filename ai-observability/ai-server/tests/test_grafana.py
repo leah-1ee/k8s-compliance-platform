@@ -272,6 +272,14 @@ def test_grafana_ui_proxy_requires_login():
     assert response.json()["error"] == "login required"
 
 
+def test_favicon_is_served_from_kubeowl_logo():
+    response = client.get("/favicon.ico")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.content.startswith(b"\x89PNG")
+
+
 def test_grafana_ui_proxy_injects_auth_proxy_headers(monkeypatch):
     user = storage.upsert_user(
         provider="dev",
@@ -581,6 +589,50 @@ def test_grafana_ui_proxy_suppresses_live_http_without_touching_data_queries(mon
     assert captured == [
         "/api/ds/query?ds_type=prometheus",
         "/api/annotations?dashboardUID=kubeowl",
+    ]
+
+
+def test_grafana_ui_proxy_retries_transient_upstream_502(monkeypatch):
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="grafana-ui-retry@example.test",
+        email="grafana-ui-retry@example.test",
+    )
+    session = storage.create_session(user["id"])
+    attempts = []
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def request(self, method, upstream_path, **kwargs):
+            attempts.append((method, upstream_path))
+            if len(attempts) == 1:
+                return httpx.Response(502, text="temporary upstream failure")
+            return httpx.Response(200, json={"ok": True})
+
+    async def fake_sleep(delay):
+        return None
+
+    monkeypatch.setattr(ui_proxy.httpx, "AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(ui_proxy.asyncio, "sleep", fake_sleep)
+
+    response = client.post(
+        "/grafana-ui/api/ds/query?ds_type=prometheus",
+        cookies={"compliance_ai_session": session},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert attempts == [
+        ("POST", "/api/ds/query?ds_type=prometheus"),
+        ("POST", "/api/ds/query?ds_type=prometheus"),
     ]
 
 
