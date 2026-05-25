@@ -94,6 +94,7 @@ def test_ui_is_served():
     assert 'data-copy-target="templateOutput"' in response.text
     assert 'aria-label="ConstraintTemplate 복사"' in response.text
     assert "Sign in" in response.text
+    assert "Continue with Google" in response.text
     assert "applyLlmApiKey" in response.text
 
 
