@@ -26,6 +26,21 @@ ACTION_BY_SEVERITY = {
         "필요 시 정책 임계값 조정",
     ],
 }
+SENSITIVE_KEY_RE = re.compile(
+    r"(secret|token|password|passwd|api[_-]?key|authorization|cookie|credential|webhook)",
+    re.IGNORECASE,
+)
+PRIVATE_IP_RE = re.compile(
+    r"\b(?:10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})\b"
+)
+REGISTRY_HOST_RE = re.compile(r"\b((?:localhost|[a-z0-9-]+(?:\.[a-z0-9-]+)+)(?::\d+)?)/", re.IGNORECASE)
+PUBLIC_REGISTRY_HOSTS = {
+    "docker.io",
+    "gcr.io",
+    "ghcr.io",
+    "quay.io",
+    "registry.k8s.io",
+}
 
 
 def analyze_violation(
@@ -139,15 +154,68 @@ def _build_incident_prompt(payload: ViolationAnalysisRequest, severity: str, rea
         "severity": severity,
         "classification_reason": reason,
     }
+    redacted_event = _redact_for_llm(event)
+    redacted_manifest = _redact_manifest_for_llm(payload.resource_manifest)
     return (
         "다음 Kubernetes 보안 위반 이벤트를 분석하세요.\n"
         "1. 심각도 판단 근거를 한국어로 작성하세요.\n"
         "2. 자연어 원인 설명을 한국어로 작성하세요.\n"
         "3. 운영자가 수행할 수정 방법을 한국어로 작성하세요.\n"
         "4. 적용 가능한 수정 YAML 스니펫을 작성하세요.\n\n"
-        f"위반 이벤트 JSON:\n{json.dumps(event, ensure_ascii=False, indent=2)}\n\n"
-        f"관련 리소스 매니페스트:\n{payload.resource_manifest or '(not provided)'}"
+        f"위반 이벤트 JSON:\n{json.dumps(redacted_event, ensure_ascii=False, indent=2)}\n\n"
+        f"관련 리소스 매니페스트:\n{redacted_manifest or '(not provided)'}"
     )
+
+
+def _redact_for_llm(value):
+    if isinstance(value, dict):
+        redacted = {}
+        for key, item in value.items():
+            key_text = str(key)
+            key_lower = key_text.lower()
+            if SENSITIVE_KEY_RE.search(key_text):
+                redacted[key] = "[REDACTED_SECRET]"
+            elif key_lower in {"k8s.ns.name", "namespace"} or key_lower.endswith(".namespace"):
+                redacted[key] = "[REDACTED_NAMESPACE]"
+            else:
+                redacted[key] = _redact_for_llm(item)
+        return redacted
+    if isinstance(value, list):
+        return [_redact_for_llm(item) for item in value]
+    if isinstance(value, str):
+        return _redact_string_for_llm(value)
+    return value
+
+
+def _redact_string_for_llm(value: str) -> str:
+    redacted = PRIVATE_IP_RE.sub("[REDACTED_PRIVATE_IP]", value)
+
+    def replace_registry(match: re.Match[str]) -> str:
+        host = match.group(1)
+        normalized_host = host.split(":", 1)[0].lower()
+        if normalized_host in PUBLIC_REGISTRY_HOSTS:
+            return match.group(0)
+        return "[REDACTED_REGISTRY]/"
+
+    return REGISTRY_HOST_RE.sub(replace_registry, redacted)
+
+
+def _redact_manifest_for_llm(value: str) -> str:
+    if not value:
+        return ""
+    redacted = _redact_string_for_llm(value)
+    redacted = re.sub(r"(?im)^(\s*namespace:\s*).+$", r"\1[REDACTED_NAMESPACE]", redacted)
+    redacted = re.sub(
+        r"(?ims)^(\s*env:\s*\n(?:\s*-\s*name:\s*[^\n]+\n\s*value:\s*).+?)(?=\n\s*-\s*name:|\n\S|\Z)",
+        lambda match: re.sub(r"(?im)^(\s*value:\s*).+$", r"\1[REDACTED_ENV_VALUE]", match.group(0)),
+        redacted,
+    )
+    redacted = re.sub(
+        r"(?im)^(\s*(?:token|password|secret|api[_-]?key|authorization|cookie|webhook)[\w.-]*:\s*).+$",
+        r"\1[REDACTED_SECRET]",
+        redacted,
+    )
+    return redacted
 
 
 def _parse_llm_incident_json(value: str) -> dict[str, str]:

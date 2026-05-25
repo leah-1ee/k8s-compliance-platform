@@ -946,6 +946,66 @@ def test_analyze_violation_uses_llm_when_enabled(monkeypatch):
     assert "runAsNonRoot" in body["yaml_snippet"]
 
 
+def test_analyze_violation_redacts_sensitive_values_before_llm(monkeypatch):
+    captured = {}
+
+    def fake_complete_text(self, prompt: str, system_prompt: str, max_tokens: int = 1200) -> str:
+        captured["prompt"] = prompt
+        return """{
+  "root_cause": "redacted context reviewed",
+  "remediation": "keep deterministic fallback guidance",
+  "yaml_snippet": "securityContext:\\n  runAsNonRoot: true"
+}"""
+
+    monkeypatch.setattr(LLMClient, "complete_text", fake_complete_text)
+    payload = _analysis_payload()
+    payload["cluster"] = "private-prod-cluster"
+    payload["output"] = "pod connected to 10.24.7.9 with token abc123"
+    payload["output_fields"].update(
+        {
+            "k8s.ns.name": "payments-prod",
+            "container.image.repository": "registry.internal.local/team/payment-api",
+            "secret.token": "super-secret-token",
+        }
+    )
+    payload["resource_manifest"] = """apiVersion: v1
+kind: Pod
+metadata:
+  name: payment-api
+  namespace: payments-prod
+spec:
+  containers:
+    - name: app
+      image: registry.internal.local/team/payment-api:v1
+      env:
+        - name: DB_PASSWORD
+          value: pa55w0rd
+"""
+    payload["use_llm"] = True
+
+    response = client.post(
+        "/analyze-violation",
+        headers={
+            "X-LLM-Provider": "google",
+            "X-LLM-API-Key": "test-user-key",
+        },
+        json=payload,
+    )
+
+    assert response.status_code == 200
+    prompt = captured["prompt"]
+    assert "payments-prod" not in prompt
+    assert "10.24.7.9" not in prompt
+    assert "registry.internal.local" not in prompt
+    assert "super-secret-token" not in prompt
+    assert "pa55w0rd" not in prompt
+    assert "[REDACTED_NAMESPACE]" in prompt
+    assert "[REDACTED_PRIVATE_IP]" in prompt
+    assert "[REDACTED_REGISTRY]" in prompt
+    assert "[REDACTED_SECRET]" in prompt
+    assert "[REDACTED_ENV_VALUE]" in prompt
+
+
 def test_gatekeeper_event_is_collected_and_reported():
     response = client.post(
         "/gatekeeper-events",
