@@ -359,9 +359,9 @@
 
       .topic-detail h3 {
         margin: 0;
-        font-size: clamp(26px, 4vw, 42px);
-        line-height: 1.05;
-        letter-spacing: -0.05em;
+        font-size: clamp(22px, 3.2vw, 34px);
+        line-height: 1.18;
+        letter-spacing: -0.04em;
       }
 
       .topic-detail .kicker {
@@ -592,7 +592,7 @@
         </nav>
         <div class="docs-copy">
           <p class="eyebrow">KubeOwl Docs</p>
-          <h1>운영 흐름이 보이는 문서</h1>
+          <h1>Documentation</h1>
           <p>정책 생성, 런타임 이벤트 수집, Grafana 관측, zrok 공개 접근까지 데모와 운영에 필요한 큰 그림을 빠르게 확인합니다.</p>
         </div>
       </section>
@@ -702,6 +702,11 @@
                 <span class="topic-main"><strong>Violation & Report</strong><span>analysis / export</span></span>
                 <span class="topic-arrow">›</span>
               </button>
+              <button class="topic-button" type="button" data-docs-topic="feature-byok">
+                <span class="topic-number">5</span>
+                <span class="topic-main"><strong>Use my own API key</strong><span>personal llm key</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
             </div>
             <div class="topic-detail-wrap">
               <article class="topic-detail is-active" data-docs-panel="feature-policy">
@@ -777,6 +782,17 @@ falco-sidekick-7f6c9d9b6c-jh2qx   <span class="ok">Running</span>
                 </ul>
                 <div class="topic-chips"><span>severity explain</span><span>root cause</span><span>recommended fix</span><span>PDF</span></div>
               </article>
+              <article class="topic-detail" data-docs-panel="feature-byok">
+                <span class="kicker">Use my own API key</span>
+                <h3>팀 기본 키 대신 사용자의 LLM API key로 생성과 분석을 실행할 수 있습니다.</h3>
+                <ul>
+                  <li>OpenAI, Anthropic, Google, xAI provider를 선택하고 같은 화면에서 개인 API key를 입력합니다.</li>
+                  <li>개인 키는 정책 생성, LLM 검토, 위반 분석, AI Report처럼 LLM 호출이 필요한 요청에만 사용합니다.</li>
+                  <li>서버 공용 rate limit에 막히거나 데모 환경에서 provider별 응답 차이를 비교해야 할 때 유용합니다.</li>
+                  <li>키는 세션 요청에만 붙여 보내며, DB나 관리자 화면에 저장하지 않는 것을 기본 원칙으로 둡니다.</li>
+                </ul>
+                <div class="topic-chips"><span>OpenAI</span><span>Anthropic</span><span>Gemini</span><span>xAI</span><span>session only</span></div>
+              </article>
             </div>
           </div>
         </section>
@@ -803,9 +819,9 @@ falco-sidekick-7f6c9d9b6c-jh2qx   <span class="ok">Running</span>
                 <span class="topic-main"><strong>Grafana Boundary</strong><span>proxy / datasource</span></span>
                 <span class="topic-arrow">›</span>
               </button>
-              <button class="topic-button" type="button" data-docs-topic="sec-check">
+              <button class="topic-button" type="button" data-docs-topic="sec-byok">
                 <span class="topic-number">4</span>
-                <span class="topic-main"><strong>Demo Checklist</strong><span>before public share</span></span>
+                <span class="topic-main"><strong>User API Key</strong><span>session-only byok</span></span>
                 <span class="topic-arrow">›</span>
               </button>
             </div>
@@ -839,28 +855,26 @@ falco-sidekick-7f6c9d9b6c-jh2qx   <span class="ok">Running</span>
                   <li>Grafana Live, annotations, datasource query는 프록시 경로에서 정상 동작해야 합니다.</li>
                 </ul>
               </article>
-              <article class="topic-detail" data-docs-panel="sec-check">
-                <span class="kicker">Before Public Share</span>
-                <h3>공개 데모 전에 토큰, zrok, Grafana, 데이터 격리를 확인합니다.</h3>
+              <article class="topic-detail" data-docs-panel="sec-byok">
+                <span class="kicker">Use my own API key</span>
+                <h3>사용자 API key는 저장하지 않고 현재 요청의 LLM 호출에만 사용합니다.</h3>
                 <ul>
-                  <li>관리자 토큰이 기본값이 아닌지 확인합니다.</li>
-                  <li><code>PUBLIC_BASE_URL</code>과 zrok 공유 주소가 의도한 도메인을 가리키는지 확인합니다.</li>
-                  <li>Grafana가 직접 public URL로 노출되지 않고 KubeOwl 프록시 뒤에 있는지 확인합니다.</li>
-                  <li>테스트 클러스터와 사용자 클러스터의 데이터가 섞이지 않는지 점검합니다.</li>
+                  <li>키는 브라우저 세션에서 요청 헤더로만 전달하고 서버 DB에 저장하지 않습니다.</li>
+                  <li>입력된 키는 해당 사용자의 정책 생성, 위반 분석, 리포트 생성 요청에만 적용됩니다.</li>
+                  <li>다른 사용자, 관리자 페이지, Grafana 대시보드로 키 값이 노출되지 않아야 합니다.</li>
+                  <li>공개 URL이나 HTTP 환경에서 개인 키를 전송하지 않도록 HTTPS 프록시 뒤에서 사용하는 것을 권장합니다.</li>
                 </ul>
                 <div class="terminal-window" aria-label="Security check terminal example">
                   <div class="terminal-bar"><span></span><span></span><span></span><strong class="terminal-title">security-check</strong></div>
-                  <pre class="terminal-body"><code><span class="prompt">$</span> kubectl get secret ai-classifier-admin -n compliance-system
-<span class="warn">verify ADMIN_TOKEN is rotated</span>
+                  <pre class="terminal-body"><code><span class="prompt">$</span> enable "Use my own API key"
+provider=openai
+scope=current browser session
 
-<span class="prompt">$</span> curl -I https://kubeowl.example/admin
-HTTP/2 200
+<span class="prompt">$</span> generate policy with user key
+<span class="ok">request sent with session header only</span>
 
-<span class="prompt">$</span> curl https://kubeowl.example/admin/api/clusters
-{"error":"admin token required"}
-
-<span class="prompt">$</span> open https://kubeowl.example/grafana-ui/
-<span class="ok">redirected through KubeOwl auth proxy</span></code></pre>
+<span class="prompt">$</span> refresh page
+<span class="warn">key input is empty again</span></code></pre>
                 </div>
               </article>
             </div>

@@ -101,7 +101,8 @@ def test_admin_is_served():
     assert response.status_code == 200
     assert "KubeOwl Admin" in response.text
     assert "Admin Grafana" in response.text
-    assert "클러스터 등록" in response.text
+    assert "클러스터 등록" not in response.text
+    assert "설치 명령어" not in response.text
     assert "운영 요약" in response.text
     assert "사용자 목록" in response.text
 

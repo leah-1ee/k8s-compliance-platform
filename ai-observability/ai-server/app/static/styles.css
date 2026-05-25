@@ -1534,8 +1534,8 @@ h2 {
 [data-theme="dark"] .grafana-dashboard-card {
   border-color: rgba(56, 189, 248, 0.28);
   background:
-    radial-gradient(circle at 12% 0%, rgba(56, 189, 248, 0.18), transparent 34%),
-    linear-gradient(180deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.96));
+    radial-gradient(circle at 50% 18%, rgba(86, 204, 242, 0.24), transparent 36%),
+    linear-gradient(90deg, rgba(5, 11, 22, 0.98) 0%, rgba(20, 55, 88, 0.96) 50%, rgba(5, 11, 22, 0.98) 100%);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.28),
     0 22px 54px rgba(0, 0, 0, 0.22);
@@ -1544,6 +1544,9 @@ h2 {
 [data-theme="dark"] .grafana-dashboard-card:hover,
 [data-theme="dark"] .grafana-dashboard-card:focus-within {
   border-color: rgba(125, 211, 252, 0.54);
+  background:
+    radial-gradient(circle at 50% 18%, rgba(125, 211, 252, 0.3), transparent 38%),
+    linear-gradient(90deg, rgba(5, 11, 22, 0.98) 0%, rgba(24, 67, 104, 0.98) 50%, rgba(5, 11, 22, 0.98) 100%);
   box-shadow:
     0 12px 28px rgba(0, 0, 0, 0.32),
     0 26px 60px rgba(14, 165, 233, 0.16);
