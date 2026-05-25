@@ -408,7 +408,6 @@ def google_login(request: Request):
         "scope": "openid email profile",
         "state": state,
         "access_type": "online",
-        "prompt": "select_account",
     }
     response = RedirectResponse(f"{GOOGLE_AUTH_URL}?{urlencode(params)}", status_code=302)
     response.set_cookie(

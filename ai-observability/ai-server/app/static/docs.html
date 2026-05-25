@@ -879,6 +879,7 @@ falco-sidekick-7f6c9d9b6c-jh2qx   <span class="ok">Running</span>
                 <ul>
                   <li>일반 UI는 로그인 세션 쿠키를 기준으로 사용자와 클러스터를 식별합니다.</li>
                   <li>초기 화면은 상단 Sign in 버튼으로 진입하고, 랜딩 중앙의 Continue with Google CTA는 그대로 유지합니다.</li>
+                  <li>두 버튼은 같은 Google OAuth 진입점을 사용하며, 브라우저에 기존 Google 세션이 있으면 계정 선택 없이 바로 로그인될 수 있습니다.</li>
                   <li>클러스터 목록, 런타임 이벤트, 이벤트 상세, AI Report는 로그인한 사용자의 클러스터 범위로만 조회됩니다.</li>
                   <li>개발 로그인은 로컬/데모 모드에서만 켜고, 운영 환경에서는 Google OAuth 또는 별도 SSO로 제한합니다.</li>
                 </ul>
@@ -1147,7 +1148,7 @@ scope=current browser session
               </article>
               <article class="topic-detail" data-docs-panel="ops-secret">
                 <span class="kicker">Secret Management / Least Privilege</span>
-                <h3>Q. KubeOwl이 클러스터 마스터키나 kubeconfig를 저장하면 서버가 털렸을 때 위험하지 않습니까?</h3>
+                <h3>Q. KubeOwl이 클러스터 마스터키나 kubeconfig를 저장하면 침해 사고 발생 시 위험하지 않습니까?</h3>
                 <ul>
                   <li><strong>A.</strong> 맞습니다. KubeOwl 백엔드가 장기 관리자 kubeconfig를 평문 저장하는 구조는 피해야 합니다.</li>
                   <li>현재 설계는 Falco ingest에 bearer cluster token을 쓰고, 삭제/휴지통 이동 시 token hash를 폐기합니다. 사용자-facing 목록에는 원본 토큰을 다시 노출하지 않습니다.</li>
