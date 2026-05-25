@@ -59,6 +59,8 @@ GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 current_request: ContextVar[Request | None] = ContextVar("current_request", default=None)
+AUDIT_ADMIN_USER_ID = "kubeowl-admin"
+AUDIT_ADMIN_EMAIL = "kubeowl-admin@local"
 
 
 def sanitize_llm_api_key(value: str | None) -> str:
@@ -112,6 +114,41 @@ def require_user(session_token: str | None) -> tuple[dict | None, JSONResponse |
     if user is None:
         return None, JSONResponse(status_code=401, content={"error": "login required"})
     return user, None
+
+
+def audit_request_id(request: Request) -> str:
+    return (
+        request.headers.get("x-request-id", "")
+        or request.headers.get("x-correlation-id", "")
+        or ""
+    ).strip()
+
+
+def record_audit_action(
+    request: Request,
+    action: str,
+    target_type: str,
+    target_id: str = "",
+    *,
+    actor_user_id: str = "",
+    actor_email: str = "",
+    before: object | None = None,
+    after: object | None = None,
+    result: str = "success",
+    details: dict[str, object] | None = None,
+) -> None:
+    storage.record_audit_event(
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        actor_user_id=actor_user_id,
+        actor_email=actor_email,
+        before=before,
+        after=after,
+        request_id=audit_request_id(request),
+        result=result,
+        details=details,
+    )
 
 
 def auth_configured() -> bool:
@@ -482,9 +519,21 @@ def delete_account(
     confirm_email = str(payload.get("confirm_email", "")).strip().lower()
     if not confirm_email or confirm_email != str(user.get("email", "")).strip().lower():
         return JSONResponse(status_code=400, content={"error": "email confirmation required"})
+    before_user = dict(user)
     deleted = storage.delete_user_account(user["id"])
     response = JSONResponse({"status": "deleted", "user": _public_user(deleted)})
     clear_session_cookie(response, request)
+    record_audit_action(
+        request,
+        "account.delete",
+        "user",
+        user["id"],
+        actor_user_id=user["id"],
+        actor_email=str(user.get("email", "")).strip().lower(),
+        before=before_user,
+        after=deleted,
+        details={"confirm_email": confirm_email},
+    )
     return response
 
 
@@ -726,6 +775,16 @@ def user_create_cluster(
             return JSONResponse(status_code=409, content={"error": "cluster name already exists"})
         raise
     cluster["install_command"] = _sidekick_install_command(request, cluster["token"])
+    record_audit_action(
+        request,
+        "cluster.create",
+        "cluster",
+        cluster["id"],
+        actor_user_id=user["id"],
+        actor_email=str(user.get("email", "")).strip().lower(),
+        after=cluster,
+        details={"kind": cluster["kind"], "name": cluster["name"]},
+    )
     return {"cluster": cluster}
 
 
@@ -743,15 +802,27 @@ def user_rotate_cluster_token(
     cluster = storage.get_cluster(cluster_id)
     if cluster is None or cluster.get("user_id") != user["id"]:
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    before_cluster = dict(cluster)
     rotated = storage.rotate_cluster_token(cluster_id)
     if rotated is None:
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
     rotated["install_command"] = _sidekick_install_command(request, rotated["token"])
+    record_audit_action(
+        request,
+        "cluster.rotate_token",
+        "cluster",
+        cluster_id,
+        actor_user_id=user["id"],
+        actor_email=str(user.get("email", "")).strip().lower(),
+        before=before_cluster,
+        after=rotated,
+    )
     return {"cluster": rotated}
 
 
 @app.delete("/api/clusters/{cluster_id}/permanent")
 def user_permanently_delete_cluster(
+    request: Request,
     cluster_id: str,
     compliance_ai_session: str | None = Cookie(default=None),
 ) -> dict:
@@ -759,14 +830,27 @@ def user_permanently_delete_cluster(
     if auth_error:
         return auth_error
     assert user is not None
+    before_cluster = storage.get_cluster(cluster_id)
     deleted = storage.permanently_delete_cluster(cluster_id, user["id"])
     if not deleted:
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    if before_cluster is not None:
+        record_audit_action(
+            request,
+            "cluster.permanent_delete",
+            "cluster",
+            cluster_id,
+            actor_user_id=user["id"],
+            actor_email=str(user.get("email", "")).strip().lower(),
+            before=before_cluster,
+            details={"scope": "user"},
+        )
     return {"status": "deleted"}
 
 
 @app.delete("/api/clusters/{cluster_id}")
 def user_trash_cluster(
+    request: Request,
     cluster_id: str,
     compliance_ai_session: str | None = Cookie(default=None),
 ) -> dict:
@@ -774,14 +858,28 @@ def user_trash_cluster(
     if auth_error:
         return auth_error
     assert user is not None
+    before_cluster = storage.get_cluster(cluster_id)
     cluster = storage.trash_cluster(cluster_id, user["id"])
     if cluster is None:
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    if before_cluster is not None:
+        record_audit_action(
+            request,
+            "cluster.trash",
+            "cluster",
+            cluster_id,
+            actor_user_id=user["id"],
+            actor_email=str(user.get("email", "")).strip().lower(),
+            before=before_cluster,
+            after=cluster,
+            details={"scope": "user"},
+        )
     return {"cluster": cluster}
 
 
 @app.post("/api/clusters/{cluster_id}/restore")
 def user_restore_cluster(
+    request: Request,
     cluster_id: str,
     compliance_ai_session: str | None = Cookie(default=None),
 ) -> dict:
@@ -789,9 +887,22 @@ def user_restore_cluster(
     if auth_error:
         return auth_error
     assert user is not None
+    before_cluster = storage.get_cluster(cluster_id)
     cluster = storage.restore_cluster(cluster_id, user["id"])
     if cluster is None:
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    if before_cluster is not None:
+        record_audit_action(
+            request,
+            "cluster.restore",
+            "cluster",
+            cluster_id,
+            actor_user_id=user["id"],
+            actor_email=str(user.get("email", "")).strip().lower(),
+            before=before_cluster,
+            after=cluster,
+            details={"scope": "user"},
+        )
     return {"cluster": cluster}
 
 
@@ -806,7 +917,11 @@ def get_slack_settings(compliance_ai_session: str | None = Cookie(default=None))
 
 
 @app.post("/api/slack-settings")
-def save_slack_settings(payload: dict, compliance_ai_session: str | None = Cookie(default=None)) -> dict:
+def save_slack_settings(
+    request: Request,
+    payload: dict,
+    compliance_ai_session: str | None = Cookie(default=None),
+) -> dict:
     # 사용자별 Slack incoming webhook URL 저장
     user, auth_error = require_user(compliance_ai_session)
     if auth_error:
@@ -815,7 +930,20 @@ def save_slack_settings(payload: dict, compliance_ai_session: str | None = Cooki
     webhook_url = str(payload.get("webhook_url", "")).strip()
     if webhook_url and not _is_valid_slack_webhook_url(webhook_url):
         return JSONResponse(status_code=400, content={"error": "valid Slack webhook URL required"})
-    return {"settings": storage.save_slack_settings(user["id"], webhook_url)}
+    before_settings = storage.get_slack_settings(user["id"])
+    settings = storage.save_slack_settings(user["id"], webhook_url)
+    record_audit_action(
+        request,
+        "slack_settings.save",
+        "user",
+        user["id"],
+        actor_user_id=user["id"],
+        actor_email=str(user.get("email", "")).strip().lower(),
+        before=before_settings,
+        after=settings,
+        details={"configured": bool(settings.get("configured"))},
+    )
+    return {"settings": settings}
 
 
 @app.post("/api/slack-settings/test")
@@ -852,6 +980,7 @@ def test_slack_settings(compliance_ai_session: str | None = Cookie(default=None)
 
 @app.post("/api/clusters/{cluster_id}/slack")
 def set_cluster_slack(
+    request: Request,
     cluster_id: str,
     payload: dict,
     compliance_ai_session: str | None = Cookie(default=None),
@@ -868,11 +997,22 @@ def set_cluster_slack(
     )
     if cluster is None:
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    record_audit_action(
+        request,
+        "cluster.slack_toggle",
+        "cluster",
+        cluster_id,
+        actor_user_id=user["id"],
+        actor_email=str(user.get("email", "")).strip().lower(),
+        after=cluster,
+        details={"enabled": bool(payload.get("enabled"))},
+    )
     return {"cluster": cluster}
 
 
 @app.post("/api/clusters/{cluster_id}/grafana/provision")
 def provision_cluster_grafana(
+    request: Request,
     cluster_id: str,
     compliance_ai_session: str | None = Cookie(default=None),
 ) -> dict:
@@ -891,6 +1031,16 @@ def provision_cluster_grafana(
     grafana_url = _grafana_dashboard_url(
         str(provisioning.get("dashboard_url") or "/d/kubeowl-observability/kubeowl-observability"),
         org_id,
+    )
+    record_audit_action(
+        request,
+        "grafana.provision",
+        "cluster",
+        cluster["id"],
+        actor_user_id=user["id"],
+        actor_email=str(user.get("email", "")).strip().lower(),
+        before=cluster,
+        details={"org_id": provisioning.get("org_id"), "dashboard_url": provisioning.get("dashboard_url", "")},
     )
     return {
         "status": "provisioned",
@@ -979,6 +1129,7 @@ def _metric_timestamp_seconds(value: object) -> int | None:
 
 @app.post("/api/clusters/{cluster_id}/policy-applies")
 def apply_generated_policy_to_cluster(
+    request: Request,
     cluster_id: str,
     payload: dict,
     compliance_ai_session: str | None = Cookie(default=None),
@@ -1010,6 +1161,20 @@ def apply_generated_policy_to_cluster(
         status=status,
         error=str(result.get("error", "")),
         result=result,
+    )
+    record_audit_action(
+        request,
+        "policy.apply",
+        "cluster",
+        cluster["id"],
+        actor_user_id=user["id"],
+        actor_email=str(user.get("email", "")).strip().lower(),
+        before=cluster,
+        details={
+            "policy_type": history["policy_type"],
+            "policy_name": history["policy_name"],
+            "status": status,
+        },
     )
     response = {
         "status": status,
@@ -1087,35 +1252,68 @@ def admin_list_user_clusters(user_id: str, x_admin_token: str | None = Header(de
 
 
 @app.post("/admin/api/users/{user_id}/restore")
-def admin_restore_user(user_id: str, x_admin_token: str | None = Header(default=None)):
+def admin_restore_user(request: Request, user_id: str, x_admin_token: str | None = Header(default=None)):
     auth_error = require_admin(x_admin_token)
     if auth_error:
         return auth_error
+    before_user = storage.get_user(user_id)
     user = storage.restore_user(user_id)
     if user is None:
         return JSONResponse(status_code=404, content={"error": "user not found"})
+    record_audit_action(
+        request,
+        "user.restore",
+        "user",
+        user_id,
+        actor_user_id=AUDIT_ADMIN_USER_ID,
+        actor_email=AUDIT_ADMIN_EMAIL,
+        before=before_user,
+        after=user,
+    )
     return {"user": _public_user(user)}
 
 
 @app.post("/admin/api/users/{user_id}/disable")
-def admin_disable_user(user_id: str, x_admin_token: str | None = Header(default=None)):
+def admin_disable_user(request: Request, user_id: str, x_admin_token: str | None = Header(default=None)):
     auth_error = require_admin(x_admin_token)
     if auth_error:
         return auth_error
+    before_user = storage.get_user(user_id)
     user = storage.disable_user(user_id)
     if user is None:
         return JSONResponse(status_code=404, content={"error": "user not found"})
+    record_audit_action(
+        request,
+        "user.disable",
+        "user",
+        user_id,
+        actor_user_id=AUDIT_ADMIN_USER_ID,
+        actor_email=AUDIT_ADMIN_EMAIL,
+        before=before_user,
+        after=user,
+    )
     return {"user": _public_user(user)}
 
 
 @app.post("/admin/api/users/{user_id}/enable")
-def admin_enable_user(user_id: str, x_admin_token: str | None = Header(default=None)):
+def admin_enable_user(request: Request, user_id: str, x_admin_token: str | None = Header(default=None)):
     auth_error = require_admin(x_admin_token)
     if auth_error:
         return auth_error
+    before_user = storage.get_user(user_id)
     user = storage.enable_user(user_id)
     if user is None:
         return JSONResponse(status_code=404, content={"error": "user not found"})
+    record_audit_action(
+        request,
+        "user.enable",
+        "user",
+        user_id,
+        actor_user_id=AUDIT_ADMIN_USER_ID,
+        actor_email=AUDIT_ADMIN_EMAIL,
+        before=before_user,
+        after=user,
+    )
     return {"user": _public_user(user)}
 
 
@@ -1148,6 +1346,15 @@ def admin_grafana_url(request: Request, x_admin_token: str | None = Header(defau
         samesite="lax",
         path="/grafana-ui",
     )
+    record_audit_action(
+        request,
+        "grafana.admin_url_issue",
+        "grafana",
+        org_id,
+        actor_user_id=AUDIT_ADMIN_USER_ID,
+        actor_email=AUDIT_ADMIN_EMAIL,
+        details={"mode": "admin", "scope": "admin-cluster", "org_id": org_id},
+    )
     return response
 
 
@@ -1172,28 +1379,60 @@ def admin_create_cluster(
             return JSONResponse(status_code=409, content={"error": "cluster name already exists"})
         raise
     cluster["install_command"] = _sidekick_install_command(request, cluster["token"])
+    record_audit_action(
+        request,
+        "cluster.create",
+        "cluster",
+        cluster["id"],
+        actor_user_id=AUDIT_ADMIN_USER_ID,
+        actor_email=AUDIT_ADMIN_EMAIL,
+        after=cluster,
+        details={"kind": cluster["kind"], "name": cluster["name"], "scope": "admin"},
+    )
     return {"cluster": cluster}
 
 
 @app.post("/admin/api/clusters/{cluster_id}/mark-demo")
-def admin_mark_demo_cluster(cluster_id: str, x_admin_token: str | None = Header(default=None)):
+def admin_mark_demo_cluster(request: Request, cluster_id: str, x_admin_token: str | None = Header(default=None)):
     auth_error = require_admin(x_admin_token)
     if auth_error:
         return auth_error
+    before_cluster = storage.get_cluster(cluster_id)
     cluster = storage.update_cluster_kind(cluster_id, "demo")
     if cluster is None:
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    record_audit_action(
+        request,
+        "cluster.mark_demo",
+        "cluster",
+        cluster_id,
+        actor_user_id=AUDIT_ADMIN_USER_ID,
+        actor_email=AUDIT_ADMIN_EMAIL,
+        before=before_cluster,
+        after=cluster,
+    )
     return {"cluster": cluster}
 
 
 @app.post("/admin/api/clusters/{cluster_id}/mark-customer")
-def admin_mark_customer_cluster(cluster_id: str, x_admin_token: str | None = Header(default=None)):
+def admin_mark_customer_cluster(request: Request, cluster_id: str, x_admin_token: str | None = Header(default=None)):
     auth_error = require_admin(x_admin_token)
     if auth_error:
         return auth_error
+    before_cluster = storage.get_cluster(cluster_id)
     cluster = storage.update_cluster_kind(cluster_id, "customer")
     if cluster is None:
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    record_audit_action(
+        request,
+        "cluster.mark_customer",
+        "cluster",
+        cluster_id,
+        actor_user_id=AUDIT_ADMIN_USER_ID,
+        actor_email=AUDIT_ADMIN_EMAIL,
+        before=before_cluster,
+        after=cluster,
+    )
     return {"cluster": cluster}
 
 
@@ -1206,66 +1445,161 @@ def admin_rotate_cluster_token(
     auth_error = require_admin(x_admin_token)
     if auth_error:
         return auth_error
+    before_cluster = storage.get_cluster(cluster_id)
     cluster = storage.rotate_cluster_token(cluster_id)
     if cluster is None:
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
     cluster["install_command"] = _sidekick_install_command(request, cluster["token"])
+    record_audit_action(
+        request,
+        "cluster.rotate_token",
+        "cluster",
+        cluster_id,
+        actor_user_id=AUDIT_ADMIN_USER_ID,
+        actor_email=AUDIT_ADMIN_EMAIL,
+        before=before_cluster,
+        after=cluster,
+        details={"scope": "admin"},
+    )
     return {"cluster": cluster}
 
 
 @app.post("/admin/api/clusters/{cluster_id}/disable")
-def admin_disable_cluster(cluster_id: str, x_admin_token: str | None = Header(default=None)):
+def admin_disable_cluster(request: Request, cluster_id: str, x_admin_token: str | None = Header(default=None)):
     auth_error = require_admin(x_admin_token)
     if auth_error:
         return auth_error
+    before_cluster = storage.get_cluster(cluster_id)
     cluster = storage.disable_cluster(cluster_id)
     if cluster is None:
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    record_audit_action(
+        request,
+        "cluster.disable",
+        "cluster",
+        cluster_id,
+        actor_user_id=AUDIT_ADMIN_USER_ID,
+        actor_email=AUDIT_ADMIN_EMAIL,
+        before=before_cluster,
+        after=cluster,
+        details={"scope": "admin"},
+    )
     return {"cluster": cluster}
 
 
 @app.post("/admin/api/clusters/{cluster_id}/enable")
-def admin_enable_cluster(cluster_id: str, x_admin_token: str | None = Header(default=None)):
+def admin_enable_cluster(request: Request, cluster_id: str, x_admin_token: str | None = Header(default=None)):
     auth_error = require_admin(x_admin_token)
     if auth_error:
         return auth_error
+    before_cluster = storage.get_cluster(cluster_id)
     cluster = storage.enable_cluster(cluster_id)
     if cluster is None:
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    record_audit_action(
+        request,
+        "cluster.enable",
+        "cluster",
+        cluster_id,
+        actor_user_id=AUDIT_ADMIN_USER_ID,
+        actor_email=AUDIT_ADMIN_EMAIL,
+        before=before_cluster,
+        after=cluster,
+        details={"scope": "admin"},
+    )
     return {"cluster": cluster}
 
 
 @app.delete("/admin/api/clusters/{cluster_id}")
-def admin_trash_cluster(cluster_id: str, x_admin_token: str | None = Header(default=None)):
+def admin_trash_cluster(request: Request, cluster_id: str, x_admin_token: str | None = Header(default=None)):
     auth_error = require_admin(x_admin_token)
     if auth_error:
         return auth_error
+    before_cluster = storage.get_cluster(cluster_id)
     cluster = storage.admin_trash_cluster(cluster_id)
     if cluster is None:
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    record_audit_action(
+        request,
+        "cluster.trash",
+        "cluster",
+        cluster_id,
+        actor_user_id=AUDIT_ADMIN_USER_ID,
+        actor_email=AUDIT_ADMIN_EMAIL,
+        before=before_cluster,
+        after=cluster,
+        details={"scope": "admin"},
+    )
     return {"cluster": cluster}
 
 
 @app.post("/admin/api/clusters/{cluster_id}/restore")
-def admin_restore_cluster(cluster_id: str, x_admin_token: str | None = Header(default=None)):
+def admin_restore_cluster(request: Request, cluster_id: str, x_admin_token: str | None = Header(default=None)):
     auth_error = require_admin(x_admin_token)
     if auth_error:
         return auth_error
+    before_cluster = storage.get_cluster(cluster_id)
     cluster = storage.admin_restore_cluster(cluster_id)
     if cluster is None:
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    record_audit_action(
+        request,
+        "cluster.restore",
+        "cluster",
+        cluster_id,
+        actor_user_id=AUDIT_ADMIN_USER_ID,
+        actor_email=AUDIT_ADMIN_EMAIL,
+        before=before_cluster,
+        after=cluster,
+        details={"scope": "admin"},
+    )
     return {"cluster": cluster}
 
 
 @app.delete("/admin/api/clusters/{cluster_id}/permanent")
-def admin_permanently_delete_cluster(cluster_id: str, x_admin_token: str | None = Header(default=None)):
+def admin_permanently_delete_cluster(request: Request, cluster_id: str, x_admin_token: str | None = Header(default=None)):
     auth_error = require_admin(x_admin_token)
     if auth_error:
         return auth_error
+    before_cluster = storage.get_cluster(cluster_id)
     deleted = storage.admin_permanently_delete_cluster(cluster_id)
     if not deleted:
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
+    if before_cluster is not None:
+        record_audit_action(
+            request,
+            "cluster.permanent_delete",
+            "cluster",
+            cluster_id,
+            actor_user_id=AUDIT_ADMIN_USER_ID,
+            actor_email=AUDIT_ADMIN_EMAIL,
+            before=before_cluster,
+            details={"scope": "admin"},
+        )
     return {"status": "deleted"}
+
+
+@app.get("/admin/api/audit-events")
+def admin_list_audit_events(
+    limit: int = 100,
+    action: str = "",
+    target_type: str = "",
+    target_id: str = "",
+    actor_user_id: str = "",
+    x_admin_token: str | None = Header(default=None),
+):
+    auth_error = require_admin(x_admin_token)
+    if auth_error:
+        return auth_error
+    return {
+        "audit_events": storage.list_audit_events(
+            limit=limit,
+            action=action,
+            target_type=target_type,
+            target_id=target_id,
+            actor_user_id=actor_user_id,
+        )
+    }
 
 
 @app.get("/resource-manifest")
@@ -1497,13 +1831,24 @@ def generate(
     x_llm_api_key: str | None = Header(default=None),
 ) -> PolicyGenerationResponse:
     # 정책 생성
-    _ = request
     try:
-        return generate_policy(
+        response = generate_policy(
             payload,
             llm_provider=sanitize_llm_provider(x_llm_provider),
             llm_api_key=sanitize_llm_api_key(x_llm_api_key),
         )
+        record_audit_action(
+            request,
+            "policy.generate",
+            "policy",
+            str(getattr(payload, "policy_kind", "") or ""),
+            details={
+                "policy_kind": str(getattr(payload, "policy_kind", "") or ""),
+                "use_llm": bool(getattr(payload, "use_llm", False)),
+            },
+            after=response.model_dump() if hasattr(response, "model_dump") else response.dict(),
+        )
+        return response
     except UnsupportedPolicyError as error:
         return JSONResponse(
             status_code=400,

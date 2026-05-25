@@ -132,6 +132,21 @@ def init_db() -> None:
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
 
+                CREATE TABLE IF NOT EXISTS audit_events (
+                    id TEXT PRIMARY KEY,
+                    actor_user_id TEXT NOT NULL DEFAULT '',
+                    actor_email TEXT NOT NULL DEFAULT '',
+                    action TEXT NOT NULL,
+                    target_type TEXT NOT NULL,
+                    target_id TEXT NOT NULL DEFAULT '',
+                    before_hash TEXT NOT NULL DEFAULT '',
+                    after_hash TEXT NOT NULL DEFAULT '',
+                    request_id TEXT NOT NULL DEFAULT '',
+                    result TEXT NOT NULL DEFAULT 'success',
+                    details_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp DESC);
                 CREATE INDEX IF NOT EXISTS idx_events_cluster ON events(cluster);
                 CREATE INDEX IF NOT EXISTS idx_events_namespace ON events(namespace);
@@ -157,6 +172,9 @@ def init_db() -> None:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_policy_apply_history_cluster ON policy_apply_history(cluster_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_grafana_provisioning_user ON grafana_provisioning(user_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_login_events_ip_time ON auth_login_events(ip_hash, created_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events(created_at DESC)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_action ON audit_events(action)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_target ON audit_events(target_type, target_id)")
             _mark_env_demo_clusters(conn)
         _INITIALIZED = True
 
@@ -579,6 +597,149 @@ def enable_user(user_id: str) -> dict[str, Any] | None:
     if cursor.rowcount == 0:
         return None
     return get_user(normalized_user_id)
+
+
+_AUDIT_REDACT_KEYS = {
+    "access_token",
+    "after",
+    "api_key",
+    "authorization",
+    "before",
+    "confirm_email",
+    "credential",
+    "password",
+    "secret",
+    "session_token",
+    "token",
+    "token_hash",
+    "token_value",
+    "webhook_url",
+}
+
+
+def _audit_redact_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            key_name = str(key).strip().lower()
+            if key_name in _AUDIT_REDACT_KEYS:
+                continue
+            redacted[key] = _audit_redact_value(item)
+        return redacted
+    if isinstance(value, list):
+        return [_audit_redact_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_audit_redact_value(item) for item in value]
+    return value
+
+
+def _audit_json(value: Any) -> str:
+    return json.dumps(_audit_redact_value(value), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _audit_hash(value: Any) -> str:
+    payload = _audit_json(value)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def record_audit_event(
+    action: str,
+    target_type: str,
+    target_id: str = "",
+    *,
+    actor_user_id: str = "",
+    actor_email: str = "",
+    before: Any = None,
+    after: Any = None,
+    request_id: str = "",
+    result: str = "success",
+    details: dict[str, Any] | None = None,
+) -> None:
+    init_db()
+    normalized_action = str(action or "").strip()
+    normalized_target_type = str(target_type or "").strip()
+    if not normalized_action or not normalized_target_type:
+        return
+    normalized_actor_user_id = str(actor_user_id or "").strip()
+    normalized_actor_email = str(actor_email or "").strip().lower()
+    normalized_target_id = str(target_id or "").strip()
+    normalized_request_id = str(request_id or "").strip()
+    normalized_result = str(result or "").strip().lower() or "success"
+    details_payload = _audit_redact_value(details or {})
+    with _LOCK, _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO audit_events (
+                id, actor_user_id, actor_email, action, target_type, target_id,
+                before_hash, after_hash, request_id, result, details_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                f"audit-{uuid.uuid4().hex[:16]}",
+                normalized_actor_user_id,
+                normalized_actor_email,
+                normalized_action,
+                normalized_target_type,
+                normalized_target_id,
+                _audit_hash(before) if before is not None else "",
+                _audit_hash(after) if after is not None else "",
+                normalized_request_id,
+                normalized_result,
+                _audit_json(details_payload),
+            ),
+        )
+
+
+def list_audit_events(
+    limit: int = 100,
+    action: str = "",
+    target_type: str = "",
+    target_id: str = "",
+    actor_user_id: str = "",
+) -> list[dict[str, Any]]:
+    init_db()
+    normalized_limit = max(1, min(int(limit or 100), 500))
+    normalized_action = str(action or "").strip()
+    normalized_target_type = str(target_type or "").strip()
+    normalized_target_id = str(target_id or "").strip()
+    normalized_actor_user_id = str(actor_user_id or "").strip()
+    filters: list[str] = []
+    params: list[Any] = []
+    if normalized_action:
+        filters.append("action = ?")
+        params.append(normalized_action)
+    if normalized_target_type:
+        filters.append("target_type = ?")
+        params.append(normalized_target_type)
+    if normalized_target_id:
+        filters.append("target_id = ?")
+        params.append(normalized_target_id)
+    if normalized_actor_user_id:
+        filters.append("actor_user_id = ?")
+        params.append(normalized_actor_user_id)
+    where = f"WHERE {' AND '.join(filters)}" if filters else ""
+    with _connect() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT id, actor_user_id, actor_email, action, target_type, target_id,
+                   before_hash, after_hash, request_id, result, details_json, created_at
+            FROM audit_events
+            {where}
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+            """,
+            [*params, normalized_limit],
+        ).fetchall()
+    events: list[dict[str, Any]] = []
+    for row in rows:
+        event = dict(row)
+        try:
+            event["details"] = json.loads(event.pop("details_json") or "{}")
+        except json.JSONDecodeError:
+            event["details"] = {}
+        events.append(event)
+    return events
 
 
 def save_event(event: dict[str, Any]) -> dict[str, Any]:

@@ -45,20 +45,6 @@ subjects:
     name: ai-classifier
     namespace: compliance-system
 
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ai-classifier-admin
-  namespace: compliance-system
-  labels:
-    app: ai-classifier
-    app.kubernetes.io/part-of: compliance-platform
-type: Opaque
-stringData:
-  ADMIN_TOKEN: "change-me-before-deploy"
-
----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

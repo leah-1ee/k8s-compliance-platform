@@ -1998,6 +1998,76 @@ def test_admin_cluster_lifecycle():
     assert purge_missing_response.status_code == 404
 
 
+def test_audit_log_records_user_and_admin_writes():
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="audit-log-user@example.test",
+        email="audit-log-user@example.test",
+        name="Audit Log User",
+    )
+    session = storage.create_session(user["id"])
+
+    create_response = client.post(
+        "/api/clusters",
+        cookies={"compliance_ai_session": session},
+        headers={"X-Request-ID": "req-audit-create"},
+        json={"name": "audit-log-cluster"},
+    )
+    assert create_response.status_code == 200
+    cluster_id = create_response.json()["cluster"]["id"]
+
+    rotate_response = client.post(
+        f"/api/clusters/{cluster_id}/rotate-token",
+        cookies={"compliance_ai_session": session},
+        headers={"X-Request-ID": "req-audit-rotate"},
+    )
+    assert rotate_response.status_code == 200
+
+    delete_response = client.post(
+        "/api/account/delete",
+        cookies={"compliance_ai_session": session},
+        headers={"X-Request-ID": "req-audit-delete"},
+        json={"confirm_email": user["email"]},
+    )
+    assert delete_response.status_code == 200
+
+    grafana_response = client.get(
+        "/admin/api/grafana/url",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    assert grafana_response.status_code == 200
+
+    cluster_audit_response = client.get(
+        f"/admin/api/audit-events?target_id={cluster_id}",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    cluster_audit_body = cluster_audit_response.json()
+
+    assert cluster_audit_response.status_code == 200
+    cluster_events = {event["action"]: event for event in cluster_audit_body["audit_events"]}
+    assert cluster_events["cluster.rotate_token"]["request_id"] == "req-audit-rotate"
+    assert cluster_events["cluster.create"]["request_id"] == "req-audit-create"
+    assert all("token" not in event["details"] for event in cluster_events.values())
+
+    user_audit_response = client.get(
+        f"/admin/api/audit-events?target_type=user&target_id={user['id']}",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    user_audit_body = user_audit_response.json()
+
+    assert user_audit_response.status_code == 200
+    assert any(event["action"] == "account.delete" for event in user_audit_body["audit_events"])
+
+    grafana_audit_response = client.get(
+        "/admin/api/audit-events?action=grafana.admin_url_issue",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    grafana_audit_body = grafana_audit_response.json()
+
+    assert grafana_audit_response.status_code == 200
+    assert any(event["target_type"] == "grafana" for event in grafana_audit_body["audit_events"])
+
+
 def test_admin_dashboard_lists_users_and_event_counts():
     user = storage.upsert_user(
         provider="dev",
