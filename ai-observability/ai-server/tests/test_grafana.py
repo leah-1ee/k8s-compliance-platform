@@ -7,6 +7,7 @@ import time
 
 import httpx
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from app import storage
 from app.grafana import proxy
@@ -397,6 +398,33 @@ def test_grafana_ui_proxy_rewrites_javascript_chunk_paths(monkeypatch):
     assert '"/public/build/' not in response.text
 
 
+def test_grafana_ui_proxy_disables_grafana_live_in_rewritten_settings(monkeypatch):
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="grafana-ui-live-settings@example.test",
+        email="grafana-ui-live-settings@example.test",
+    )
+    session = storage.create_session(user["id"])
+
+    async def fake_forward(request, upstream_path, user):
+        return httpx.Response(
+            200,
+            text='{"appSubUrl":"","liveEnabled":true,"assets":"/public/build/runtime.js"}',
+            headers={"content-type": "application/json; charset=utf-8"},
+        )
+
+    monkeypatch.setattr(ui_proxy, "_forward_grafana_request", fake_forward)
+
+    response = client.get(
+        "/grafana-ui/api/frontend/settings",
+        cookies={"compliance_ai_session": session},
+    )
+
+    assert response.status_code == 200
+    assert '"liveEnabled":false' in response.text
+    assert '"/grafana-ui/public/build/runtime.js"' in response.text
+
+
 def test_grafana_ui_proxy_serves_root_public_lazy_chunks(monkeypatch):
     user = storage.upsert_user(
         provider="dev",
@@ -473,7 +501,6 @@ def test_grafana_ui_proxy_serves_root_grafana_api_paths(monkeypatch):
         "/api/frontend/settings",
         "/api/login/ping",
         "/api/library-elements?perPage=100",
-        "/api/live/ws",
         "/api/org",
         "/api/org/preferences",
         "/api/plugins/grafana-lokiexplore-app/settings",
@@ -502,7 +529,6 @@ def test_grafana_ui_proxy_serves_root_grafana_api_paths(monkeypatch):
         "/api/frontend/settings",
         "/api/login/ping",
         "/api/library-elements?perPage=100",
-        "/api/live/ws",
         "/api/org",
         "/api/org/preferences",
         "/api/plugins/grafana-lokiexplore-app/settings",
@@ -520,6 +546,50 @@ def test_grafana_ui_proxy_serves_root_grafana_api_paths(monkeypatch):
         "/avatar/78d07744450b61186736ffc6f97b1082",
         "/api/frontend-metrics",
     ]
+
+
+def test_grafana_ui_proxy_suppresses_live_http_without_touching_data_queries(monkeypatch):
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="grafana-ui-live-http@example.test",
+        email="grafana-ui-live-http@example.test",
+    )
+    session = storage.create_session(user["id"])
+    captured = []
+
+    async def fake_forward(request, upstream_path, user):
+        captured.append(upstream_path)
+        return httpx.Response(200, json={"ok": True})
+
+    monkeypatch.setattr(ui_proxy, "_forward_grafana_request", fake_forward)
+
+    live_response = client.get("/grafana-ui/api/live/ws", cookies={"compliance_ai_session": session})
+    data_response = client.get(
+        "/grafana-ui/api/ds/query?ds_type=prometheus",
+        cookies={"compliance_ai_session": session},
+    )
+    annotations_response = client.get(
+        "/grafana-ui/api/annotations?dashboardUID=kubeowl",
+        cookies={"compliance_ai_session": session},
+    )
+
+    assert live_response.status_code == 204
+    assert data_response.status_code == 200
+    assert annotations_response.status_code == 200
+    assert captured == [
+        "/api/ds/query?ds_type=prometheus",
+        "/api/annotations?dashboardUID=kubeowl",
+    ]
+
+
+def test_grafana_live_websocket_closes_cleanly():
+    with client.websocket_connect("/grafana-ui/api/live/ws") as websocket:
+        try:
+            websocket.receive_text()
+        except WebSocketDisconnect as error:
+            assert error.code == 1000
+            return
+    raise AssertionError("Grafana Live websocket should close cleanly")
 
 
 def test_grafana_ui_proxy_rewrites_root_relative_redirects():

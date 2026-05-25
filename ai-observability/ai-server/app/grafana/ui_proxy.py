@@ -6,7 +6,7 @@ import unicodedata
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Cookie, Request
+from fastapi import APIRouter, Cookie, Request, WebSocket
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 
 from app import storage
@@ -159,6 +159,13 @@ async def grafana_root_api_proxy(
     )
 
 
+@router.websocket("/api/live/ws")
+@router.websocket("/grafana-ui/api/live/ws")
+async def grafana_live_websocket_disabled(websocket: WebSocket) -> None:
+    await websocket.accept()
+    await websocket.close(code=1000)
+
+
 @router.api_route("/grafana-ui/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def grafana_ui_proxy(
     request: Request,
@@ -188,6 +195,9 @@ async def _proxy_grafana_path(
             user = storage.get_user_by_session(compliance_ai_session or "")
         if user is None:
             return JSONResponse(status_code=401, content={"error": "login required"})
+
+    if _is_grafana_live_path(path):
+        return Response(status_code=204)
 
     upstream_path = _upstream_path(path, request.url.query)
     try:
@@ -249,6 +259,11 @@ def _upstream_path(path: str, query: str) -> str:
     return upstream_path
 
 
+def _is_grafana_live_path(path: str) -> bool:
+    normalized = path.strip("/")
+    return normalized == "api/live/ws" or normalized.startswith("api/live/")
+
+
 def _ascii_header_value(value: Any) -> str:
     normalized = unicodedata.normalize("NFKD", str(value or ""))
     return normalized.encode("ascii", "ignore").decode("ascii").strip()
@@ -308,6 +323,9 @@ def _rewrite_html(html: str) -> str:
 def _rewrite_asset_text(text: str) -> str:
     rewritten = GRAFANA_PUBLIC_PATH_RE.sub(r"/grafana-ui/public/\1/", text)
     rewritten = GRAFANA_RELATIVE_PUBLIC_PATH_RE.sub(r"\g<prefix>/grafana-ui/public/\2/", rewritten)
+    rewritten = rewritten.replace('"liveEnabled":true', '"liveEnabled":false')
+    rewritten = rewritten.replace('"liveEnabled": true', '"liveEnabled": false')
+    rewritten = rewritten.replace("liveEnabled:true", "liveEnabled:false")
     for asset_dir in GRAFANA_PUBLIC_DIRS:
         rewritten = rewritten.replace(
             f"\\/public\\/{asset_dir}\\/",
