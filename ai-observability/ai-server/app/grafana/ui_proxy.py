@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 from fastapi import APIRouter, Cookie, Request, WebSocket
 from fastapi.responses import JSONResponse, RedirectResponse, Response
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app import storage
 from app.grafana.admin_session import admin_user_from_token
@@ -23,6 +24,19 @@ GRAFANA_PUBLIC_PATH_RE = re.compile(
 GRAFANA_RELATIVE_PUBLIC_PATH_RE = re.compile(
     rf"(?P<prefix>[\"'`=(])public/({'|'.join(GRAFANA_PUBLIC_DIRS)})/"
 )
+GRAFANA_LIVE_WEBSOCKET_PATHS = {"/api/live/ws", "/grafana-ui/api/live/ws"}
+
+
+class GrafanaLiveWebSocketMiddleware:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "websocket" and scope.get("path") in GRAFANA_LIVE_WEBSOCKET_PATHS:
+            await send({"type": "websocket.accept"})
+            await send({"type": "websocket.close", "code": 1000})
+            return
+        await self.app(scope, receive, send)
 
 
 @router.api_route("/grafana-ui", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
@@ -91,6 +105,10 @@ async def grafana_public_asset_proxy(
 )
 @router.api_route(
     "/api/search",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+)
+@router.api_route(
+    "/api/search/{path:path}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
 )
 @router.api_route(

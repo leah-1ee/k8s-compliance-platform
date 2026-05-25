@@ -23,7 +23,7 @@ from app import storage
 from app.grafana.admin_session import ADMIN_GRAFANA_COOKIE_NAME, issue_admin_grafana_token
 from app.grafana.proxy import router as grafana_proxy_router
 from app.grafana.provisioning import ProvisioningError, provision_user
-from app.grafana.ui_proxy import router as grafana_ui_router
+from app.grafana.ui_proxy import GrafanaLiveWebSocketMiddleware, router as grafana_ui_router
 from app.runtime_client import (
     apply_policy_manifest,
     build_dashboard_summary,
@@ -235,6 +235,7 @@ app = FastAPI(
     description="Falco 이벤트 분류 및 컴플라이언스 AI API",
 )
 app.state.limiter = limiter
+app.add_middleware(GrafanaLiveWebSocketMiddleware)
 app.add_exception_handler(
     RateLimitExceeded,
     lambda request, exc: JSONResponse(
