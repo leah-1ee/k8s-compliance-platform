@@ -624,3 +624,12 @@ def test_dashboard_payloads_can_disable_local_dashboard(monkeypatch):
     dashboards = provisioning._dashboard_payloads(FakeClient(), "user-datasource")
 
     assert [dashboard["uid"] for dashboard in dashboards] == ["compliance-overview"]
+
+
+def test_grafana_ui_proxy_rewrites_extended_asset_paths():
+    assert ui_proxy._rewrite_asset_text('"/public/build/app.js"') == '"/grafana-ui/public/build/app.js"'
+    assert ui_proxy._rewrite_asset_text("'/public/plugins/test/'") == "'/grafana-ui/public/plugins/test/'"
+    assert ui_proxy._rewrite_asset_text('`/public/img/logo.png`') == '`/grafana-ui/public/img/logo.png`'
+    assert ui_proxy._rewrite_asset_text('__webpack_public_path__="/public/build/";') == '__webpack_public_path__="/grafana-ui/public/build/";'
+    assert ui_proxy._rewrite_asset_text('url(/public/fonts/roboto.woff2)') == 'url(/grafana-ui/public/fonts/roboto.woff2)'
+

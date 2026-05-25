@@ -128,11 +128,14 @@ async def _proxy_grafana_path(
     compliance_ai_session: str | None,
     kubeowl_admin_grafana: str | None,
 ) -> Response:
-    user = admin_user_from_token(kubeowl_admin_grafana)
-    if user is None:
-        user = storage.get_user_by_session(compliance_ai_session or "")
-    if user is None:
-        return JSONResponse(status_code=401, content={"error": "login required"})
+    if path.startswith("public/") or path == "public":
+        user = {}
+    else:
+        user = admin_user_from_token(kubeowl_admin_grafana)
+        if user is None:
+            user = storage.get_user_by_session(compliance_ai_session or "")
+        if user is None:
+            return JSONResponse(status_code=401, content={"error": "login required"})
 
     upstream_path = _upstream_path(path, request.url.query)
     try:
@@ -170,13 +173,14 @@ def _request_headers(request: Request, user: dict[str, Any]) -> dict[str, str]:
     email = _ascii_header_value(user.get("email") or user.get("id") or "")
     name = _ascii_header_value(user.get("name") or user.get("email") or "") or email
     headers: dict[str, str] = {
-        "X-WEBAUTH-USER": email,
-        "X-WEBAUTH-EMAIL": email,
-        "X-WEBAUTH-NAME": name,
         "X-Forwarded-Host": _ascii_header_value(request.headers.get("host", "")),
         "X-Forwarded-Proto": _ascii_header_value(request.url.scheme),
         "X-Forwarded-Prefix": "/grafana-ui",
     }
+    if email:
+        headers["X-WEBAUTH-USER"] = email
+        headers["X-WEBAUTH-EMAIL"] = email
+        headers["X-WEBAUTH-NAME"] = name
     for key in ("accept", "content-type", "cookie", "user-agent"):
         value = request.headers.get(key)
         if value:
@@ -250,17 +254,14 @@ def _rewrite_html(html: str) -> str:
 
 
 def _rewrite_asset_text(text: str) -> str:
-    replacements = {
-        '"/public/build/': '"/grafana-ui/public/build/',
-        "'/public/build/": "'/grafana-ui/public/build/",
-        "`/public/build/": "`/grafana-ui/public/build/",
-        '=/public/build/': '=/grafana-ui/public/build/',
-        '(/public/build/': '(/grafana-ui/public/build/',
-        'url(/public/': 'url(/grafana-ui/public/',
-    }
     rewritten = text
-    for old, new in replacements.items():
-        rewritten = rewritten.replace(old, new)
+    for asset_dir in ("build", "fonts", "img", "plugins", "app", "locales"):
+        for prefix in ('"', "'", "`", "=", "("):
+            old = f'{prefix}/public/{asset_dir}/'
+            new = f'{prefix}/grafana-ui/public/{asset_dir}/'
+            rewritten = rewritten.replace(old, new)
+
+    rewritten = rewritten.replace('url(/public/', 'url(/grafana-ui/public/')
     return rewritten
 
 

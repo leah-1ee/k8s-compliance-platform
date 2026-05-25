@@ -225,7 +225,7 @@ def _forward_headers(request: Request) -> dict[str, str]:
 
 def _response_headers(response: httpx.Response) -> dict[str, str]:
     headers: dict[str, str] = {}
-    for key in ("cache-control", "content-encoding"):
+    for key in ("cache-control",):
         value = response.headers.get(key)
         if value:
             headers[key] = value
