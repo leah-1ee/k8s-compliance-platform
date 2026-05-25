@@ -45,6 +45,7 @@ subjects:
     name: ai-classifier
     namespace: compliance-system
 
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
