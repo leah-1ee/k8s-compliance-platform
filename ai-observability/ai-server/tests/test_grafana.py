@@ -562,6 +562,7 @@ def test_dashboard_payloads_support_multiple_master_uids(monkeypatch):
         "compliance-overview",
         "runtime-detection",
         "grafana-overview",
+        "kubeowl-observability",
     ]
     assert [item[0] for item in requested] == [
         "/api/dashboards/uid/compliance-overview",
@@ -569,3 +570,20 @@ def test_dashboard_payloads_support_multiple_master_uids(monkeypatch):
         "/api/dashboards/uid/grafana-overview",
     ]
     assert all(dashboard["panels"][0]["datasource"]["uid"] == "user-datasource" for dashboard in dashboards)
+
+
+def test_dashboard_payloads_can_disable_local_dashboard(monkeypatch):
+    requested = []
+
+    class FakeClient:
+        def get(self, path, headers=None):
+            requested.append((path, headers))
+            uid = path.rsplit("/", 1)[-1]
+            return httpx.Response(200, json={"dashboard": {"uid": uid, "panels": []}})
+
+    monkeypatch.setenv("GRAFANA_MASTER_DASHBOARD_UIDS", "compliance-overview")
+    monkeypatch.setenv("GRAFANA_INCLUDE_LOCAL_DASHBOARD", "false")
+
+    dashboards = provisioning._dashboard_payloads(FakeClient(), "user-datasource")
+
+    assert [dashboard["uid"] for dashboard in dashboards] == ["compliance-overview"]

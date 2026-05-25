@@ -33,14 +33,14 @@
     {
       "id": 2,
       "type": "timeseries",
-      "title": "Runtime Events",
+      "title": "Stored Runtime Events",
       "datasource": {
         "type": "prometheus",
         "uid": "__DATASOURCE_UID__"
       },
       "targets": [
         {
-          "expr": "sum by (rule) (rate(falco_events_total[5m]))",
+          "expr": "sum by (severity, source) (kubeowl_runtime_events_total)",
           "refId": "A"
         }
       ],

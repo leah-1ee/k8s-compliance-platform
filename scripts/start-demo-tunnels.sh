@@ -244,11 +244,13 @@ start_bg ai-console-port-forward \
   "${AI_LOCAL_PORT}:${AI_TARGET_PORT}"
 
 start_zrok_share ai-console-zrok "${AI_PUBLIC_URL}" \
+  "${ROOT_DIR}/scripts/run-zrok-share-loop.sh" ai-console-zrok \
   "${ZROK_BIN}" share public "http://127.0.0.1:${AI_LOCAL_PORT}" \
   -n "${AI_SHARE_NAME}"
 
 if [ "${ENABLE_DIRECT_GRAFANA_ZROK}" = "true" ]; then
   start_zrok_share grafana-zrok "${GRAFANA_PUBLIC_URL}" \
+    "${ROOT_DIR}/scripts/run-zrok-share-loop.sh" grafana-zrok \
     "${ZROK_BIN}" share public "http://127.0.0.1:${GRAFANA_LOCAL_PORT}" \
     -n "${GRAFANA_SHARE_NAME}"
 fi

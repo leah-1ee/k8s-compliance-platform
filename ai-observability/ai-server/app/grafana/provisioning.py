@@ -187,8 +187,13 @@ def _import_dashboards(client: httpx.Client, org_id: int, datasource_uid: str) -
 
 def _dashboard_payloads(client: httpx.Client, datasource_uid: str) -> list[dict[str, Any]]:
     dashboards = _load_master_dashboards(client)
+    local_dashboard = _load_local_dashboard_template()
+    if _include_local_dashboard() and not any(
+        dashboard.get("uid") == local_dashboard.get("uid") for dashboard in dashboards
+    ):
+        dashboards.append(local_dashboard)
     if not dashboards:
-        dashboards = [_load_local_dashboard_template()]
+        dashboards = [local_dashboard]
     return [
         _replace_datasource_uid(_sanitize_dashboard_for_import(dashboard), datasource_uid)
         for dashboard in dashboards
@@ -243,6 +248,10 @@ def _load_local_dashboard_template() -> dict[str, Any]:
     }
 
 
+def _include_local_dashboard() -> bool:
+    return os.getenv("GRAFANA_INCLUDE_LOCAL_DASHBOARD", "true").strip().lower() not in {"false", "0", "no"}
+
+
 def _sanitize_dashboard_for_import(dashboard: dict[str, Any]) -> dict[str, Any]:
     clean = json.loads(json.dumps(dashboard))
     clean["id"] = None
@@ -282,11 +291,21 @@ def _proxy_jwt(user_id: str, cluster_id: str) -> str:
         "user_id": user_id,
         "cluster_id": cluster_id,
         "iat": now,
-        "exp": now + 60 * 60 * 24,
+        "exp": now + _grafana_proxy_jwt_ttl_seconds(),
     }
     signing_input = f"{_b64json(header)}.{_b64json(payload)}"
     signature = hmac.new(secret.encode("utf-8"), signing_input.encode("ascii"), hashlib.sha256).digest()
     return f"{signing_input}.{_b64(signature)}"
+
+
+def _grafana_proxy_jwt_ttl_seconds() -> int:
+    raw = os.getenv("GRAFANA_PROXY_JWT_TTL_SECONDS", "").strip()
+    if raw:
+        try:
+            return max(3600, int(raw))
+        except ValueError:
+            pass
+    return 60 * 60 * 24 * 30
 
 
 def _b64json(value: dict[str, Any]) -> str:

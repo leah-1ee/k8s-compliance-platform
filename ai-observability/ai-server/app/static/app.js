@@ -12,6 +12,7 @@ let authState = { authenticated: false, user: null, auth: { google_configured: f
 let userClusters = [];
 let slackSettings = { webhook_url: "", configured: false };
 let landingTypewriterStarted = false;
+let apiBackoffUntil = 0;
 const SESSION_KEY = "complianceAiLlmApiKey";
 const THEME_KEY = "complianceOpsTheme";
 const DEFAULT_RUNTIME_LIMIT = "50";
@@ -149,6 +150,9 @@ async function postJson(path, payload) {
 }
 
 async function apiJson(path, options = {}) {
+  if (Date.now() < apiBackoffUntil) {
+    throw new Error("zrok 연결 복구 대기 중입니다. 잠시 후 자동으로 다시 시도합니다.");
+  }
   const response = await fetch(path, {
     ...options,
     headers: {
@@ -158,6 +162,9 @@ async function apiJson(path, options = {}) {
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if ([502, 503, 504].includes(response.status)) {
+      apiBackoffUntil = Date.now() + 30_000;
+    }
     throw new Error(formatErrorMessage(body.error || body.detail || `HTTP ${response.status}`));
   }
   return body;
@@ -372,6 +379,9 @@ async function refreshDashboardSummary() {
   if (!authState.authenticated) {
     renderDashboardSummary({});
     renderUserObservability({});
+    return;
+  }
+  if (Date.now() < apiBackoffUntil) {
     return;
   }
   const [summary, observability] = await Promise.all([
@@ -938,6 +948,9 @@ async function refreshRuntimeEvents() {
   const container = $("#runtimeEvents");
   if (!authState.authenticated) {
     container.innerHTML = "";
+    return;
+  }
+  if (Date.now() < apiBackoffUntil) {
     return;
   }
   ensureRuntimeUsabilityControls();
