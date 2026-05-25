@@ -100,7 +100,7 @@ spec:
       serviceAccountName: ai-classifier
       containers:
         - name: ai-classifier
-          image: docker.io/leeon3345/compliance-ai-server:0.1.41
+          image: docker.io/leeon3345/compliance-ai-server:0.1.43
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -115,6 +115,8 @@ spec:
               value: "https://compliance-ai-console.shares.zrok.io"
             - name: GRAFANA_URL_INTERNAL
               value: "http://monitoring-grafana.monitoring.svc.cluster.local:80"
+            - name: PROMETHEUS_URL
+              value: "http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090"
             - name: AI_SERVER_PROXY_BASE_URL
               value: "http://ai-classifier.compliance-system.svc.cluster.local:8000"
             - name: GRAFANA_ADMIN_USER

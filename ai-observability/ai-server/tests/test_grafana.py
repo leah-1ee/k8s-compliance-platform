@@ -88,7 +88,10 @@ def test_prometheus_proxy_rewrites_query_and_writes_audit(monkeypatch, tmp_path)
     )
 
     assert response.status_code == 200
-    assert captured["url"] == "http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query"
+    assert (
+        captured["url"]
+        == "http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/api/v1/query"
+    )
     assert captured["params"] == [("query", 'up{cluster_id="cluster-1"}')]
 
     audit = json.loads(audit_path.read_text(encoding="utf-8").splitlines()[-1])
@@ -129,7 +132,10 @@ def test_prometheus_proxy_rewrites_form_post(monkeypatch, tmp_path):
 
     assert response.status_code == 200
     assert captured["method"] == "POST"
-    assert captured["url"] == "http://prometheus.monitoring.svc.cluster.local:9090/api/v1/query_range"
+    assert (
+        captured["url"]
+        == "http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/api/v1/query_range"
+    )
     assert captured["params"] == []
     assert captured["headers"]["content-type"].startswith("application/x-www-form-urlencoded")
     assert b"query=sum%28kubeowl_runtime_events_total%7Bcluster_id%3D%22cluster-form%22%7D%29" in captured["content"]

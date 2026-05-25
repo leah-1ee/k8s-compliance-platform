@@ -20,7 +20,10 @@ from slowapi import Limiter
 from app.grafana.promql_inject import PromQLInjectionError, inject_cluster_label
 
 
-PROMETHEUS_URL = os.getenv("PROMETHEUS_URL", "http://prometheus.monitoring.svc.cluster.local:9090").rstrip("/")
+PROMETHEUS_URL = os.getenv(
+    "PROMETHEUS_URL",
+    "http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090",
+).rstrip("/")
 AUDIT_LOG_PATH = Path(os.getenv("GRAFANA_PROXY_AUDIT_LOG", "/var/log/proxy/audit.log"))
 PROMETHEUS_PROXY_RATE_LIMIT = os.getenv("GRAFANA_PROMETHEUS_PROXY_RATE_LIMIT", "600/minute")
 logger = logging.getLogger("ai-server.grafana.proxy")
