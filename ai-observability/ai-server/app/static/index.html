@@ -4,15 +4,15 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>KubeOwl</title>
-    <link rel="stylesheet" href="/static/styles.css?v=violation-ux-2" />
+    <link rel="stylesheet" href="/static/styles.css?v=task17-blue-landing" />
   </head>
   <body class="logged-out">
     <div class="app-shell">
       <aside class="sidebar" aria-label="KubeOwl navigation">
         <div class="sidebar-header">
-          <div class="brand-block">
+          <button class="brand-block brand-home-button" id="sidebarHomeButton" type="button" aria-label="KubeOwl 초기 화면으로 이동">
             <div class="brand-mark">
-              <img class="site-logo" src="/static/assets/kubeowl-logo.png" alt="KubeOwl logo" />
+              <img class="site-logo" src="/static/assets/main-logo.png?v=task17" alt="KubeOwl logo" />
             </div>
             <div>
               <h1>KubeOwl</h1>
@@ -20,7 +20,7 @@
               <span class="sr-only">Kubernetes Policy-as-Code 자동 생성 및 위반 분석 도구</span>
               <p>Policy-as-Code Console</p>
             </div>
-          </div>
+          </button>
           <button class="nav-menu-toggle" id="navMenuToggle" type="button" aria-expanded="false" aria-label="메뉴 열기">
             <span></span>
             <span></span>
@@ -47,12 +47,12 @@
       <main class="main-shell">
         <header class="topbar">
           <div class="topbar-title">
-            <p class="eyebrow">Cloud Security Console</p>
+            <p class="eyebrow">KubeOwl Operations</p>
             <h2 id="pageTitle">Dashboard</h2>
           </div>
           <div class="landing-top-brand" aria-label="KubeOwl">
             <div class="brand-mark">
-              <img class="site-logo" src="/static/assets/kubeowl-logo.png" alt="KubeOwl logo" />
+              <img class="site-logo" src="/static/assets/main-logo.png?v=task17" alt="KubeOwl logo" />
             </div>
             <div>
               <h1>KubeOwl</h1>
@@ -61,7 +61,10 @@
           </div>
           <div class="topbar-actions">
             <span class="auth-status" id="authStatus">로그인 확인 중</span>
-            <a class="button-like secondary" href="/auth/google/login" id="loginLink" hidden>Google 로그인</a>
+            <a class="button-like secondary google-login-button" href="/auth/google/login" id="loginLink" hidden>
+              <span class="google-logo" aria-hidden="true"></span>
+              Continue with Google
+            </a>
             <a class="button-like secondary" href="/auth/dev-login" id="devLoginLink" hidden>개발 로그인</a>
             <button class="secondary" id="logoutButton" hidden>로그아웃</button>
           </div>
@@ -75,24 +78,23 @@
               <p
                 class="typewriter-subtitle"
                 id="landingSubtitle"
-                data-typewriter-text="Kubernetes 정책 생성부터 런타임 위반 분석까지 한 화면에서 운영하는 Policy-as-Code 콘솔입니다."
+                data-typewriter-text="Kubernetes 보안 정책 생성부터 런타임 위반 확인까지,&#10;운영 흐름을 한 화면에서 빠르게 한 번에."
               >
-                Kubernetes 정책 생성부터 런타임 위반 분석까지 한 화면에서 운영하는 Policy-as-Code
-                콘솔입니다.
+                Kubernetes 보안 정책 생성부터 런타임 위반 확인까지,<br />
+                운영 흐름을 한 화면에서 빠르게 한 번에.
               </p>
               <div class="landing-login-actions" id="landingLoginActions" aria-label="login actions">
-                <a class="button-like primary" href="/auth/google/login" id="landingLoginLink" hidden>
-                  Google로 시작
+                <a class="button-like primary google-login-button" href="/auth/google/login" id="landingLoginLink" hidden>
+                  <span class="google-logo" aria-hidden="true"></span>
+                  Continue with Google
                 </a>
                 <a class="button-like secondary" href="/auth/dev-login" id="landingDevLoginLink" hidden>
                   개발 로그인
                 </a>
                 <button class="primary" id="landingPolicyButton" type="button">
-                  공개 Policy Generator 열기
+                  Policy Generator
                 </button>
-                <p class="landing-login-note" id="landingLoginNote">
-                  Google 로그인은 운영 환경용이며, 개발 로그인은 로컬/데모 모드에서만 사용합니다.
-                </p>
+                <a class="button-like secondary glass-docs-button" href="/docs" id="docsLink">Docs</a>
                 <p class="landing-login-note" id="landingNoLoginMessage" hidden>
                   현재 로그인 공급자가 설정되지 않았습니다. 공개 Policy Generator는 계속 사용할 수 있습니다.
                 </p>
@@ -100,44 +102,71 @@
             </div>
           </section>
 
-          <section class="landing-signal-panel features" aria-label="KubeOwl workflow">
-            <article>
-              <span>01</span>
-              <strong>Natural language to Gatekeeper</strong>
-              <p>요구사항을 입력하면 ConstraintTemplate, Constraint, Rego 산출물을 생성합니다.</p>
-            </article>
-            <article>
-              <span>02</span>
-              <strong>Falco Sidekick ingest</strong>
-              <p>사용자 클러스터를 등록하고 런타임 이벤트를 안전하게 수집합니다.</p>
-              <div class="rich-hover-card" role="tooltip" aria-label="Falco runtime event UI preview">
-                <p>Falco 이벤트가 수집되면 런타임 위반 목록과 상세 분석 흐름에서 확인할 수 있습니다.</p>
+          <section class="landing-showcase" id="landingShowcase" aria-label="KubeOwl feature showcase">
+            <div class="showcase-window">
+              <div class="showcase-browser-dots" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
               </div>
-            </article>
-            <article>
-              <span>03</span>
-              <strong>AI-assisted triage</strong>
-              <p>위반 원인, 심각도, 수정 방향을 사용자 클러스터 범위 안에서 분석합니다.</p>
-            </article>
+              <div class="showcase-grid">
+                <article class="showcase-card">
+                  <span class="showcase-kicker">Gatekeeper</span>
+                  <h3>Policy Guardrails</h3>
+                  <p>이미지 태그, 루트 권한, 레지스트리 기준을 정책으로 고정합니다.</p>
+                  <div class="showcase-code" aria-hidden="true">
+                    <span>deny latest image</span>
+                    <span>require non-root</span>
+                    <span>allow trusted registry</span>
+                  </div>
+                </article>
+                <article class="showcase-card">
+                  <span class="showcase-kicker">Falco</span>
+                  <h3>Runtime Signals</h3>
+                  <p>클러스터에서 발생한 쉘 실행, 권한 상승, 이상 행위를 추적합니다.</p>
+                  <div class="showcase-code" aria-hidden="true">
+                    <span>shell spawned</span>
+                    <span>root process</span>
+                    <span>namespace context</span>
+                  </div>
+                </article>
+                <article class="showcase-card">
+                  <span class="showcase-kicker">AI Report</span>
+                  <h3>Action Summary</h3>
+                  <p>위반 원인과 조치 방향을 운영자가 바로 읽을 수 있게 정리합니다.</p>
+                  <div class="showcase-code" aria-hidden="true">
+                    <span>severity explain</span>
+                    <span>recommended fix</span>
+                    <span>report export</span>
+                  </div>
+                </article>
+              </div>
+            </div>
           </section>
 
-          <section class="landing-feature-grid bottom-cards" id="landingFeatureGrid" aria-label="KubeOwl capabilities">
-            <article>
-              <span class="badge loading">Policy</span>
-              <h3>정책을 빠르게 표준화</h3>
-              <p>latest 태그 금지, non-root 강제, 허용 레지스트리 같은 Kubernetes 보안 규칙을 생성합니다.</p>
-            </article>
-            <article>
-              <span class="badge ready">Runtime</span>
-              <h3>클러스터별 이벤트 관측</h3>
-              <p>Falco와 Gatekeeper 신호를 클러스터, 소스, 심각도 기준으로 확인합니다.</p>
-            </article>
-            <article>
-              <span class="badge medium">Report</span>
-              <h3>AI 리포트로 정리</h3>
-              <p>운영자가 바로 조치할 수 있도록 위반 요약과 권장 조치를 리포트로 만듭니다.</p>
-            </article>
+          <section class="landing-marquee" aria-label="KubeOwl highlights">
+            <div class="landing-marquee-track">
+              <span>Policy Generator</span>
+              <span>Gatekeeper</span>
+              <span>Falco Runtime</span>
+              <span>AI Triage</span>
+              <span>Grafana</span>
+              <span>Slack Alerts</span>
+              <span aria-hidden="true">Policy Generator</span>
+              <span aria-hidden="true">Gatekeeper</span>
+              <span aria-hidden="true">Falco Runtime</span>
+              <span aria-hidden="true">AI Triage</span>
+              <span aria-hidden="true">Grafana</span>
+              <span aria-hidden="true">Slack Alerts</span>
+            </div>
           </section>
+
+          <a class="landing-scroll-cue" href="#landingShowcase" aria-label="아래 소개 영역으로 이동">
+            <span aria-hidden="true"></span>
+          </a>
+          <a class="landing-top-cue" href="#landingIntro" aria-label="초기 화면으로 이동">
+            <span aria-hidden="true"></span>
+          </a>
         </section>
 
         <section class="metric-grid" aria-label="Compliance summary">
@@ -205,9 +234,11 @@
                 <h2>Gatekeeper Compliance Overview</h2>
                 <p>Gatekeeper 감사 상태, 정책 위반 추이, enforcement action별 위반 수를 한 화면에서 확인합니다.</p>
                 <ul>
-                  <li>Gatekeeper audit health</li>
-                  <li>Violations by policy</li>
-                  <li>Violations by enforcement</li>
+                  <li data-tip="AI 분류 요청량을 추적합니다.">AI Classification Requests</li>
+                  <li data-tip="분류 실패와 오류 흐름을 확인합니다.">AI Classification Errors</li>
+                  <li data-tip="enforcement action별 위반 수를 비교합니다.">Gatekeeper Violations by Enforcement</li>
+                  <li data-tip="정책별 위반 집중도를 확인합니다.">Policy Violations by Policy</li>
+                  <li data-tip="Gatekeeper audit 성능을 점검합니다.">Gatekeeper Audit Duration</li>
                 </ul>
               </article>
               <article class="dashboard-card grafana-dashboard-card">
@@ -215,19 +246,23 @@
                 <h2>Runtime Detection</h2>
                 <p>Falco Sidekick 런타임 이벤트, severity 분포, 자동 대응 결과를 운영 관점에서 추적합니다.</p>
                 <ul>
-                  <li>Events by severity</li>
-                  <li>Rules and namespaces</li>
-                  <li>Response actions</li>
+                  <li data-tip="고위험 이벤트가 없는 상태를 점수화합니다.">High-Severity Free Score</li>
+                  <li data-tip="심각도별 이벤트 추이를 봅니다.">Events by Severity Over Time</li>
+                  <li data-tip="클러스터와 심각도별 분포를 비교합니다.">Events by Cluster and Severity</li>
+                  <li data-tip="클러스터별 마지막 이벤트 경과 시간을 확인합니다.">Last Event Age by Cluster</li>
+                  <li data-tip="저장된 이벤트를 심각도 기준으로 요약합니다.">Stored Events by Severity</li>
                 </ul>
               </article>
               <article class="dashboard-card grafana-dashboard-card">
                 <span class="badge medium">AI</span>
-                <h2>AI Classifier Reliability</h2>
-                <p>Response Server에서 AI Classifier로 전달된 요청량, 오류율, fallback 흐름을 점검합니다.</p>
+                <h2>KubeOwl Observability</h2>
+                <p>사용자 클러스터의 이벤트 집계와 리포팅 상태를 KubeOwl 메트릭 기준으로 확인합니다.</p>
                 <ul>
-                  <li>Classification requests</li>
-                  <li>Classification errors</li>
-                  <li>Fallback and latency</li>
+                  <li data-tip="메트릭을 보내는 클러스터 수를 확인합니다.">Reporting Clusters</li>
+                  <li data-tip="저장된 전체 런타임 이벤트 수입니다.">Total Events</li>
+                  <li data-tip="high 심각도 이벤트 집계입니다.">High Events</li>
+                  <li data-tip="medium 심각도 이벤트 집계입니다.">Medium Events</li>
+                  <li data-tip="KubeOwl DB에 저장된 런타임 이벤트입니다.">Stored Runtime Events</li>
                 </ul>
               </article>
             </div>
@@ -368,7 +403,7 @@
             <div class="auth-required" id="clusterSetupAuthMessage" hidden>
               <span class="badge loading">login</span>
               <h2>로그인 후 클러스터를 등록할 수 있습니다.</h2>
-              <p>상단의 Google 로그인 또는 개발 로그인을 사용하세요.</p>
+              <p>상단의 Continue with Google 또는 개발 로그인을 사용하세요.</p>
             </div>
             <div id="clusterSetupContent">
               <section class="setup-install-card">
@@ -380,10 +415,9 @@
                   <div class="setup-control-actions">
                     <button class="primary" id="registerUserCluster">등록</button>
                     <button class="secondary" id="refreshUserClusters">새로고침</button>
-                    <label class="toggle-row cluster-trash-toggle">
+                    <label class="cluster-trash-toggle" aria-label="휴지통 보기" title="휴지통 보기">
                       <input id="showDeletedClusters" type="checkbox" />
-                      <span class="toggle-control" aria-hidden="true"></span>
-                      <span>휴지통 보기</span>
+                      <span class="glyphs-poly--trash-1" aria-hidden="true"></span>
                     </label>
                   </div>
                 </div>
@@ -420,21 +454,17 @@
             </div>
             <div id="analysisContent">
               <div class="actions runtime-actions">
-                <button class="secondary" id="refreshRuntimeEvents">최근 위반 새로고침</button>
-                <button class="secondary" id="loadSelectedManifest">선택 이벤트 매니페스트 조회</button>
+                <button class="secondary icon-only-button" id="refreshRuntimeEvents" aria-label="최근 위반 새로고침" title="최근 위반 새로고침">
+                  <span class="tabler--refresh" aria-hidden="true"></span>
+                </button>
+                <button class="secondary icon-only-button" id="loadSelectedManifest" aria-label="선택 이벤트 매니페스트 조회" title="선택 이벤트 매니페스트 조회">
+                  <span class="healthicons--magnifying-glass" aria-hidden="true"></span>
+                </button>
               </div>
               <div class="runtime-filters" aria-label="runtime event filters">
                 <label>
                   클러스터
                   <select id="runtimeCluster"><option value="">전체 클러스터</option></select>
-                </label>
-                <label>
-                  클러스터 구분
-                  <select id="runtimeClusterKind">
-                    <option value="">전체</option>
-                    <option value="customer">사용자 클러스터</option>
-                    <option value="demo">데모/테스트 클러스터</option>
-                  </select>
                 </label>
                 <label>
                   이벤트 소스
@@ -443,11 +473,6 @@
                     <option value="sidekick">Falco Sidekick</option>
                     <option value="gatekeeper">Gatekeeper</option>
                   </select>
-                </label>
-                <label class="toggle-row">
-                  <input id="includeLegacyEvents" type="checkbox" />
-                  <span class="toggle-control" aria-hidden="true"></span>
-                  <span>레거시 response-server 이벤트 포함</span>
                 </label>
               </div>
               <div class="runtime-events" id="runtimeEvents" aria-label="recent runtime violations">
@@ -536,6 +561,6 @@ spec:
       </main>
     </div>
     <div class="toast" id="toast" role="status"></div>
-    <script src="/static/app.js?v=violation-ux-2"></script>
+    <script src="/static/app.js?v=task17-blue-landing"></script>
   </body>
 </html>

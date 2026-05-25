@@ -68,7 +68,7 @@ def test_ui_is_served():
     assert "Google (Gemini)" in response.text
     assert "xAI (Grok)" in response.text
     assert "Use my own API key" in response.text
-    assert "Google 로그인" in response.text
+    assert "Continue with Google" in response.text
     assert "PDF 다운로드" in response.text
     assert "개발 로그인" in response.text
     assert "Your API key is used only for requests in this session" in response.text
@@ -88,8 +88,8 @@ def test_ui_is_served():
     assert "Resource Manifest" in response.text
     assert "LLM으로 원인/수정 YAML 생성" in response.text
     assert "최근 위반 새로고침" in response.text
-    assert "클러스터 구분" in response.text
-    assert "레거시 response-server 이벤트 포함" in response.text
+    assert "클러스터 구분" not in response.text
+    assert "레거시 response-server 이벤트 포함" not in response.text
     assert "AI Report" in response.text
     assert 'data-copy-target="templateOutput"' in response.text
     assert 'aria-label="ConstraintTemplate 복사"' in response.text
@@ -99,11 +99,23 @@ def test_admin_is_served():
     response = client.get("/admin")
 
     assert response.status_code == 200
-    assert "Compliance Admin" in response.text
+    assert "KubeOwl Admin" in response.text
     assert "Admin Grafana" in response.text
     assert "클러스터 등록" in response.text
     assert "운영 요약" in response.text
     assert "사용자 목록" in response.text
+
+
+def test_docs_is_served():
+    response = client.get("/docs")
+
+    assert response.status_code == 200
+    assert "KubeOwl Docs" in response.text
+    assert "설계" in response.text
+    assert "기능" in response.text
+    assert "보안" in response.text
+    assert "zrok" in response.text
+    assert "Grafana" in response.text
 
 
 def test_me_reports_anonymous_user():

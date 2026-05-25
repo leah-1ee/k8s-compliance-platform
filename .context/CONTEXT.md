@@ -5,21 +5,21 @@ Policy-as-Code based Kubernetes compliance automation platform.
 Natural language → Rego policy via LLM, Falco event AI classification, real-time dashboard.
 
 ## Current Image Version
-Current VM image observed by user during TASK-11: `docker.io/leeon3345/compliance-ai-server:0.1.18`
-Next build/deploy tag for current AI server/UI changes: `docker.io/leeon3345/compliance-ai-server:0.1.20`
-`0.1.10` was the older deployed image. `0.1.11` was prepared by TASK-04, `0.1.12` by TASK-05, `0.1.13` by TASK-06, `0.1.15` by TASK-10 branding/deploy prep, `0.1.16`/`0.1.17` were used during TASK-10 policy apply/UI iteration, `0.1.18` is the TASK-10 completed/Grafana-title image observed in use, and `0.1.20` is the TASK-11 UI/trash cleanup follow-up target; do not overwrite or reuse older tags.
+Current VM image observed by user during TASK-16 stabilization: `docker.io/leeon3345/compliance-ai-server:0.1.47`
+Next build/deploy tag for TASK-17 UI changes: use a fresh tag after `docker.io/leeon3345/compliance-ai-server:0.1.47`; do not overwrite or reuse older tags.
+`0.1.10` was the older deployed image. `0.1.11` was prepared by TASK-04, `0.1.12` by TASK-05, `0.1.13` by TASK-06, `0.1.15` by TASK-10 branding/deploy prep, `0.1.16`/`0.1.17` were used during TASK-10 policy apply/UI iteration, `0.1.18` is the TASK-10 completed/Grafana-title image observed in use, `0.1.20` is the TASK-11 UI/trash cleanup follow-up target, `0.1.43` started the TASK-15/16 Grafana proxy and dashboard recovery image line, and `0.1.47` includes TASK-16 Grafana Live, splash storage, favicon, and transient Grafana retry hardening.
 
 ## Tech Stack
 - Backend: Python (FastAPI), SQLite (WAL mode, PVC persistent)
 - Monitoring: Prometheus, Grafana
-- Auth: Google OAuth (implemented, deployment prepared, credentials not issued yet) + dev-login fallback
+- Auth: Google OAuth live login works with real credentials; dev-login fallback exists but live manifests should keep `DEV_AUTH_ENABLED=false`
 - Infra: Kubernetes, OPA Gatekeeper, Falco Sidekick
 
 ## Completed
 
 - Gatekeeper policy UI: public (no login required)
-- Google OAuth: code done, not live (Google Cloud 카드 문제로 보류)
-- Dev login (`/auth/dev-login`): active via `DEV_AUTH_ENABLED=true`
+- Google OAuth: live activation completed; real OAuth credentials exist and users can log in with Google
+- Dev login (`/auth/dev-login`): fallback exists; live deployment should keep `DEV_AUTH_ENABLED=false`
 - SQLite: WAL mode, PVC persistent
 - `/admin`: cluster register, token issue/rotate/disable
 - `/admin`: full user list, per-user cluster list, active/disabled status, last seen, event count
@@ -47,7 +47,7 @@ Next build/deploy tag for current AI server/UI changes: `docker.io/leeon3345/com
 - TASK-03 note: `app/static/index.html` was intentionally not changed; Slack UI is injected by `app/static/app.js`
 - TASK-04 done locally: Google OAuth live deployment manifest prepared for `0.1.11`
 - TASK-04 done locally: `ai-google-oauth` secret references are required in live manifests so fake/missing OAuth credentials fail clearly
-- TASK-04 blocked for actual live login: Google OAuth Client ID/Secret have not been created yet; do not create the Kubernetes secret with placeholder values
+- TASK-04 original blocker resolved later: real Google OAuth Client ID/Secret now exist and live Google login works
 - TASK-05 done locally: `/resource-manifest` now returns user-scoped kubectl manifest guidance instead of central-server Kubernetes API fetches
 - TASK-05 done locally: runtime analysis no longer falls back to direct central-server manifest fetch when event snapshots are missing
 - TASK-05 done locally: UI shows copyable kubectl manifest lookup guidance without changing `app/static/index.html`
@@ -91,18 +91,26 @@ Next build/deploy tag for current AI server/UI changes: `docker.io/leeon3345/com
 - TASK-13 done locally/VM-iterated: secure Grafana OSS multi-tenant observability implemented with Prometheus ClusterIP, Grafana ClusterIP behind KubeOwl `/grafana-ui/` auth proxy, Prometheus proxy query injection, per-user Grafana org provisioning, proxy-backed datasource, multi-dashboard master copy via `GRAFANA_MASTER_DASHBOARD_UIDS`, audit logging, rate limiting, and tests.
 - TASK-13 VM findings fixed locally: NetworkPolicy needs namespaceSelector + podSelector because ai-server runs in `compliance-system` while Prometheus/Grafana run in `monitoring`; Grafana 13 datasource update needs UID endpoint; auth proxy headers must be ASCII-safe for Korean display names; dashboard opening should use `/grafana-ui/d/...?...orgId=<user-org>` instead of `/org/switch`.
 - TASK-13 UI follow-up done locally: removed topbar global Grafana button, kept Grafana access on per-cluster rows, changed cluster row actions to vertical layout, and replaced the user trash action text with a red icon-only button.
+- TASK-13/14 metrics finding: Falco Sidekick ingest to Runtime Detection works for separate user clusters when `FALCO_INGEST_BASE_URL` points to a reachable central ingest URL, but Grafana remains `No data` until ai-server exports trusted SQLite event aggregates as Prometheus metrics. Security decision for TASK-14: prefer ai-server `/metrics` scraped by central Prometheus over user-cluster Prometheus remote_write/federation.
+- TASK-15 completed locally/VM-validated: Grafana Runtime Detection and KubeOwl Observability dashboards now show user-scoped metrics (`Reporting=1`, `Total=5`, `High=3`, `Medium=2`) after fixing ai-server `PROMETHEUS_URL` to the kube-prometheus service, persisting that env in manifests, and removing the missing `screenshot-falco.png` hover-card reference.
+- TASK-15 validation note: `runtime-detection/manifests/grafana/dashboard-configmap.yaml` and `ai-observability/ai-server/app/grafana/dashboard_template.json` both provision user datasource UID `kubeowl-prom-f4efeb00a6e0387b` for `cluster-ff1f78d5c20b`; Grafana `/api/ds/query` returned the expected `5`.
+- TASK-16 created: public Grafana access is now data-correct but still visually unstable because `/grafana-ui/api/live/ws` returns `403` and the browser can still surface intermittent public-path `502`s; keep `api/ds/query` and `api/annotations` as-is and stabilize or suppress Grafana Live for the demo path.
+- TASK-16 completed locally/VM-iterated: Grafana Live `403` noise removed, `/api/ds/query` and `/api/annotations` kept intact, splash user-storage 404 and `/favicon.ico` 404 suppressed, transient Grafana upstream `502/503/504` calls retried, and runtime dashboard panels polished.
+- TASK-17 created: homepage/user console and admin page UI polish should be done with the existing vanilla HTML/CSS/JS stack before final screenshots; defer full React migration to a later v2 frontend refactor.
+- Security finding before TASK-17: live `ai-classifier-admin` Secret was observed as `ADMIN_TOKEN=change-me-before-deploy`; rotate it to a strong random value before treating public admin as demo-safe. This does not delete Grafana/SQLite data.
 - TASK-07 note: no AI server code or UI changed; no new AI server image tag is required
-- Tests: `63 passed, 61 warnings` in `ai-observability/ai-server/tests`; `node --check ai-observability/ai-server/app/static/app.js` passes
+- Tests: latest TASK-16 run was `105 passed, 101 warnings` in `ai-observability/ai-server/tests`; `node --check ai-observability/ai-server/app/static/app.js` should still be run after TASK-17 UI edits
 
 ## Deployment Notes
 
-- Deployed image target: `docker.io/leeon3345/compliance-ai-server:0.1.13`
+- Current deployed image target: `docker.io/leeon3345/compliance-ai-server:0.1.47`
 - Active deployment in cluster: `deploy/ai-classifier -n compliance-system`
-- Deployment env:
+- Current live deployment env expectations:
   - `CLUSTER_NAME=school-cloud`
-  - `DEMO_CLUSTER_NAMES=school-cloud`
-  - `DEV_AUTH_ENABLED=true`
-  - `DEV_AUTH_EMAIL=demo@school.test`
+  - `DEMO_CLUSTER_NAMES=school-cloud,boanlab-cloud`
+  - `DEV_AUTH_ENABLED=false`
+  - `SESSION_COOKIE_SECURE=true`
+  - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` from real `ai-google-oauth` Secret
 - TASK-04 prepared deployment env in manifests:
   - `image=docker.io/leeon3345/compliance-ai-server:0.1.11`
 - TASK-05 handoff image:
@@ -136,6 +144,10 @@ Next build/deploy tag for current AI server/UI changes: `docker.io/leeon3345/com
   - `docker.io/leeon3345/compliance-ai-server:0.1.20`
   - `kubectl set image deploy/ai-classifier -n compliance-system ai-classifier=docker.io/leeon3345/compliance-ai-server:0.1.20`
   - `kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s`
+- TASK-15/TASK-16 rollout target image:
+  - `docker.io/leeon3345/compliance-ai-server:0.1.47`
+  - `kubectl apply -f cloud-deploy/ai-server.yaml`
+  - `kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s`
 - TASK-11 Grafana ConfigMap apply:
   - `kubectl apply -f ai-observability/dashboards/grafana/compliance-overview-configmap.yaml`
   - `kubectl apply -f runtime-detection/manifests/grafana/dashboard-configmap.yaml`
@@ -147,9 +159,10 @@ Next build/deploy tag for current AI server/UI changes: `docker.io/leeon3345/com
 
 ## Auth State
 
-- Current deployed dev mode: `DEV_AUTH_ENABLED=true`, `DEV_AUTH_EMAIL=demo@school.test`
-- UI shows dev-login button only — this is EXPECTED (no Google Secret configured)
-- Production/live OAuth: `DEV_AUTH_ENABLED=false`, Google OAuth secret required; wait until real Google Cloud OAuth credentials exist
+- Current live auth target: `DEV_AUTH_ENABLED=false`, `SESSION_COOKIE_SECURE=true`, real `ai-google-oauth` Secret configured
+- Google login works in live deployment
+- Dev login remains a fallback route but should stay disabled in live public demo
+- Admin token security issue: rotate `ai-classifier-admin` away from `change-me-before-deploy`
 
 ## UI Access Control
 
@@ -166,13 +179,14 @@ Next build/deploy tag for current AI server/UI changes: `docker.io/leeon3345/com
 
 ## Remaining Tasks (priority order)
 
-1. **TASK-14 Admin Grafana Access (P0)** — add `/admin` admin-only Grafana entrypoint for master/admin dashboards while keeping normal users on per-cluster `/grafana-ui/` Viewer org flow.
-2. **TASK-12 Google OAuth live activation (P0)** — after Google Console signup and real credentials exist, create real `ai-google-oauth` secret, switch off dev-login, and smoke-test the live Google login/callback/logout flow.
-3. **TASK-12 Admin page cleanup/refactor (P1)** — add first-class admin archive/restore/permanent-delete UX for test clusters, improve table filtering/search, and separate user/cluster/event operations.
-4. **Demo data cleanup controls (P1)** — provide safe cleanup for old test clusters/events/apply history after admin actions are implemented.
-5. **Grafana cleanup (P2)** — decide whether the visible `Grafana Overview` dashboard should be imported as a master dashboard or retired; keep repo JSON/ConfigMaps as source of truth.
-6. **Final verification (P3)** — verify one end-to-end story: generate/apply Gatekeeper policy via fallback, trigger/observe violation, show Runtime Detection event, run Violation Detail, generate AI Report PDF, and show user-scoped Grafana dashboards.
-7. **Final docs (P4)** — document zrok stabilization, OAuth setup/rollback, image tag/deploy procedure, SQLite/Grafana backup and persistence, Grafana dashboard apply commands, demo data cleanup, and user-cluster RBAC expectations.
+1. **TASK-18 Account Deletion and Final Demo Hardening (P0)** — add a safe 회원 탈퇴 flow only after deciding cluster/token/event/report/Slack/Grafana retention behavior; see `.context/Task18.md`.
+2. **Admin token security hotfix (P0)** — rotate live `ai-classifier-admin` Secret away from `change-me-before-deploy`; no code build required for the rotation itself.
+3. **TASK-16 final end-to-end demo capture (P0)** — after UI polish if desired, run the final smoke story and capture screenshots: Falco smoke event, ingest `200`, `/metrics`, Prometheus query, Runtime Detection, Violation Detail, AI Report, and user-scoped Grafana dashboards.
+4. **TASK-14 Admin Grafana Access and Metrics Export follow-up (P1)** — admin-only Grafana entrypoint exists, but master/admin dashboard UX and docs still need cleanup.
+5. **Admin cleanup controls (P1)** — first-class archive/restore/permanent-delete UX for test clusters, improved filtering/search, and separated user/cluster/event operations.
+6. **Demo data cleanup controls (P1)** — safe cleanup for old test clusters/events/apply history after admin actions are polished.
+7. **Grafana cleanup (P2)** — decide whether the visible `Grafana Overview` dashboard should be imported as a master dashboard or retired; keep repo JSON/ConfigMaps as source of truth.
+8. **Final deploy/docs verification (P2)** — deploy the TASK-17 UI/docs image, verify `/ui`, `/docs`, `/admin`, `/grafana-ui/`, and update screenshots.
 
 ## Do Not Change (fixed decisions)
 
@@ -196,7 +210,10 @@ ai-observability/ai-server/app/runtime_client.py
 ai-observability/ai-server/app/static/index.html
 ai-observability/ai-server/app/static/app.js
 ai-observability/ai-server/app/static/styles.css
+ai-observability/ai-server/app/static/docs.html
 ai-observability/ai-server/app/static/assets/kubeowl-logo.png
+ai-observability/ai-server/app/static/assets/main-logo.png
+ai-observability/ai-server/app/static/assets/landing-background.png
 ai-observability/ai-server/app/grafana/
 ai-observability/ai-server/tests/test_api.py
 ai-observability/ai-server/tests/test_grafana.py
@@ -227,6 +244,8 @@ cloud-deploy/ai-server.yaml
 .context/Task12.md
 .context/Task13.md
 .context/Task14.md
+.context/Task17.md
+.context/Task18.md
 ```
 
-Last AI server test result: `85 passed, 67 warnings` after TASK-13 Grafana auth proxy, multi-dashboard provisioning, and user Grafana UX cleanup.
+TASK-17 UI/docs local test result: `106 passed, 101 warnings` after landing, `/docs`, `/admin`, Grafana card, and dashboard polish.

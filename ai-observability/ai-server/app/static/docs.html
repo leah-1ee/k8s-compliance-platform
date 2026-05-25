@@ -1,0 +1,887 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KubeOwl Docs</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #ecfbff;
+        --panel: rgba(255, 255, 255, 0.88);
+        --line: rgba(8, 119, 242, 0.18);
+        --line-strong: rgba(8, 119, 242, 0.32);
+        --text: #1f2937;
+        --muted: #64748b;
+        --brand: #0877f2;
+        --brand-2: #56ccf2;
+        --code: #08111f;
+        --shadow: 0 22px 60px rgba(8, 119, 242, 0.11);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        font-family: SUIT, Pretendard, "Noto Sans KR", ui-sans-serif, system-ui, sans-serif;
+        background:
+          radial-gradient(circle at 18% -10%, rgba(86, 204, 242, 0.4), transparent 34%),
+          linear-gradient(135deg, #f8fdff 0%, #e7faff 48%, #d8f3ff 100%);
+        color: var(--text);
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .docs-shell {
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 24px 0 56px;
+      }
+
+      .docs-hero {
+        position: relative;
+        overflow: hidden;
+        display: grid;
+        gap: 22px;
+        min-height: 340px;
+        padding: clamp(28px, 5vw, 48px);
+        border: 1px solid rgba(255, 255, 255, 0.42);
+        border-radius: 22px;
+        background:
+          radial-gradient(circle at 80% 10%, rgba(86, 204, 242, 0.45), transparent 30%),
+          linear-gradient(135deg, #07306f, #0877f2 58%, #08aeea);
+        color: #ffffff;
+        box-shadow: 0 28px 80px rgba(8, 119, 242, 0.24);
+      }
+
+      .docs-hero::after {
+        content: "";
+        position: absolute;
+        inset: auto -90px -130px auto;
+        width: 320px;
+        height: 320px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      .docs-nav {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .brand-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 900;
+      }
+
+      .brand-link img {
+        width: 46px;
+        height: 46px;
+        border-radius: 12px;
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+      }
+
+      .nav-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .glass-button {
+        display: inline-flex;
+        align-items: center;
+        min-height: 42px;
+        padding: 0 16px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.14);
+        color: #ffffff;
+        font-weight: 850;
+        backdrop-filter: blur(16px);
+      }
+
+      .docs-copy {
+        position: relative;
+        z-index: 1;
+        max-width: 760px;
+      }
+
+      .eyebrow {
+        margin: 0 0 12px;
+        color: rgba(255, 255, 255, 0.74);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(38px, 6vw, 72px);
+        line-height: 0.95;
+        letter-spacing: -0.06em;
+      }
+
+      .docs-copy > p:not(.eyebrow) {
+        max-width: 680px;
+        margin: 18px 0 0;
+        color: rgba(255, 255, 255, 0.82);
+        font-size: clamp(16px, 2vw, 20px);
+        line-height: 1.65;
+        font-weight: 720;
+      }
+
+      .category-tabs {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin: 24px 0;
+      }
+
+      .category-tabs a,
+      .docs-card {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(18px);
+      }
+
+      .category-tabs a {
+        display: grid;
+        gap: 8px;
+        min-height: 118px;
+        padding: 20px;
+        transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+      }
+
+      .category-tabs a:hover {
+        transform: translateY(-4px);
+        border-color: var(--line-strong);
+        box-shadow: 0 24px 60px rgba(8, 119, 242, 0.16);
+      }
+
+      .category-tabs strong {
+        color: var(--brand);
+        font-size: 20px;
+      }
+
+      .category-tabs span {
+        color: var(--muted);
+        line-height: 1.45;
+      }
+
+      .docs-grid {
+        display: grid;
+        gap: 20px;
+      }
+
+      .docs-card {
+        padding: clamp(22px, 4vw, 32px);
+      }
+
+      .section-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+
+      .section-heading h2 {
+        margin: 0;
+        font-size: clamp(26px, 4vw, 36px);
+        letter-spacing: -0.04em;
+      }
+
+      .section-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 0 12px;
+        border: 1px solid rgba(8, 119, 242, 0.18);
+        border-radius: 999px;
+        background: rgba(8, 119, 242, 0.08);
+        color: var(--brand);
+        font-size: 12px;
+        font-weight: 900;
+        white-space: nowrap;
+      }
+
+      .info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .guide-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);
+        gap: 16px;
+        align-items: start;
+        margin-top: 16px;
+      }
+
+      .docs-split {
+        display: grid;
+        grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.2fr);
+        gap: 20px;
+        align-items: stretch;
+      }
+
+      .topic-list {
+        position: relative;
+        display: grid;
+        align-content: start;
+        gap: 14px;
+      }
+
+      .topic-list::before {
+        content: "";
+        position: absolute;
+        left: 26px;
+        top: 38px;
+        bottom: 38px;
+        width: 1px;
+        background: linear-gradient(180deg, rgba(8, 119, 242, 0.34), rgba(8, 119, 242, 0.04));
+      }
+
+      .topic-button {
+        position: relative;
+        display: grid;
+        grid-template-columns: 54px 1fr auto;
+        gap: 14px;
+        align-items: center;
+        width: 100%;
+        min-height: 92px;
+        border: 1px solid rgba(8, 119, 242, 0.18);
+        border-radius: 16px;
+        background:
+          radial-gradient(circle at 0% 0%, rgba(86, 204, 242, 0.12), transparent 30%),
+          rgba(248, 253, 255, 0.84);
+        color: var(--text);
+        padding: 16px 18px;
+        text-align: left;
+        cursor: pointer;
+        box-shadow: 0 12px 28px rgba(8, 119, 242, 0.07);
+        transition:
+          transform 0.18s ease,
+          border-color 0.18s ease,
+          box-shadow 0.18s ease,
+          background 0.18s ease;
+      }
+
+      .topic-button:hover,
+      .topic-button:focus-visible,
+      .topic-button.is-active {
+        transform: translateY(-3px);
+        border-color: rgba(8, 119, 242, 0.42);
+        background:
+          radial-gradient(circle at 0% 0%, rgba(86, 204, 242, 0.18), transparent 32%),
+          rgba(255, 255, 255, 0.95);
+        box-shadow: 0 20px 54px rgba(8, 119, 242, 0.14);
+        outline: none;
+      }
+
+      .topic-number {
+        display: inline-grid;
+        place-items: center;
+        width: 46px;
+        height: 46px;
+        border: 1px solid rgba(8, 119, 242, 0.24);
+        border-radius: 12px;
+        background: rgba(8, 119, 242, 0.09);
+        color: var(--brand);
+        font-weight: 950;
+      }
+
+      .topic-main {
+        min-width: 0;
+      }
+
+      .topic-main strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 18px;
+        letter-spacing: -0.02em;
+      }
+
+      .topic-main span {
+        color: var(--brand);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .topic-arrow {
+        color: rgba(8, 119, 242, 0.46);
+        font-size: 26px;
+        font-weight: 300;
+      }
+
+      .topic-detail-wrap {
+        position: relative;
+        min-height: 520px;
+        border: 1px solid rgba(8, 119, 242, 0.18);
+        border-radius: 18px;
+        background:
+          radial-gradient(circle at 8% 0%, rgba(86, 204, 242, 0.1), transparent 32%),
+          rgba(255, 255, 255, 0.84);
+        padding: clamp(22px, 4vw, 32px);
+        box-shadow: 0 18px 48px rgba(8, 119, 242, 0.1);
+      }
+
+      .topic-detail {
+        display: none;
+        animation: detailFade 0.22s ease both;
+      }
+
+      .topic-detail.is-active {
+        display: grid;
+        gap: 16px;
+      }
+
+      .topic-detail h3 {
+        margin: 0;
+        font-size: clamp(26px, 4vw, 42px);
+        line-height: 1.05;
+        letter-spacing: -0.05em;
+      }
+
+      .topic-detail .kicker {
+        color: var(--brand);
+        font-size: 13px;
+        font-weight: 950;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .topic-detail p,
+      .topic-detail li {
+        color: var(--muted);
+        line-height: 1.72;
+      }
+
+      .topic-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .topic-chips span {
+        display: inline-flex;
+        align-items: center;
+        min-height: 32px;
+        padding: 0 12px;
+        border: 1px solid rgba(8, 119, 242, 0.18);
+        border-radius: 999px;
+        background: rgba(8, 119, 242, 0.08);
+        color: #075bb8;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .info-box {
+        border: 1px solid rgba(8, 119, 242, 0.14);
+        border-radius: 13px;
+        background: rgba(248, 253, 255, 0.82);
+        padding: 18px;
+      }
+
+      .info-box h3 {
+        margin: 0 0 10px;
+        font-size: 18px;
+      }
+
+      .info-box p,
+      .info-box li {
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
+      .info-box p {
+        margin: 0;
+      }
+
+      ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 14px;
+      }
+
+      .flow-step {
+        position: relative;
+        min-height: 112px;
+        padding: 16px;
+        border: 1px solid rgba(8, 119, 242, 0.16);
+        border-radius: 13px;
+        background: linear-gradient(180deg, #ffffff, #f3fbff);
+      }
+
+      .flow-step span {
+        display: inline-grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        margin-bottom: 12px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, var(--brand), var(--brand-2));
+        color: #ffffff;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .flow-step strong {
+        display: block;
+        margin-bottom: 6px;
+      }
+
+      .flow-step p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      code {
+        border-radius: 6px;
+        background: rgba(8, 119, 242, 0.08);
+        color: #075bb8;
+        padding: 2px 6px;
+        font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 0.92em;
+      }
+
+      pre {
+        overflow: auto;
+        margin: 14px 0 0;
+        border: 1px solid rgba(125, 211, 252, 0.22);
+        border-radius: 13px;
+        background: var(--code);
+        color: #dbeafe;
+        padding: 18px;
+        line-height: 1.55;
+      }
+
+      pre code {
+        background: transparent;
+        color: inherit;
+        padding: 0;
+      }
+
+      .terminal-window {
+        overflow: hidden;
+        border: 1px solid rgba(125, 211, 252, 0.24);
+        border-radius: 14px;
+        background: #08111f;
+        box-shadow: 0 18px 44px rgba(8, 17, 31, 0.18);
+      }
+
+      .terminal-bar {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-height: 38px;
+        padding: 0 14px;
+        border-bottom: 1px solid rgba(125, 211, 252, 0.16);
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .terminal-bar span {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.22);
+      }
+
+      .terminal-title {
+        margin-left: 8px;
+        color: rgba(219, 234, 254, 0.72);
+        font-size: 12px;
+        font-weight: 850;
+      }
+
+      .terminal-body {
+        margin: 0;
+        min-height: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        color: #dbeafe;
+        font-size: 13px;
+      }
+
+      .terminal-body .prompt {
+        color: #7dd3fc;
+      }
+
+      .terminal-body .ok {
+        color: #86efac;
+      }
+
+      .terminal-body .warn {
+        color: #fde68a;
+      }
+
+      @keyframes detailFade {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @media (max-width: 860px) {
+        .category-tabs,
+        .info-grid,
+        .flow,
+        .guide-grid,
+        .docs-split {
+          grid-template-columns: 1fr;
+        }
+
+        .topic-detail-wrap {
+          min-height: 0;
+        }
+
+        .docs-nav,
+        .section-heading {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="docs-shell">
+      <section class="docs-hero">
+        <nav class="docs-nav" aria-label="Docs navigation">
+          <a class="brand-link" href="/ui">
+            <img src="/static/assets/main-logo.png?v=task17" alt="KubeOwl logo" />
+            <span>KubeOwl</span>
+          </a>
+          <div class="nav-actions">
+            <a class="glass-button" href="/ui">Console</a>
+          </div>
+        </nav>
+        <div class="docs-copy">
+          <p class="eyebrow">KubeOwl Docs</p>
+          <h1>운영 흐름이 보이는 문서</h1>
+          <p>정책 생성, 런타임 이벤트 수집, Grafana 관측, zrok 공개 접근까지 데모와 운영에 필요한 큰 그림을 빠르게 확인합니다.</p>
+        </div>
+      </section>
+
+      <nav class="category-tabs" aria-label="Docs categories">
+        <a href="#architecture">
+          <strong>설계</strong>
+          <span>관리자 클러스터, 사용자 클러스터, zrok, Grafana 연결 구조</span>
+        </a>
+        <a href="#features">
+          <strong>기능</strong>
+          <span>Policy Generator, Cluster Setup, 위반 분석, AI Report</span>
+        </a>
+        <a href="#security">
+          <strong>보안</strong>
+          <span>인증, 토큰, Grafana 프록시, 데이터 격리 기준</span>
+        </a>
+      </nav>
+
+      <div class="docs-grid">
+        <section class="docs-card" id="architecture">
+          <div class="section-heading">
+            <h2>설계</h2>
+            <span class="section-pill">Architecture</span>
+          </div>
+          <div class="docs-split" data-docs-group>
+            <div class="topic-list" aria-label="설계 목록">
+              <button class="topic-button is-active" type="button" data-docs-topic="arch-cluster">
+                <span class="topic-number">1</span>
+                <span class="topic-main"><strong>Cluster Boundary</strong><span>admin / user cluster</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="arch-network">
+                <span class="topic-number">2</span>
+                <span class="topic-main"><strong>Network Entry</strong><span>zrok public access</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="arch-grafana">
+                <span class="topic-number">3</span>
+                <span class="topic-main"><strong>Grafana Proxy</strong><span>scoped observability</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="arch-flow">
+                <span class="topic-number">4</span>
+                <span class="topic-main"><strong>Event Flow</strong><span>policy + runtime</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+            </div>
+            <div class="topic-detail-wrap">
+              <article class="topic-detail is-active" data-docs-panel="arch-cluster">
+                <span class="kicker">Admin / User Cluster</span>
+                <h3>관리자 영역은 토큰을 만들고, 사용자 클러스터는 이벤트를 보냅니다.</h3>
+                <p>KubeOwl 서버는 중앙 관리자 영역에서 사용자별 클러스터 토큰을 발급합니다. 각 사용자 클러스터는 Falco Sidekick 이벤트를 중앙 ingest API로 전송하고, UI와 API는 로그인한 사용자의 클러스터 범위로 결과를 제한합니다.</p>
+                <div class="topic-chips"><span>cluster token</span><span>user_id scope</span><span>Falco ingest</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="arch-network">
+                <span class="kicker">zrok Public Access</span>
+                <h3>Public IP가 없어도 Console과 Grafana 진입점을 공개할 수 있습니다.</h3>
+                <p>학교 클라우드 VM처럼 Public IP가 제한된 환경에서는 zrok public share로 AI Console과 Grafana 진입점을 외부에 공개합니다. 공유 주소는 <code>shares.zrok.io</code> 형태를 사용하고, zrok 프로세스가 살아 있어야 접근할 수 있습니다.</p>
+                <div class="topic-chips"><span>AI Console</span><span>Grafana</span><span>shares.zrok.io</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="arch-grafana">
+                <span class="kicker">Grafana Auth Proxy</span>
+                <h3>Grafana는 직접 열지 않고 KubeOwl 프록시 뒤에서 사용자별로 분리합니다.</h3>
+                <p>사용자 Grafana는 <code>/grafana-ui/</code> 인증 프록시 뒤에 두고, 사용자별 org와 datasource를 프로비저닝합니다. Prometheus 쿼리는 사용자 클러스터 범위로 주입해 다른 사용자의 메트릭이 섞이지 않도록 합니다.</p>
+                <div class="topic-chips"><span>/grafana-ui/</span><span>org per user</span><span>query injection</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="arch-flow">
+                <span class="kicker">Operational Flow</span>
+                <h3>정책 생성과 런타임 탐지를 하나의 운영 화면으로 연결합니다.</h3>
+                <p>Gatekeeper 정책 생성과 Falco 런타임 이벤트는 UI에서 같은 운영 흐름으로 묶입니다. 정책은 적용 전 YAML로 확인하고, 이벤트는 저장 후 상세 분석과 리포트 생성에 사용됩니다.</p>
+                <div class="flow" aria-label="KubeOwl request flow">
+                  <div class="flow-step"><span>1</span><strong>Cluster Token</strong><p>사용자별 클러스터 토큰을 발급합니다.</p></div>
+                  <div class="flow-step"><span>2</span><strong>Sidekick Ingest</strong><p>Falco Sidekick이 이벤트를 전송합니다.</p></div>
+                  <div class="flow-step"><span>3</span><strong>Scoped Metrics</strong><p>사용자 클러스터 기준으로 집계합니다.</p></div>
+                  <div class="flow-step"><span>4</span><strong>Grafana Proxy</strong><p>인증 프록시로 대시보드를 엽니다.</p></div>
+                </div>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="docs-card" id="features">
+          <div class="section-heading">
+            <h2>기능</h2>
+            <span class="section-pill">Features</span>
+          </div>
+          <div class="docs-split" data-docs-group>
+            <div class="topic-list" aria-label="기능 목록">
+              <button class="topic-button is-active" type="button" data-docs-topic="feature-policy">
+                <span class="topic-number">1</span>
+                <span class="topic-main"><strong>Policy Generator</strong><span>policy-as-code</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="feature-apply">
+                <span class="topic-number">2</span>
+                <span class="topic-main"><strong>Cluster Apply Guide</strong><span>safe rollout</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="feature-sidekick">
+                <span class="topic-number">3</span>
+                <span class="topic-main"><strong>Cluster Setup</strong><span>falco sidekick</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="feature-analysis">
+                <span class="topic-number">4</span>
+                <span class="topic-main"><strong>Violation & Report</strong><span>analysis / export</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+            </div>
+            <div class="topic-detail-wrap">
+              <article class="topic-detail is-active" data-docs-panel="feature-policy">
+                <span class="kicker">Policy Generator</span>
+                <h3>입력값을 좁힐수록 바로 적용 가능한 정책이 나옵니다.</h3>
+                <ul>
+                  <li><strong>Policy Type</strong>: Validate는 위반 탐지/차단, Mutation은 누락된 securityContext나 resource limit 자동 주입에 사용합니다.</li>
+                  <li><strong>EnforcementAction</strong>: <code>dryrun</code>은 검증, <code>warn</code>은 전환, <code>deny</code>는 실제 차단 단계에 적합합니다.</li>
+                  <li><strong>disallow-latest-tag</strong>: <code>:latest</code> 또는 태그가 없는 이미지를 제한해 재현 가능한 배포를 강제합니다.</li>
+                  <li><strong>Allowed Registries</strong>: <code>ghcr.io/org/</code>, <code>registry.example.com/team/</code>처럼 prefix 기준을 좁게 적습니다.</li>
+                  <li><strong>Excluded Namespaces</strong>: 시스템 네임스페이스는 제외하되, 앱 네임스페이스를 제외해 정책 사각지대를 만들지 않습니다.</li>
+                </ul>
+                <div class="topic-chips"><span>Validate</span><span>Mutation</span><span>dryrun</span><span>warn</span><span>deny</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="feature-apply">
+                <span class="kicker">Safe Rollout</span>
+                <h3>정책은 dryrun에서 시작해서 테스트 네임스페이스를 거쳐 확대합니다.</h3>
+                <ul>
+                  <li>먼저 <code>dryrun</code>으로 생성해 기존 워크로드 영향도를 확인합니다.</li>
+                  <li>ConstraintTemplate과 Constraint가 함께 있는지 확인하고, 제외 네임스페이스 범위를 점검합니다.</li>
+                  <li>테스트 네임스페이스 적용 후 운영 네임스페이스로 확대합니다.</li>
+                  <li>문제가 생기면 <code>deny</code>로 밀어붙이지 말고 <code>warn</code> 또는 <code>dryrun</code>으로 되돌립니다.</li>
+                </ul>
+                <div class="terminal-window" aria-label="Policy apply terminal example">
+                  <div class="terminal-bar"><span></span><span></span><span></span><strong class="terminal-title">policy-apply-demo</strong></div>
+                  <pre class="terminal-body"><code><span class="prompt">$</span> select cluster school-cloud-prod
+<span class="ok">connected</span> cluster token verified
+
+<span class="prompt">$</span> generate policy disallow-latest-tag --action dryrun
+ConstraintTemplate/k8sdisallowlatesttag created
+K8sDisallowLatestTag/pods-must-use-version-tags created
+
+<span class="prompt">$</span> kubectl apply --dry-run=server -f generated.yaml
+<span class="ok">server validation passed</span>
+
+<span class="prompt">$</span> kubectl apply -f generated.yaml
+<span class="warn">watch Grafana: Policy Violations by Policy</span></code></pre>
+                </div>
+              </article>
+              <article class="topic-detail" data-docs-panel="feature-sidekick">
+                <span class="kicker">FALCO SIDEKICK 설치 명령</span>
+                <h3>클러스터 토큰이 포함된 명령은 재발급과 폐기 흐름까지 같이 봐야 합니다.</h3>
+                <ul>
+                  <li>설치 명령은 등록된 클러스터 토큰을 포함하므로 외부 문서에 그대로 공유하지 않습니다.</li>
+                  <li><strong>401/403</strong>: 토큰 만료 또는 휴지통 이동으로 폐기된 상태입니다. 토큰 재발급 후 새 명령을 적용합니다.</li>
+                  <li><strong>이벤트 없음</strong>: Falco/Sidekick Pod, ingest URL, NetworkPolicy, DNS 순서로 확인합니다.</li>
+                  <li><strong>Grafana No data</strong>: ingest 성공 후 Prometheus scrape 또는 metrics export 지연을 확인합니다.</li>
+                </ul>
+                <div class="terminal-window" aria-label="Falco Sidekick install terminal example">
+                  <div class="terminal-bar"><span></span><span></span><span></span><strong class="terminal-title">falco-sidekick-install</strong></div>
+                  <pre class="terminal-body"><code><span class="prompt">$</span> copy FALCO SIDEKICK 설치 명령
+helm repo add falcosecurity https://falcosecurity.github.io/charts
+
+<span class="prompt">$</span> helm upgrade --install falco-sidekick falcosecurity/falco-sidekick \
+  --namespace falco --create-namespace \
+  --set webui.enabled=false \
+  --set config.webhook.address=https://kubeowl.example/ingest/falco-events
+
+<span class="prompt">$</span> kubectl get pods -n falco
+falco-sidekick-7f6c9d9b6c-jh2qx   <span class="ok">Running</span>
+
+<span class="prompt">$</span> open KubeOwl > Violation Detail
+<span class="ok">runtime event received</span></code></pre>
+                </div>
+              </article>
+              <article class="topic-detail" data-docs-panel="feature-analysis">
+                <span class="kicker">Violation Detail / AI Report</span>
+                <h3>런타임 이벤트를 운영자가 읽을 수 있는 조치 문장으로 바꿉니다.</h3>
+                <ul>
+                  <li>Violation Detail은 rule, cluster, namespace, pod, container 맥락을 한 화면에 묶습니다.</li>
+                  <li>분석 결과는 심각도 설명, 원인 요약, 권장 수정, 구체적 조치로 분리합니다.</li>
+                  <li>AI Report는 최근 이벤트를 집계해 리포트 복사와 PDF 다운로드 흐름으로 넘깁니다.</li>
+                </ul>
+                <div class="topic-chips"><span>severity explain</span><span>root cause</span><span>recommended fix</span><span>PDF</span></div>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="docs-card" id="security">
+          <div class="section-heading">
+            <h2>보안</h2>
+            <span class="section-pill">Security</span>
+          </div>
+          <div class="docs-split" data-docs-group>
+            <div class="topic-list" aria-label="보안 목록">
+              <button class="topic-button is-active" type="button" data-docs-topic="sec-auth">
+                <span class="topic-number">1</span>
+                <span class="topic-main"><strong>Auth & Isolation</strong><span>session scope</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="sec-admin">
+                <span class="topic-number">2</span>
+                <span class="topic-main"><strong>Admin Token</strong><span>x-admin-token</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="sec-grafana">
+                <span class="topic-number">3</span>
+                <span class="topic-main"><strong>Grafana Boundary</strong><span>proxy / datasource</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="sec-check">
+                <span class="topic-number">4</span>
+                <span class="topic-main"><strong>Demo Checklist</strong><span>before public share</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+            </div>
+            <div class="topic-detail-wrap">
+              <article class="topic-detail is-active" data-docs-panel="sec-auth">
+                <span class="kicker">Session Scope</span>
+                <h3>사용자 화면은 로그인 세션과 클러스터 소유권을 기준으로 분리합니다.</h3>
+                <ul>
+                  <li>일반 UI는 로그인 세션 쿠키를 기준으로 사용자와 클러스터를 식별합니다.</li>
+                  <li>클러스터 목록, 런타임 이벤트, 이벤트 상세, AI Report는 로그인한 사용자의 클러스터 범위로만 조회됩니다.</li>
+                  <li>개발 로그인은 로컬/데모 모드에서만 켜고, 운영 환경에서는 Google OAuth 또는 별도 SSO로 제한합니다.</li>
+                </ul>
+              </article>
+              <article class="topic-detail" data-docs-panel="sec-admin">
+                <span class="kicker">X-Admin-Token</span>
+                <h3>관리자 경로는 공개 전 토큰 회전이 먼저입니다.</h3>
+                <ul>
+                  <li><code>/admin</code> API는 <code>X-Admin-Token</code>으로 보호됩니다.</li>
+                  <li><code>ADMIN_TOKEN</code>은 기본값이 아닌 강한 랜덤 값으로 교체해야 합니다.</li>
+                  <li>토큰 회전은 Grafana/SQLite 데이터를 삭제하지 않지만, 기존 관리자 Grafana 프록시 세션은 무효화될 수 있습니다.</li>
+                  <li>토큰은 장기 공유 문서에 저장하지 않고, 가능하면 세션 단위로 관리합니다.</li>
+                </ul>
+              </article>
+              <article class="topic-detail" data-docs-panel="sec-grafana">
+                <span class="kicker">Grafana Boundary</span>
+                <h3>Grafana 직접 공개 대신 KubeOwl 프록시와 datasource scope를 사용합니다.</h3>
+                <ul>
+                  <li>Grafana는 <code>/grafana-ui/</code> 인증 프록시 뒤에 둡니다.</li>
+                  <li>사용자별 Grafana org와 datasource를 분리해 대시보드 접근 경계를 만듭니다.</li>
+                  <li>Prometheus datasource 요청은 사용자 클러스터 기준으로 제한합니다.</li>
+                  <li>Grafana Live, annotations, datasource query는 프록시 경로에서 정상 동작해야 합니다.</li>
+                </ul>
+              </article>
+              <article class="topic-detail" data-docs-panel="sec-check">
+                <span class="kicker">Before Public Share</span>
+                <h3>공개 데모 전에 토큰, zrok, Grafana, 데이터 격리를 확인합니다.</h3>
+                <ul>
+                  <li>관리자 토큰이 기본값이 아닌지 확인합니다.</li>
+                  <li><code>PUBLIC_BASE_URL</code>과 zrok 공유 주소가 의도한 도메인을 가리키는지 확인합니다.</li>
+                  <li>Grafana가 직접 public URL로 노출되지 않고 KubeOwl 프록시 뒤에 있는지 확인합니다.</li>
+                  <li>테스트 클러스터와 사용자 클러스터의 데이터가 섞이지 않는지 점검합니다.</li>
+                </ul>
+                <div class="terminal-window" aria-label="Security check terminal example">
+                  <div class="terminal-bar"><span></span><span></span><span></span><strong class="terminal-title">security-check</strong></div>
+                  <pre class="terminal-body"><code><span class="prompt">$</span> kubectl get secret ai-classifier-admin -n compliance-system
+<span class="warn">verify ADMIN_TOKEN is rotated</span>
+
+<span class="prompt">$</span> curl -I https://kubeowl.example/admin
+HTTP/2 200
+
+<span class="prompt">$</span> curl https://kubeowl.example/admin/api/clusters
+{"error":"admin token required"}
+
+<span class="prompt">$</span> open https://kubeowl.example/grafana-ui/
+<span class="ok">redirected through KubeOwl auth proxy</span></code></pre>
+                </div>
+              </article>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+    <script>
+      document.querySelectorAll("[data-docs-group]").forEach((group) => {
+        const buttons = group.querySelectorAll("[data-docs-topic]");
+        const panels = group.querySelectorAll("[data-docs-panel]");
+        const activate = (id) => {
+          buttons.forEach((button) => button.classList.toggle("is-active", button.dataset.docsTopic === id));
+          panels.forEach((panel) => panel.classList.toggle("is-active", panel.dataset.docsPanel === id));
+        };
+        buttons.forEach((button) => {
+          button.addEventListener("mouseenter", () => activate(button.dataset.docsTopic));
+          button.addEventListener("focus", () => activate(button.dataset.docsTopic));
+          button.addEventListener("click", () => activate(button.dataset.docsTopic));
+        });
+      });
+    </script>
+  </body>
+</html>

@@ -193,6 +193,11 @@ function formatErrorMessage(value) {
 }
 
 function activateTab(tabName) {
+  const landingIntro = $("#landingIntro");
+  if (landingIntro) {
+    landingIntro.hidden = true;
+  }
+  document.querySelector(".landing-top-cue")?.classList.remove("is-visible");
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.toggle("is-active", tab.dataset.tab === tabName);
   });
@@ -205,6 +210,23 @@ function activateTab(tabName) {
   if (activeTab && pageTitle) {
     pageTitle.textContent = activeTab.textContent.trim();
   }
+}
+
+function showLandingHome() {
+  const landingIntro = $("#landingIntro");
+  if (!landingIntro) {
+    return;
+  }
+  landingIntro.hidden = false;
+  document.querySelectorAll(".panel").forEach((panel) => {
+    panel.classList.remove("is-active");
+  });
+  document.querySelectorAll(".tab").forEach((tab) => {
+    tab.classList.remove("is-active");
+  });
+  $("#pageTitle").textContent = "Home";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  startLandingTypewriter();
 }
 
 function escapeHtml(value) {
@@ -595,14 +617,24 @@ function renderViolationAnalysis(result, payload) {
     </div>
     <h2>${escapeHtml(payload.rule || result.summary)}</h2>
     <div class="analysis-context-grid" aria-label="analysis target context">${analysisContextRows(payload)}</div>
-    <h3>심각도 설명</h3>
-    <p>${escapeHtml(result.severity_explanation || result.reason)}</p>
-    <h3>원인 요약</h3>
-    <p>${escapeHtml(result.root_cause)}</p>
-    <h3>권장 수정</h3>
-    <p>${escapeHtml(result.recommended_fix || result.remediation)}</p>
-    <h3>구체적 조치</h3>
-    <p>${escapeHtml(result.remediation)}</p>
+    <div class="analysis-insight-grid">
+      <section class="analysis-insight-card">
+        <h3>심각도 설명</h3>
+        <p>${escapeHtml(result.severity_explanation || result.reason)}</p>
+      </section>
+      <section class="analysis-insight-card">
+        <h3>원인 요약</h3>
+        <p>${escapeHtml(result.root_cause)}</p>
+      </section>
+      <section class="analysis-insight-card">
+        <h3>권장 수정</h3>
+        <p>${escapeHtml(result.recommended_fix || result.remediation)}</p>
+      </section>
+      <section class="analysis-insight-card">
+        <h3>구체적 조치</h3>
+        <p>${escapeHtml(result.remediation)}</p>
+      </section>
+    </div>
     ${renderYamlSnippet(latestYamlSnippet)}
     ${actions ? `<h3>체크리스트</h3><ul>${actions}</ul>` : ""}
     ${result.llm_error ? `<p>${escapeHtml(result.llm_error)}</p>` : ""}
@@ -954,15 +986,14 @@ async function refreshRuntimeEvents() {
     return;
   }
   ensureRuntimeUsabilityControls();
-  const hideInfra = $("#hideInfraRuntimeNamespaces")?.checked ?? false;
   const limit = $("#runtimeEventLimit")?.value || DEFAULT_RUNTIME_LIMIT;
   const query = new URLSearchParams({
     limit,
     cluster: $("#runtimeCluster").value,
-    cluster_kind: $("#runtimeClusterKind").value,
+    cluster_kind: "",
     source: $("#runtimeSource").value,
-    include_legacy: $("#includeLegacyEvents").checked ? "true" : "false",
-    exclude_infra: hideInfra ? "true" : "false",
+    include_legacy: "false",
+    exclude_infra: "false",
   });
   container.innerHTML = `
     <article class="event-row">
@@ -988,11 +1019,7 @@ async function refreshRuntimeEvents() {
     `;
     return;
   }
-  const hiddenSummary = hideInfra
-    ? `<article class="event-row event-row-note"><span class="badge ready">filtered</span><p>infra namespace 숨김 활성화</p></article>`
-    : "";
   container.innerHTML =
-    hiddenSummary +
     visibleEvents
     .map(
       (event) => `
@@ -1012,10 +1039,10 @@ async function refreshRuntimeEvents() {
 }
 
 function ensureRuntimeUsabilityControls() {
-  if ($("#runtimeEventLimit") && $("#hideInfraRuntimeNamespaces")) {
+  if ($("#runtimeEventLimit")) {
     return;
   }
-  const anchor = $("#includeLegacyEvents");
+  const anchor = $("#runtimeSource");
   if (!anchor) {
     return;
   }
@@ -1023,7 +1050,7 @@ function ensureRuntimeUsabilityControls() {
   wrapper.insertAdjacentHTML(
     "afterend",
     `
-      <label>
+      <label class="runtime-limit-field">
         표시 개수
         <select id="runtimeEventLimit">
           <option value="20">20</option>
@@ -1031,14 +1058,14 @@ function ensureRuntimeUsabilityControls() {
           <option value="100">100</option>
         </select>
       </label>
-      <label class="toggle-row">
-        <input id="hideInfraRuntimeNamespaces" type="checkbox" checked />
-        <span class="toggle-control" aria-hidden="true"></span>
-        <span>infra namespace 숨김</span>
-      </label>
     `,
   );
-  ["#runtimeEventLimit", "#hideInfraRuntimeNamespaces"].forEach((selector) => {
+  const actions = $(".runtime-actions");
+  const limitField = $("#runtimeEventLimit")?.closest("label");
+  if (actions && limitField) {
+    limitField.insertAdjacentElement("afterend", actions);
+  }
+  ["#runtimeEventLimit"].forEach((selector) => {
     $(selector).addEventListener("change", () => {
       refreshRuntimeEvents().catch((error) => {
         showInlineAlert(error.message);
@@ -1079,7 +1106,10 @@ function renderLandingIntro() {
   landingIntro.hidden = isAuthenticated;
   $("#landingLoginLink").hidden = isAuthenticated || !googleConfigured;
   $("#landingDevLoginLink").hidden = isAuthenticated || !devEnabled;
-  $("#landingLoginNote").hidden = isAuthenticated || (!googleConfigured && !devEnabled);
+  const landingLoginNote = $("#landingLoginNote");
+  if (landingLoginNote) {
+    landingLoginNote.hidden = isAuthenticated || (!googleConfigured && !devEnabled);
+  }
   $("#landingNoLoginMessage").hidden = isAuthenticated || googleConfigured || devEnabled;
   if (!isAuthenticated) {
     startLandingTypewriter();
@@ -1111,6 +1141,48 @@ function startLandingTypewriter() {
     window.setTimeout(typeNext, delay);
   };
   window.setTimeout(typeNext, 220);
+}
+
+function setupLandingScrollAnimation() {
+  const items = document.querySelectorAll(".landing-showcase .showcase-card, .landing-showcase .showcase-code span");
+  const topCue = document.querySelector(".landing-top-cue");
+  const downCue = document.querySelector(".landing-scroll-cue");
+  const showcase = document.querySelector("#landingShowcase");
+  const updateLandingCues = () => {
+    if (!topCue && !downCue) {
+      return;
+    }
+    const landingVisible = !$("#landingIntro")?.hidden;
+    const showcasePoint = showcase ? Math.max(180, showcase.offsetTop - window.innerHeight * 0.35) : Math.max(240, window.innerHeight * 0.55);
+    const reachedShowcase = window.scrollY > showcasePoint;
+    topCue?.classList.toggle("is-visible", landingVisible && reachedShowcase);
+    downCue?.classList.toggle("is-hidden", !landingVisible || reachedShowcase);
+  };
+  window.addEventListener("scroll", updateLandingCues, { passive: true });
+  window.addEventListener("resize", updateLandingCues);
+  updateLandingCues();
+  if (!items.length) {
+    return;
+  }
+  if (!("IntersectionObserver" in window)) {
+    items.forEach((item) => item.classList.add("is-visible"));
+    return;
+  }
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        }
+      });
+    },
+    { threshold: 0.18, rootMargin: "0px 0px -8% 0px" },
+  );
+  items.forEach((item, index) => {
+    item.style.setProperty("--reveal-delay", `${Math.min(index * 70, 560)}ms`);
+    observer.observe(item);
+  });
 }
 
 function renderRuntimeClusterFilter() {
@@ -1163,7 +1235,10 @@ function renderUserClusters() {
                   <button class="danger" data-user-purge="${escapeHtml(cluster.id || "")}">영구 삭제</button>
                 `
                 : `
-                  <button class="secondary" data-user-grafana="${escapeHtml(cluster.id || "")}">Grafana</button>
+                  <button class="secondary grafana-action-button" data-user-grafana="${escapeHtml(cluster.id || "")}">
+                    <span class="devicon--grafana" aria-hidden="true"></span>
+                    Grafana
+                  </button>
                   <button data-user-rotate="${escapeHtml(cluster.id || "")}">토큰 재발급</button>
                   <button class="danger-icon-button" data-user-delete="${escapeHtml(cluster.id || "")}" aria-label="휴지통으로 이동" title="휴지통으로 이동">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1821,7 +1896,7 @@ $("#slackClusterToggles").addEventListener("change", (event) => {
     });
 });
 
-["#runtimeCluster", "#runtimeClusterKind", "#runtimeSource", "#includeLegacyEvents"].forEach((selector) => {
+["#runtimeCluster", "#runtimeSource"].forEach((selector) => {
   $(selector).addEventListener("change", () => {
     refreshRuntimeEvents().catch((error) => {
       showInlineAlert(error.message);
@@ -1944,6 +2019,12 @@ $("#themeToggle").addEventListener("click", () => {
   toggleTheme();
 });
 
+$("#sidebarHomeButton")?.addEventListener("click", () => {
+  showLandingHome();
+  $(".sidebar")?.classList.remove("is-open");
+  $("#navMenuToggle")?.setAttribute("aria-expanded", "false");
+});
+
 $("#navMenuToggle").addEventListener("click", () => {
   const sidebar = $(".sidebar");
   const isOpen = sidebar.classList.toggle("is-open");
@@ -1963,6 +2044,8 @@ function openPublicPolicyGenerator() {
 $("#landingPolicyButton").addEventListener("click", () => {
   openPublicPolicyGenerator();
 });
+
+setupLandingScrollAnimation();
 
 async function loadConfig() {
   const response = await fetch("/config");

@@ -233,6 +233,7 @@ app = FastAPI(
     title="Compliance AI Server",
     version="0.1.0",
     description="Falco 이벤트 분류 및 컴플라이언스 AI API",
+    docs_url="/api-docs",
 )
 app.state.limiter = limiter
 app.add_middleware(GrafanaLiveWebSocketMiddleware)
@@ -911,6 +912,12 @@ def apply_generated_policy_to_cluster(
 def admin() -> FileResponse:
     # 관리자 콘솔
     return FileResponse(STATIC_DIR / "admin.html")
+
+
+@app.get("/docs", response_class=FileResponse)
+def docs() -> FileResponse:
+    # 운영 문서
+    return FileResponse(STATIC_DIR / "docs.html")
 
 
 @app.get("/admin/api/clusters")

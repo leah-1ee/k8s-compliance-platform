@@ -3,87 +3,224 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Compliance Admin</title>
+    <title>KubeOwl Admin</title>
     <style>
       :root {
+        color-scheme: light;
+        --bg: #ecfbff;
+        --panel: rgba(255, 255, 255, 0.88);
+        --panel-strong: #ffffff;
+        --line: rgba(8, 119, 242, 0.18);
+        --line-strong: rgba(8, 119, 242, 0.32);
+        --text: #1f2937;
+        --muted: #5f6b7a;
+        --accent: #0877f2;
+        --accent-2: #56ccf2;
+        --danger: #cf222e;
+        --soft: #f4fbff;
+        --code: #08111f;
+        --shadow: 0 22px 60px rgba(8, 119, 242, 0.11);
+        --shadow-soft: 0 12px 28px rgba(15, 23, 42, 0.07);
+      }
+      body[data-theme="dark"] {
         color-scheme: dark;
-        --bg: #111820;
-        --panel: #151f29;
-        --line: #304050;
+        --bg: #08111f;
+        --panel: rgba(15, 23, 42, 0.9);
+        --panel-strong: #111827;
+        --line: rgba(125, 211, 252, 0.2);
+        --line-strong: rgba(125, 211, 252, 0.34);
         --text: #e5edf6;
-        --muted: #9aa8b8;
-        --accent: #58a6ff;
-        --danger: #ff6b6b;
+        --muted: #a8b3c4;
+        --accent: #60a5fa;
+        --accent-2: #38bdf8;
+        --danger: #f87171;
+        --soft: #111827;
+        --code: #050b16;
+        --shadow: 0 22px 60px rgba(0, 0, 0, 0.24);
+        --shadow-soft: 0 12px 28px rgba(0, 0, 0, 0.22);
+      }
+      * {
+        box-sizing: border-box;
       }
       body {
         margin: 0;
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: var(--bg);
+        font-family: SUIT, Pretendard, "Noto Sans KR", ui-sans-serif, system-ui, sans-serif;
+        background:
+          radial-gradient(circle at 18% -10%, rgba(86, 204, 242, 0.38), transparent 34%),
+          linear-gradient(135deg, #f8fdff 0%, #e7faff 48%, #d8f3ff 100%);
         color: var(--text);
       }
+      body[data-theme="dark"] {
+        background:
+          radial-gradient(circle at 18% -10%, rgba(56, 189, 248, 0.22), transparent 34%),
+          linear-gradient(135deg, #050b16 0%, #08111f 48%, #0d2744 100%);
+      }
       header {
-        padding: 24px 32px;
-        border-bottom: 1px solid var(--line);
+        position: relative;
+        overflow: hidden;
+        margin: 24px 32px 0;
+        padding: 28px 32px;
+        border: 1px solid rgba(255, 255, 255, 0.36);
+        border-radius: 18px;
+        background:
+          radial-gradient(circle at 80% 10%, rgba(86, 204, 242, 0.45), transparent 30%),
+          linear-gradient(135deg, #07306f, #0877f2 58%, #08aeea);
+        color: #ffffff;
+        box-shadow: 0 26px 70px rgba(8, 119, 242, 0.24);
+      }
+      header::after {
+        content: "";
+        position: absolute;
+        inset: auto -60px -100px auto;
+        width: 260px;
+        height: 260px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+      }
+      .admin-topline {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+      }
+      .admin-title-block {
+        min-width: 0;
+      }
+      .theme-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 122px;
+        border-color: rgba(255, 255, 255, 0.28);
+        background: rgba(255, 255, 255, 0.14);
+        color: #ffffff;
+        backdrop-filter: blur(16px);
+      }
+      .theme-switch {
+        position: relative;
+        width: 42px;
+        height: 24px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.28);
+      }
+      .theme-switch::after {
+        content: "";
+        position: absolute;
+        top: 4px;
+        left: 4px;
+        width: 16px;
+        height: 16px;
+        border-radius: 999px;
+        background: #ffffff;
+        transition: transform 0.18s ease;
+      }
+      body[data-theme="dark"] .theme-switch::after {
+        transform: translateX(18px);
       }
       main {
         display: grid;
         gap: 20px;
-        padding: 28px 32px 48px;
+        padding: 24px 32px 48px;
       }
       section {
         border: 1px solid var(--line);
-        border-radius: 8px;
+        border-radius: 14px;
         background: var(--panel);
-        padding: 20px;
+        padding: 22px;
+        box-shadow: var(--shadow-soft);
+        backdrop-filter: blur(18px);
+      }
+      body[data-theme="dark"] section {
+        background: var(--panel);
       }
       h1, h2 {
         margin: 0;
       }
       h1 {
-        font-size: 28px;
+        position: relative;
+        z-index: 1;
+        font-size: clamp(30px, 4vw, 42px);
+        letter-spacing: -0.04em;
+      }
+      header p {
+        position: relative;
+        z-index: 1;
+        max-width: 620px;
+        margin: 10px 0 0;
+        color: rgba(255, 255, 255, 0.78);
+        font-weight: 720;
       }
       h2 {
         margin-bottom: 16px;
         font-size: 20px;
+        letter-spacing: -0.02em;
       }
       label {
         display: grid;
         gap: 8px;
         color: var(--muted);
-        font-weight: 700;
+        font-weight: 820;
       }
       input, select, textarea {
         width: 100%;
-        box-sizing: border-box;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        background: #0c1218;
+        border: 1px solid var(--line-strong);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.92);
         color: var(--text);
-        padding: 12px;
+        padding: 13px 14px;
         font: inherit;
+        font-weight: 760;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74);
+      }
+      body[data-theme="dark"] input,
+      body[data-theme="dark"] select {
+        background: #08111f;
+        color: var(--text);
+        box-shadow: none;
+      }
+      input:focus, select:focus, textarea:focus {
+        outline: 3px solid rgba(8, 119, 242, 0.16);
+        border-color: var(--accent);
       }
       textarea {
-        min-height: 180px;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        min-height: 220px;
+        border-color: rgba(125, 211, 252, 0.24);
+        background: var(--code);
+        color: #dbeafe;
+        font-family: "SFMono-Regular", Menlo, Consolas, monospace;
         resize: vertical;
       }
       button {
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        background: #1d2a37;
+        border: 1px solid var(--line-strong);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.78);
         color: var(--text);
-        padding: 10px 14px;
-        font-weight: 800;
+        padding: 11px 15px;
+        font-weight: 880;
         cursor: pointer;
+        transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+      }
+      body[data-theme="dark"] button {
+        background: rgba(15, 23, 42, 0.86);
+        color: var(--text);
+      }
+      button:hover {
+        transform: translateY(-1px);
+        border-color: rgba(8, 119, 242, 0.48);
+        box-shadow: 0 12px 24px rgba(8, 119, 242, 0.12);
       }
       button.primary {
-        background: var(--accent);
-        color: #07111c;
-        border-color: var(--accent);
+        border-color: transparent;
+        background: linear-gradient(135deg, var(--accent), #0ea5e9);
+        color: #ffffff;
+        box-shadow: 0 14px 28px rgba(8, 119, 242, 0.22);
       }
       button.danger {
-        border-color: rgba(255, 107, 107, 0.6);
-        color: #ffdada;
+        border-color: rgba(207, 34, 46, 0.34);
+        background: rgba(207, 34, 46, 0.08);
+        color: var(--danger);
       }
       .row {
         display: flex;
@@ -94,15 +231,41 @@
       .row label {
         flex: 1 1 280px;
       }
-      .cluster {
+      .cluster-create-row label:first-child {
+        flex: 1 1 360px;
+      }
+      .cluster-create-row label.cluster-kind-field {
+        flex: 0 1 220px;
+      }
+      .cluster-kind-field select {
+        min-height: 54px;
+      }
+      .cluster, .user {
         display: grid;
         gap: 12px;
-        border-top: 1px solid var(--line);
-        padding: 16px 0;
+        margin-top: 12px;
+        border: 1px solid rgba(8, 119, 242, 0.16);
+        border-radius: 12px;
+        background:
+          radial-gradient(circle at 0% 0%, rgba(86, 204, 242, 0.12), transparent 28%),
+          rgba(255, 255, 255, 0.72);
+        padding: 16px;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
       }
-      .cluster:first-child {
-        border-top: 0;
-        padding-top: 0;
+      body[data-theme="dark"] .cluster,
+      body[data-theme="dark"] .user {
+        background:
+          radial-gradient(circle at 0% 0%, rgba(56, 189, 248, 0.1), transparent 28%),
+          rgba(15, 23, 42, 0.76);
+      }
+      .cluster:first-child,
+      .user:first-child {
+        margin-top: 0;
+      }
+      .cluster strong,
+      .user strong {
+        font-size: 17px;
+        letter-spacing: -0.02em;
       }
       .summary-grid {
         display: grid;
@@ -110,87 +273,125 @@
         gap: 12px;
       }
       .summary-card {
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: #0c1218;
-        padding: 14px;
+        border: 1px solid rgba(8, 119, 242, 0.18);
+        border-radius: 13px;
+        background:
+          radial-gradient(circle at 18% 0%, rgba(86, 204, 242, 0.22), transparent 34%),
+          linear-gradient(180deg, #ffffff, #f5fcff);
+        padding: 16px;
+      }
+      body[data-theme="dark"] .summary-card {
+        background:
+          radial-gradient(circle at 18% 0%, rgba(56, 189, 248, 0.16), transparent 34%),
+          linear-gradient(180deg, #111827, #0f172a);
+      }
+      body[data-theme="dark"] .summary-card strong {
+        color: #f8fafc;
       }
       .summary-card strong {
         display: block;
         margin-top: 6px;
-        font-size: 24px;
-      }
-      .user {
-        display: grid;
-        gap: 12px;
-        border-top: 1px solid var(--line);
-        padding: 16px 0;
-      }
-      .user:first-child {
-        border-top: 0;
-        padding-top: 0;
+        color: #0f172a;
+        font-size: 30px;
+        letter-spacing: -0.04em;
       }
       .user-clusters {
         display: grid;
-        gap: 8px;
+        gap: 10px;
       }
       .user-cluster {
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: #0c1218;
-        padding: 10px 12px;
+        border: 1px solid rgba(8, 119, 242, 0.16);
+        border-radius: 11px;
+        background: #f8fdff;
+        padding: 12px 14px;
+      }
+      body[data-theme="dark"] .user-cluster {
+        background: #08111f;
       }
       .meta {
         color: var(--muted);
+        line-height: 1.55;
+        overflow-wrap: anywhere;
       }
       .pill {
         display: inline-flex;
         align-items: center;
-        border: 1px solid var(--line);
+        border: 1px solid rgba(8, 119, 242, 0.22);
         border-radius: 999px;
-        padding: 3px 8px;
-        color: var(--muted);
+        background: rgba(8, 119, 242, 0.08);
+        padding: 4px 10px;
+        color: var(--accent);
         font-size: 12px;
-        font-weight: 800;
+        font-weight: 860;
       }
       .status-active {
-        color: #7ee787;
+        color: #128a3d;
+        font-weight: 860;
       }
       .status-disabled {
         color: var(--danger);
+        font-weight: 860;
       }
       .status-deleted {
-        color: #ffb86b;
+        color: #b7791f;
+        font-weight: 860;
       }
       .filters {
         display: grid;
-        grid-template-columns: minmax(240px, 2fr) repeat(2, minmax(160px, 1fr)) auto;
+        grid-template-columns: minmax(240px, 2fr) minmax(150px, 0.65fr) auto;
         gap: 12px;
         align-items: end;
         margin-bottom: 16px;
+        padding: 14px;
+        border: 1px solid rgba(8, 119, 242, 0.14);
+        border-radius: 12px;
+        background: rgba(244, 251, 255, 0.7);
+      }
+      body[data-theme="dark"] .filters {
+        background: rgba(15, 23, 42, 0.62);
       }
       .actions {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
       }
+      .actions button {
+        padding: 9px 13px;
+        border-radius: 9px;
+      }
       .danger-note {
-        color: #ffb86b;
-        font-weight: 700;
+        color: #b45309;
+        font-weight: 820;
       }
       #message {
         min-height: 24px;
+        margin-bottom: 0;
         color: var(--muted);
+        font-weight: 760;
       }
       @media (max-width: 900px) {
+        header,
+        main {
+          margin-left: 16px;
+          margin-right: 16px;
+          padding-left: 18px;
+          padding-right: 18px;
+        }
+        main {
+          margin: 0;
+        }
         .summary-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
       }
       @media (max-width: 640px) {
-        .summary-grid {
-          grid-template-columns: 1fr;
+        header {
+          margin: 16px 12px 0;
         }
+        main {
+          padding: 16px 12px 36px;
+        }
+        .summary-grid,
         .filters {
           grid-template-columns: 1fr;
         }
@@ -199,7 +400,16 @@
   </head>
   <body>
     <header>
-      <h1>Compliance Admin</h1>
+      <div class="admin-topline">
+        <div class="admin-title-block">
+          <h1>KubeOwl Admin</h1>
+          <p>클러스터 토큰, 사용자 상태, 수집 이벤트를 한 곳에서 점검하는 운영자 콘솔입니다.</p>
+        </div>
+        <button class="theme-toggle" id="adminThemeToggle" type="button" aria-pressed="false">
+          <span id="adminThemeLabel">Dark</span>
+          <span class="theme-switch" aria-hidden="true"></span>
+        </button>
+      </div>
     </header>
     <main>
       <section>
@@ -224,16 +434,15 @@
 
       <section>
         <h2>클러스터 등록</h2>
-        <div class="row">
+        <div class="row cluster-create-row">
           <label>
             클러스터 이름
             <input id="clusterName" placeholder="school-cloud" />
           </label>
-          <label>
+          <label class="cluster-kind-field">
             구분
             <select id="clusterKind">
               <option value="customer">사용자 클러스터</option>
-              <option value="demo">데모/테스트 클러스터</option>
             </select>
           </label>
           <button class="primary" id="createCluster">등록</button>
@@ -273,7 +482,7 @@
         <div class="filters">
           <label>
             검색
-            <input id="clusterSearch" placeholder="email, cluster, status, kind, last_seen" />
+            <input id="clusterSearch" placeholder="email, cluster, status, last_seen" />
           </label>
           <label>
             상태
@@ -282,16 +491,6 @@
               <option value="active">active</option>
               <option value="disabled">disabled</option>
               <option value="deleted">deleted</option>
-            </select>
-          </label>
-          <label>
-            구분
-            <select id="kindFilter">
-              <option value="">전체</option>
-              <option value="customer">customer</option>
-              <option value="demo">demo</option>
-              <option value="source">source</option>
-              <option value="legacy">legacy</option>
             </select>
           </label>
           <button id="applyClusterFilters">필터 적용</button>
@@ -311,9 +510,14 @@
       const clusterKind = document.querySelector("#clusterKind");
       const clusterSearch = document.querySelector("#clusterSearch");
       const statusFilter = document.querySelector("#statusFilter");
-      const kindFilter = document.querySelector("#kindFilter");
+      const adminThemeToggle = document.querySelector("#adminThemeToggle");
+      const adminThemeLabel = document.querySelector("#adminThemeLabel");
 
       tokenInput.value = localStorage.getItem("adminToken") || "";
+      const savedTheme = localStorage.getItem("adminTheme") || "light";
+      document.body.dataset.theme = savedTheme;
+      adminThemeToggle.setAttribute("aria-pressed", savedTheme === "dark" ? "true" : "false");
+      adminThemeLabel.textContent = savedTheme === "dark" ? "Light" : "Dark";
 
       function adminHeaders() {
         return {
@@ -352,6 +556,15 @@
         return body;
       }
 
+      function displayClusterStatus(status) {
+        const labels = {
+          active: "활성",
+          disabled: "비활성",
+          deleted: "휴지통",
+        };
+        return labels[status] || status;
+      }
+
       function renderClusters(clusters) {
         if (!clusters.length) {
           clustersEl.innerHTML = '<p class="meta">조건에 맞는 클러스터가 없습니다.</p>';
@@ -369,11 +582,6 @@
             `
             : `
               <button data-rotate="${escapeHtml(cluster.id)}">토큰 재발급</button>
-              ${
-                (cluster.kind || "customer") === "demo"
-                  ? `<button data-mark-customer="${escapeHtml(cluster.id)}">사용자 클러스터로 전환</button>`
-                  : `<button data-mark-demo="${escapeHtml(cluster.id)}">데모로 분리</button>`
-              }
               <button data-disable="${escapeHtml(cluster.id)}">비활성화</button>
               <button class="danger" data-trash="${escapeHtml(cluster.id)}">휴지통</button>
             `;
@@ -383,8 +591,7 @@
               <span class="meta">
                 id=${escapeHtml(cluster.id)} ·
                 owner=${escapeHtml(cluster.user_email || "admin/unassigned")} ·
-                kind=${escapeHtml(cluster.kind || "customer")} ·
-                status=<span class="status-${escapeHtml(status)}">${escapeHtml(status)}</span> ·
+                status=<span class="status-${escapeHtml(status)}">${escapeHtml(displayClusterStatus(status))}</span> ·
                 slack=${cluster.slack_enabled === false ? "off" : "on"} ·
                 last_seen=${escapeHtml(cluster.last_seen_at || "-")} ·
                 events=${escapeHtml(cluster.event_count || 0)}
@@ -442,8 +649,7 @@
               <div class="user-cluster">
                 <strong>${escapeHtml(cluster.name)}</strong>
                 <span class="meta">
-                  <span class="pill">${escapeHtml(cluster.status)}</span>
-                  kind=${escapeHtml(cluster.kind || "customer")} ·
+                  <span class="pill">${escapeHtml(displayClusterStatus(cluster.status || "active"))}</span>
                   slack=${cluster.slack_enabled === false ? "off" : "on"} ·
                   last_seen=${escapeHtml(cluster.last_seen_at || "-")} ·
                   events=${escapeHtml(cluster.event_count || 0)}
@@ -472,9 +678,6 @@
         }
         if (statusFilter.value) {
           params.set("status", statusFilter.value);
-        }
-        if (kindFilter.value) {
-          params.set("kind", kindFilter.value);
         }
         return `/admin/api/clusters?${params.toString()}`;
       }
@@ -558,8 +761,6 @@
       clustersEl.addEventListener("click", async (event) => {
         const rotateId = event.target.dataset.rotate;
         const disableId = event.target.dataset.disable;
-        const markDemoId = event.target.dataset.markDemo;
-        const markCustomerId = event.target.dataset.markCustomer;
         const trashId = event.target.dataset.trash;
         const restoreId = event.target.dataset.restore;
         const purgeId = event.target.dataset.purge;
@@ -569,16 +770,6 @@
             installCommand.value = body.cluster.install_command || "";
             await loadAdminDashboard();
             setMessage("토큰을 재발급했습니다. 설치 명령어는 지금만 표시됩니다.");
-          }
-          if (markDemoId) {
-            await requestJson(`/admin/api/clusters/${markDemoId}/mark-demo`, { method: "POST" });
-            await loadAdminDashboard();
-            setMessage("클러스터를 데모/테스트 클러스터로 분리했습니다.");
-          }
-          if (markCustomerId) {
-            await requestJson(`/admin/api/clusters/${markCustomerId}/mark-customer`, { method: "POST" });
-            await loadAdminDashboard();
-            setMessage("클러스터를 사용자 클러스터로 전환했습니다.");
           }
           if (disableId) {
             if (!window.confirm("이 클러스터를 비활성화할까요? 새 이벤트 수집과 정책 적용 흐름이 중단될 수 있습니다.")) {
@@ -631,6 +822,14 @@
       document.querySelector("#copyInstall").addEventListener("click", async () => {
         await navigator.clipboard.writeText(installCommand.value);
         setMessage("설치 명령어를 복사했습니다.");
+      });
+
+      adminThemeToggle.addEventListener("click", () => {
+        const nextTheme = document.body.dataset.theme === "dark" ? "light" : "dark";
+        document.body.dataset.theme = nextTheme;
+        localStorage.setItem("adminTheme", nextTheme);
+        adminThemeToggle.setAttribute("aria-pressed", nextTheme === "dark" ? "true" : "false");
+        adminThemeLabel.textContent = nextTheme === "dark" ? "Light" : "Dark";
       });
 
       if (tokenInput.value.trim()) {
