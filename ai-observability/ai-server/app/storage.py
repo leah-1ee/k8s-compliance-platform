@@ -178,8 +178,9 @@ def upsert_user(provider: str, provider_subject: str, email: str, name: str = ""
                 (user_id, normalized_provider, normalized_subject, normalized_email, name, picture, now),
             )
         else:
-            if str(row["status"] or "active") == "deleted":
-                raise ValueError("deleted user account cannot sign in")
+            status = str(row["status"] or "active")
+            if status in {"deleted", "disabled"}:
+                raise ValueError(f"{status} user account cannot sign in")
             user_id = row["id"]
             conn.execute(
                 """
@@ -374,8 +375,11 @@ def save_slack_settings(user_id: str, webhook_url: str) -> dict[str, Any]:
 def create_session(user_id: str, ttl_days: int = 30) -> str:
     init_db()
     user = get_user(user_id)
-    if user is None or str(user.get("status") or "active") == "deleted":
-        raise ValueError("deleted user account cannot sign in")
+    if user is None:
+        raise ValueError("user account cannot sign in")
+    status = str(user.get("status") or "active")
+    if status != "active":
+        raise ValueError(f"{status} user account cannot sign in")
     token = secrets.token_urlsafe(32)
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(days=max(1, int(ttl_days or 30)))
@@ -402,7 +406,7 @@ def get_user_by_session(token: str) -> dict[str, Any] | None:
                    users.picture, users.status, users.deleted_at, users.created_at, users.last_login_at
             FROM sessions
             JOIN users ON users.id = sessions.user_id
-            WHERE sessions.token_hash = ? AND sessions.expires_at > ? AND users.status != 'deleted'
+            WHERE sessions.token_hash = ? AND sessions.expires_at > ? AND users.status = 'active'
             """,
             (_token_hash(token), now),
         ).fetchone()
@@ -466,6 +470,48 @@ def restore_user(user_id: str) -> dict[str, Any] | None:
             SET status = 'active',
                 deleted_at = NULL
             WHERE id = ? AND status = 'deleted'
+            """,
+            (normalized_user_id,),
+        )
+    if cursor.rowcount == 0:
+        return None
+    return get_user(normalized_user_id)
+
+
+def disable_user(user_id: str) -> dict[str, Any] | None:
+    init_db()
+    normalized_user_id = str(user_id or "").strip()
+    if not normalized_user_id:
+        return None
+    with _LOCK, _connect() as conn:
+        row = conn.execute("SELECT id FROM users WHERE id = ? AND status != 'deleted'", (normalized_user_id,)).fetchone()
+        if row is None:
+            return None
+        conn.execute("DELETE FROM sessions WHERE user_id = ?", (normalized_user_id,))
+        conn.execute(
+            """
+            UPDATE users
+            SET status = 'disabled',
+                deleted_at = NULL
+            WHERE id = ? AND status != 'deleted'
+            """,
+            (normalized_user_id,),
+        )
+    return get_user(normalized_user_id)
+
+
+def enable_user(user_id: str) -> dict[str, Any] | None:
+    init_db()
+    normalized_user_id = str(user_id or "").strip()
+    if not normalized_user_id:
+        return None
+    with _LOCK, _connect() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE users
+            SET status = 'active',
+                deleted_at = NULL
+            WHERE id = ? AND status = 'disabled'
             """,
             (normalized_user_id,),
         )

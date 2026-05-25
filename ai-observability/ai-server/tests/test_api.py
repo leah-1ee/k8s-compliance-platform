@@ -240,6 +240,53 @@ def test_deleted_user_cannot_log_in_again_and_admin_can_restore(monkeypatch):
     assert restored_login.cookies.get("compliance_ai_session")
 
 
+def test_admin_can_suspend_user_and_block_new_sessions(monkeypatch):
+    monkeypatch.setenv("DEV_AUTH_ENABLED", "true")
+    monkeypatch.setenv("DEV_AUTH_EMAIL", "suspend-me@example.test")
+    monkeypatch.setenv("DEV_AUTH_NAME", "Suspend Me")
+
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="suspend-me@example.test",
+        email="suspend-me@example.test",
+        name="Suspend Me",
+    )
+    session = storage.create_session(user["id"])
+
+    disable_response = client.post(
+        f"/admin/api/users/{user['id']}/disable",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    assert disable_response.status_code == 200
+    assert disable_response.json()["user"]["status"] == "disabled"
+
+    disabled_me = client.get("/me", cookies={"compliance_ai_session": session})
+    assert disabled_me.status_code == 200
+    assert disabled_me.json()["authenticated"] is False
+
+    blocked_create = client.post(
+        "/api/clusters",
+        cookies={"compliance_ai_session": session},
+        json={"name": "blocked-suspended-cluster"},
+    )
+    assert blocked_create.status_code == 401
+
+    blocked_login = client.get("/auth/dev-login", follow_redirects=False)
+    assert blocked_login.status_code == 403
+    assert "disabled user account cannot sign in" in blocked_login.json()["error"]
+
+    enable_response = client.post(
+        f"/admin/api/users/{user['id']}/enable",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    assert enable_response.status_code == 200
+    assert enable_response.json()["user"]["status"] == "active"
+
+    restored_login = client.get("/auth/dev-login", follow_redirects=False)
+    assert restored_login.status_code == 302
+    assert restored_login.cookies.get("compliance_ai_session")
+
+
 def test_google_login_requires_oauth_configuration():
     response = client.get("/auth/google/login", follow_redirects=False)
 

@@ -745,9 +745,14 @@
               </div>
             `).join("")
           : '<p class="meta">사용자에게 귀속된 클러스터가 없습니다.</p>';
-        const restoreAction = status === "deleted"
-          ? `<button class="primary" data-user-restore="${escapeHtml(body.user?.id || "")}">계정 복구</button>`
-          : "";
+        let accountAction = "";
+        if (status === "deleted") {
+          accountAction = `<button class="primary" data-user-restore="${escapeHtml(body.user?.id || "")}">계정 복구</button>`;
+        } else if (status === "disabled") {
+          accountAction = `<button class="primary" data-user-enable="${escapeHtml(body.user?.id || "")}">정지 해제</button>`;
+        } else {
+          accountAction = `<button class="danger" data-user-disable="${escapeHtml(body.user?.id || "")}">계정 정지</button>`;
+        }
         userDetailEl.innerHTML = `
           <div class="user">
             <strong>${escapeHtml(body.user?.email || "unknown user")}</strong>
@@ -761,8 +766,9 @@
               ${deletedAt ? ` · deleted_at=${escapeHtml(deletedAt)}` : ""}
             </span>
             ${status === "deleted" ? '<p class="meta">삭제된 계정입니다. 세션과 클러스터 토큰은 무효화되며, 이벤트와 정책 기록은 감사 목적으로 보존됩니다.</p>' : ""}
+            ${status === "disabled" ? '<p class="meta">정지된 계정입니다. 기존 세션은 무효화되며, 사용자는 다시 로그인하거나 새 클러스터를 만들 수 없습니다.</p>' : ""}
             <div class="user-clusters">${clusterList}</div>
-            <div class="actions user-detail-actions">${restoreAction}</div>
+            <div class="actions user-detail-actions">${accountAction}</div>
           </div>
         `;
       }
@@ -928,17 +934,33 @@
 
       userDetailEl.addEventListener("click", async (event) => {
         const restoreId = event.target.dataset.userRestore;
-        if (!restoreId) {
+        const disableId = event.target.dataset.userDisable;
+        const enableId = event.target.dataset.userEnable;
+        if (!restoreId && !disableId && !enableId) {
           return;
         }
         try {
-          await requestJson(`/admin/api/users/${restoreId}/restore`, { method: "POST" });
+          if (restoreId) {
+            await requestJson(`/admin/api/users/${restoreId}/restore`, { method: "POST" });
+            setMessage("사용자 계정을 복구했습니다.");
+          }
+          if (disableId) {
+            if (!window.confirm("이 사용자 계정을 정지할까요? 기존 세션이 끊기고 새 로그인과 신규 작업이 차단됩니다.")) {
+              return;
+            }
+            await requestJson(`/admin/api/users/${disableId}/disable`, { method: "POST" });
+            setMessage("사용자 계정을 정지했습니다.");
+          }
+          if (enableId) {
+            await requestJson(`/admin/api/users/${enableId}/enable`, { method: "POST" });
+            setMessage("사용자 계정 정지를 해제했습니다.");
+          }
           await loadAdminDashboard();
-          if (currentUserDetailId === restoreId) {
-            const body = await requestJson(`/admin/api/users/${restoreId}/clusters`);
+          const targetId = restoreId || disableId || enableId;
+          if (currentUserDetailId === targetId) {
+            const body = await requestJson(`/admin/api/users/${targetId}/clusters`);
             renderUserDetail(body);
           }
-          setMessage("사용자 계정을 복구했습니다.");
         } catch (error) {
           setMessage(error.message);
         }

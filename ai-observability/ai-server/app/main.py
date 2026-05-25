@@ -373,7 +373,7 @@ def google_callback(
             picture=str(profile.get("picture", "")),
         )
     except ValueError as error:
-        status_code = 403 if "deleted user account cannot sign in" in str(error) else 400
+        status_code = 403 if "user account cannot sign in" in str(error) else 400
         return JSONResponse(status_code=status_code, content={"error": str(error)})
 
     try:
@@ -436,7 +436,7 @@ def dev_login(request: Request):
             name=name,
         )
     except ValueError as error:
-        status_code = 403 if "deleted user account cannot sign in" in str(error) else 400
+        status_code = 403 if "user account cannot sign in" in str(error) else 400
         return JSONResponse(status_code=status_code, content={"error": str(error)})
     try:
         session_token = storage.create_session(user["id"])
@@ -1021,6 +1021,28 @@ def admin_restore_user(user_id: str, x_admin_token: str | None = Header(default=
     if auth_error:
         return auth_error
     user = storage.restore_user(user_id)
+    if user is None:
+        return JSONResponse(status_code=404, content={"error": "user not found"})
+    return {"user": _public_user(user)}
+
+
+@app.post("/admin/api/users/{user_id}/disable")
+def admin_disable_user(user_id: str, x_admin_token: str | None = Header(default=None)):
+    auth_error = require_admin(x_admin_token)
+    if auth_error:
+        return auth_error
+    user = storage.disable_user(user_id)
+    if user is None:
+        return JSONResponse(status_code=404, content={"error": "user not found"})
+    return {"user": _public_user(user)}
+
+
+@app.post("/admin/api/users/{user_id}/enable")
+def admin_enable_user(user_id: str, x_admin_token: str | None = Header(default=None)):
+    auth_error = require_admin(x_admin_token)
+    if auth_error:
+        return auth_error
+    user = storage.enable_user(user_id)
     if user is None:
         return JSONResponse(status_code=404, content={"error": "user not found"})
     return {"user": _public_user(user)}
