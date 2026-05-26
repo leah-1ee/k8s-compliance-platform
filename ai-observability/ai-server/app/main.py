@@ -412,6 +412,7 @@ def google_login(request: Request, login_hint: str = ""):
     }
     if normalized_hint and "@" in normalized_hint and len(normalized_hint) <= 320:
         params["login_hint"] = normalized_hint
+        params["prompt"] = "none"
     response = RedirectResponse(f"{GOOGLE_AUTH_URL}?{urlencode(params)}", status_code=302)
     response.set_cookie(
         OAUTH_STATE_COOKIE_NAME,

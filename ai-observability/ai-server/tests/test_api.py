@@ -314,7 +314,7 @@ def test_google_login_forwards_login_hint(monkeypatch):
 
     assert response.status_code == 302
     assert "login_hint=student%40example.test" in response.headers["location"]
-    assert "prompt=select_account" not in response.headers["location"]
+    assert "prompt=none" in response.headers["location"]
 
 
 def test_dev_login_requires_explicit_enable():
