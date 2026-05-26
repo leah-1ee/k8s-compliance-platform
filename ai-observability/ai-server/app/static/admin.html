@@ -252,6 +252,14 @@
         gap: 12px;
         align-items: end;
       }
+      .field-help {
+        display: block;
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 760;
+        line-height: 1.35;
+      }
       .audit-summary-grid {
         display: flex;
         gap: 10px;
@@ -302,6 +310,29 @@
         font-size: 12px;
         font-weight: 760;
         line-height: 1.5;
+      }
+      .audit-hash-list {
+        display: inline-flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .audit-hash-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .audit-hash-value {
+        color: var(--text);
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        font-size: 12px;
+        font-weight: 820;
+      }
+      .hash-copy-button {
+        min-height: 26px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: 11px;
       }
       .audit-log-list {
         display: grid;
@@ -692,18 +723,22 @@
               <option value="login">login user</option>
               <option value="admin">admin</option>
             </select>
+            <span class="field-help">public=비로그인 정책 생성, login=로그인 사용자, admin=관리자 작업</span>
           </label>
           <label>
             액션 필터
             <input id="auditActionFilter" placeholder="cluster.create, policy.generate, policy.apply" />
+            <span class="field-help">예: policy.generate, policy.apply, cluster.rotate_token</span>
           </label>
           <label>
             대상 유형
             <input id="auditTargetTypeFilter" placeholder="user, cluster, grafana, policy" />
+            <span class="field-help">예: policy, cluster, user, grafana</span>
           </label>
           <label>
             대상 ID
             <input id="auditTargetIdFilter" placeholder="user-id, cluster-id" />
+            <span class="field-help">이메일/학번이 아니라 로그의 target 값입니다. 예: cluster-..., user-..., latest-tag</span>
           </label>
           <label>
             시작일
@@ -715,7 +750,7 @@
           </label>
         </div>
         <p class="audit-hash-note">
-          before_hash / after_hash는 변경 전후 객체를 원문 대신 SHA-256 해시로 남긴 값입니다. 생성 작업은 before가 없어서 after_hash만 보일 수 있습니다.
+          before_hash / after_hash는 변경 전후 객체를 원문 대신 SHA-256 해시로 남긴 값입니다. 화면에는 앞 12자리만 표시하고, 전체값은 복사 버튼으로만 다룹니다.
         </p>
         <div class="audit-summary-grid" id="auditSummary"></div>
         <div id="auditLogs"></div>
@@ -829,6 +864,27 @@
         return escaped.replaceAll(escapedQuery, `<mark class="search-highlight">${escapedQuery}</mark>`);
       }
 
+      function shortHash(value) {
+        const hash = String(value || "").trim();
+        if (!hash) {
+          return "-";
+        }
+        return hash.length > 12 ? `${hash.slice(0, 12)}...` : hash;
+      }
+
+      function renderHashChip(label, value) {
+        const hash = String(value || "").trim();
+        if (!hash) {
+          return `${label}=-`;
+        }
+        return `
+          <span class="audit-hash-chip">
+            ${label}=<span class="audit-hash-value" title="전체 해시는 복사 버튼으로 확인">${escapeHtml(shortHash(hash))}</span>
+            <button class="hash-copy-button" data-copy-hash="${escapeHtml(hash)}" type="button">복사</button>
+          </span>
+        `;
+      }
+
       async function requestJson(url, options = {}) {
         const response = await fetch(url, {
           ...options,
@@ -939,9 +995,11 @@
                 actor=${escapeHtml(event.actor_email || event.actor_user_id || "public actor")} ·
                 actor_type=<span class="pill">${escapeHtml(event.actor_type || "public")}</span> ·
                 target=<span class="pill">${escapeHtml(event.target_type || "-")}</span> ${escapeHtml(event.target_id || "-")} ·
-                request_id=${escapeHtml(event.request_id || "-")} ·
-                before_hash=${escapeHtml(event.before_hash || "-")} ·
-                after_hash=${escapeHtml(event.after_hash || "-")}
+                request_id=${escapeHtml(event.request_id || "-")}
+                <span class="audit-hash-list">
+                  ${renderHashChip("before_hash", event.before_hash)}
+                  ${renderHashChip("after_hash", event.after_hash)}
+                </span>
               </div>
               <pre class="audit-log-json">${escapeHtml(details)}</pre>
             </article>
@@ -1149,6 +1207,19 @@
 
       refreshAuditLogsButton.addEventListener("click", () => {
         loadAuditLogs().catch((error) => setMessage(error.message));
+      });
+
+      auditLogsEl.addEventListener("click", async (event) => {
+        const button = event.target.closest("[data-copy-hash]");
+        if (!button) {
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(button.dataset.copyHash || "");
+          setMessage("전체 해시를 복사했습니다.");
+        } catch (error) {
+          setMessage("브라우저가 클립보드 복사를 허용하지 않았습니다.");
+        }
       });
 
       [auditActionFilter, auditTargetTypeFilter, auditTargetIdFilter, auditDateFromFilter, auditDateToFilter].forEach((input) => {
