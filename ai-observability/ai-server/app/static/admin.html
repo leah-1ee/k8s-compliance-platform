@@ -237,19 +237,40 @@
         display: grid;
         gap: 16px;
       }
+      .audit-log-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .audit-log-heading h2 {
+        margin-bottom: 0;
+      }
       .audit-log-filters {
         display: grid;
-        grid-template-columns: minmax(220px, 1.5fr) repeat(4, minmax(150px, 1fr)) auto;
+        grid-template-columns: 180px minmax(220px, 1.3fr) minmax(170px, 0.9fr) minmax(180px, 1fr) 150px 150px;
         gap: 12px;
         align-items: end;
       }
       .audit-summary-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        display: flex;
         gap: 10px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scroll-snap-type: x proximity;
+      }
+      .audit-summary-grid::-webkit-scrollbar {
+        height: 8px;
+      }
+      .audit-summary-grid::-webkit-scrollbar-thumb {
+        border-radius: 999px;
+        background: var(--line-strong);
       }
       .audit-summary-card {
-        min-width: 0;
+        flex: 0 0 260px;
+        min-width: 220px;
+        max-width: 320px;
+        scroll-snap-align: start;
         border: 1px solid rgba(8, 119, 242, 0.16);
         border-radius: 8px;
         background:
@@ -274,6 +295,13 @@
         margin-top: 5px;
         color: var(--text);
         font-size: 24px;
+      }
+      .audit-hash-note {
+        margin: -4px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 760;
+        line-height: 1.5;
       }
       .audit-log-list {
         display: grid;
@@ -651,20 +679,11 @@
       </div>
 
       <section class="audit-log-card">
-        <h2>감사 로그</h2>
+        <div class="audit-log-heading">
+          <h2>감사 로그</h2>
+          <button id="refreshAuditLogs">감사 로그 새로고침</button>
+        </div>
         <div class="audit-log-filters">
-          <label>
-            액션 필터
-            <input id="auditActionFilter" placeholder="cluster.create, account.delete, grafana.admin_url_issue" />
-          </label>
-          <label>
-            대상 유형
-            <input id="auditTargetTypeFilter" placeholder="user, cluster, grafana, policy" />
-          </label>
-          <label>
-            대상 ID
-            <input id="auditTargetIdFilter" placeholder="user-id, cluster-id" />
-          </label>
           <label>
             Actor 유형
             <select id="auditActorTypeFilter">
@@ -675,6 +694,18 @@
             </select>
           </label>
           <label>
+            액션 필터
+            <input id="auditActionFilter" placeholder="cluster.create, policy.generate, policy.apply" />
+          </label>
+          <label>
+            대상 유형
+            <input id="auditTargetTypeFilter" placeholder="user, cluster, grafana, policy" />
+          </label>
+          <label>
+            대상 ID
+            <input id="auditTargetIdFilter" placeholder="user-id, cluster-id" />
+          </label>
+          <label>
             시작일
             <input id="auditDateFromFilter" type="date" />
           </label>
@@ -682,8 +713,10 @@
             종료일
             <input id="auditDateToFilter" type="date" />
           </label>
-          <button id="refreshAuditLogs">감사 로그 새로고침</button>
         </div>
+        <p class="audit-hash-note">
+          before_hash / after_hash는 변경 전후 객체를 원문 대신 SHA-256 해시로 남긴 값입니다. 생성 작업은 before가 없어서 after_hash만 보일 수 있습니다.
+        </p>
         <div class="audit-summary-grid" id="auditSummary"></div>
         <div id="auditLogs"></div>
       </section>
