@@ -1403,6 +1403,14 @@ article,
     background 0.22s ease;
 }
 
+.grafana-dashboard-card::before {
+  content: none;
+}
+
+.grafana-card-visual {
+  display: none;
+}
+
 .grafana-dashboard-card::after {
   content: "";
   position: absolute;
@@ -1594,40 +1602,164 @@ h2 {
 [data-theme="dark"] .grafana-dashboard-card {
   border-color: rgba(255, 255, 255, 0.12);
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.035)),
-    radial-gradient(circle at 15% 0%, rgba(123, 184, 160, 0.14), transparent 36%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 42%),
+    radial-gradient(ellipse at 50% 18%, rgba(16, 185, 129, 0.08), transparent 44%);
+  grid-template-rows: 180px auto auto auto 1fr;
+  gap: 14px;
+  min-height: 560px;
+  padding: 0 0 20px;
+  border-radius: 10px;
+  overflow: hidden;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 24px 58px rgba(0, 0, 0, 0.24);
+    0 1px 0 rgba(255, 255, 255, 0.04),
+    0 24px 58px rgba(0, 0, 0, 0.28);
 }
 
 [data-theme="dark"] .grafana-dashboard-card:hover,
 [data-theme="dark"] .grafana-dashboard-card:focus-within {
-  border-color: rgba(255, 255, 255, 0.22);
+  border-color: rgba(16, 185, 129, 0.34);
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.105), rgba(255, 255, 255, 0.045)),
-    radial-gradient(circle at 15% 0%, rgba(123, 184, 160, 0.18), transparent 38%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 42%),
+    radial-gradient(ellipse at 50% 18%, rgba(16, 185, 129, 0.1), transparent 44%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    0 28px 62px rgba(0, 0, 0, 0.3);
+    0 1px 0 rgba(255, 255, 255, 0.06),
+    0 30px 70px rgba(0, 0, 0, 0.34);
+}
+
+[data-theme="dark"] .grafana-dashboard-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse at 50% 112%, rgba(16, 185, 129, 0.18), transparent 48%),
+    repeating-radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 9px);
+  opacity: 0.7;
+}
+
+[data-theme="dark"] .grafana-card-visual {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  min-height: 180px;
+  padding: 28px 28px 24px;
+  border-radius: 9px;
+  color: #ffffff;
+  text-shadow: 0 20px 36px rgba(0, 0, 0, 0.34);
+  background:
+    linear-gradient(90deg, rgba(3, 7, 18, 0.92), rgba(3, 7, 18, 0.28) 52%, rgba(3, 7, 18, 0.82)),
+    radial-gradient(circle at 20% 74%, rgba(16, 185, 129, 0.44), transparent 31%),
+    radial-gradient(circle at 82% 24%, rgba(20, 184, 166, 0.22), transparent 24%),
+    repeating-radial-gradient(circle at 52% 52%, rgba(255, 255, 255, 0.12) 0 1px, transparent 1px 7px),
+    linear-gradient(135deg, #040706, #071512 48%, #020404);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -34px 60px rgba(0, 0, 0, 0.38),
+    0 18px 38px rgba(0, 0, 0, 0.26);
+}
+
+[data-theme="dark"] .grafana-card-visual strong {
+  color: #ffffff;
+  font-size: clamp(2.55rem, 4vw, 4.8rem);
+  font-weight: 950;
+  line-height: 0.9;
+  letter-spacing: 0;
+}
+
+[data-theme="dark"] .grafana-card-visual span {
+  margin-top: 16px;
+  max-width: 9ch;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: clamp(2.1rem, 3.2vw, 3.85rem);
+  font-weight: 250;
+  line-height: 0.96;
+  letter-spacing: 0;
+}
+
+[data-theme="dark"] .grafana-dashboard-card::after {
+  inset: 8px 8px auto 8px;
+  height: 176px;
+  border-radius: 8px;
+  background:
+    linear-gradient(120deg, transparent 0 42%, rgba(20, 184, 166, 0.16) 48%, transparent 58%),
+    radial-gradient(ellipse at 62% 20%, rgba(125, 211, 252, 0.16), transparent 34%);
+  opacity: 0.9;
+  mix-blend-mode: screen;
+}
+
+[data-theme="dark"] .grafana-dashboard-card:nth-child(2) .grafana-card-visual {
+  background:
+    linear-gradient(90deg, rgba(3, 7, 18, 0.94), rgba(3, 7, 18, 0.22) 50%, rgba(3, 7, 18, 0.78)),
+    repeating-linear-gradient(104deg, rgba(125, 211, 252, 0.16) 0 1px, transparent 1px 8px),
+    radial-gradient(circle at 72% 22%, rgba(34, 211, 238, 0.42), transparent 26%),
+    radial-gradient(circle at 24% 74%, rgba(16, 185, 129, 0.28), transparent 30%),
+    linear-gradient(135deg, #020505, #071116 46%, #020404);
+}
+
+[data-theme="dark"] .grafana-dashboard-card:nth-child(3) .grafana-card-visual {
+  background:
+    linear-gradient(90deg, rgba(3, 7, 18, 0.9), rgba(3, 7, 18, 0.28) 50%, rgba(3, 7, 18, 0.82)),
+    radial-gradient(ellipse at 50% 68%, rgba(16, 185, 129, 0.46), transparent 38%),
+    repeating-radial-gradient(ellipse at 58% 64%, rgba(20, 184, 166, 0.18) 0 1px, transparent 1px 9px),
+    linear-gradient(135deg, #020504, #061311 48%, #020404);
+}
+
+[data-theme="dark"] .grafana-dashboard-heading h2 {
+  color: #ffffff;
+}
+
+[data-theme="dark"] .grafana-dashboard-heading p {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+[data-theme="dark"] .dashboard-card > .badge:first-child,
+[data-theme="dark"] .grafana-dashboard-card h2,
+[data-theme="dark"] .grafana-dashboard-card p,
+[data-theme="dark"] .grafana-dashboard-card ul {
+  margin-right: 28px;
+  margin-left: 28px;
+}
+
+[data-theme="dark"] .dashboard-card > .badge:first-child {
+  margin-top: 8px;
+  border: 0;
+  background: transparent;
+  color: #0fa77a;
+  padding: 0;
+  font-size: 12px;
+  text-transform: none;
 }
 
 [data-theme="dark"] .grafana-dashboard-card li {
-  border-color: rgba(255, 255, 255, 0.11);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.035));
-  color: #eef5f1;
+  min-height: 34px;
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.035);
+  color: #edf5f1;
+  box-shadow: none;
 }
 
 [data-theme="dark"] .grafana-dashboard-card li:hover {
   border-color: rgba(123, 184, 160, 0.34);
-  background:
-    linear-gradient(180deg, rgba(123, 184, 160, 0.16), rgba(255, 255, 255, 0.045));
+  background: rgba(16, 185, 129, 0.12);
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
 }
 
 [data-theme="dark"] .grafana-dashboard-card.is-scrollable ul::-webkit-scrollbar-thumb {
   background: rgba(123, 184, 160, 0.3);
+}
+
+[data-theme="dark"] .grafana-dashboard-card h2 {
+  color: #ffffff;
+  font-size: clamp(1.1rem, 1.6vw, 1.45rem);
+  line-height: 1.18;
+}
+
+[data-theme="dark"] .grafana-dashboard-card p {
+  color: rgba(255, 255, 255, 0.74);
 }
 
 .split-view {
