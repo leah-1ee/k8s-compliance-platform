@@ -61,7 +61,7 @@ class PolicyGenerationRequest(BaseModel):
     prompt: str = Field(min_length=5, max_length=2000)
     policy_kind: PolicyKind | None = None
     constraint_name: str = Field(default="generated-policy", max_length=80)
-    enforcement_action: Literal["deny", "warn", "dryrun"] = "deny"
+    enforcement_action: Literal["deny", "warn", "dryrun"] = "dryrun"
     allowed_registries: list[str] = Field(default_factory=list, max_length=20)
     excluded_namespaces: list[str] = Field(default_factory=list, max_length=20)
     use_llm: bool = False

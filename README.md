@@ -20,7 +20,7 @@ Gatekeeper 정책 생성, Falco 런타임 탐지, AI 분석, 대시보드, 관�
 
 ## 현재 작업 기준
 
-- 현재 이미지 기준은 `docker.io/leeon3345/compliance-ai-server:0.2.10` 입니다.
+- 현재 이미지 기준은 `docker.io/leeon3345/compliance-ai-server:0.2.13` 입니다.
 - 로컬 테스트는 프로젝트 루트에서 `.venv/bin/python -m pytest ai-observability/ai-server/tests/` 로 실행합니다.
 - 문서와 demo 흐름은 현재 구현된 `/docs`, `/ui`, `/admin` 동작과 맞춰 유지합니다.
 

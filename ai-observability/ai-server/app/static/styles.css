@@ -1382,10 +1382,11 @@ article,
   position: relative;
   overflow: hidden;
   display: grid;
-  grid-template-rows: auto auto auto 1fr;
+  grid-template-rows: 164px auto auto auto 1fr;
   align-content: stretch;
-  gap: 16px;
-  min-height: 430px;
+  gap: 14px;
+  min-height: 540px;
+  padding: 0 0 20px;
   border: 1px solid rgba(255, 255, 255, 0.42);
   border-radius: 8px;
   background:
@@ -1408,7 +1409,44 @@ article,
 }
 
 .grafana-card-visual {
-  display: none;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  min-height: 164px;
+  padding: 24px 26px 22px;
+  border-radius: 8px;
+  color: #ffffff;
+  text-shadow: 0 18px 32px rgba(15, 23, 42, 0.22);
+  background:
+    linear-gradient(90deg, rgba(8, 119, 242, 0.62), rgba(8, 174, 234, 0.26) 54%, rgba(8, 119, 242, 0.5)),
+    radial-gradient(circle at 26% 72%, rgba(86, 204, 242, 0.34), transparent 32%),
+    repeating-radial-gradient(circle at 54% 54%, rgba(255, 255, 255, 0.14) 0 1px, transparent 1px 8px),
+    linear-gradient(135deg, #0756d9, #08aeea);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -28px 50px rgba(8, 119, 242, 0.22),
+    0 18px 38px rgba(8, 119, 242, 0.12);
+}
+
+.grafana-card-visual strong {
+  color: #ffffff;
+  font-size: clamp(2.05rem, 3.35vw, 3.8rem);
+  font-weight: 930;
+  line-height: 0.92;
+  letter-spacing: 0;
+}
+
+.grafana-card-visual span {
+  margin-top: 12px;
+  max-width: 9ch;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: clamp(1.65rem, 2.55vw, 3rem);
+  font-weight: 300;
+  line-height: 0.98;
+  letter-spacing: 0;
 }
 
 .grafana-dashboard-card::after {
@@ -1433,7 +1471,7 @@ article,
 .dashboard-card > .badge:first-child {
   width: fit-content;
   justify-self: start;
-  margin-bottom: 0;
+  margin: 4px 26px 0;
   position: relative;
   z-index: 1;
 }
@@ -1458,13 +1496,13 @@ h2 {
 
 .grafana-dashboard-card h2,
 .grafana-dashboard-card p,
-.grafana-dashboard-card ul {
+.grafana-panel-disclosure {
   position: relative;
   z-index: 1;
 }
 
 .grafana-dashboard-card h2 {
-  margin: 0;
+  margin: 0 26px;
   font-size: clamp(1.1rem, 1.4vw, 1.45rem);
   line-height: 1.16;
   letter-spacing: 0;
@@ -1482,17 +1520,70 @@ h2 {
 }
 
 .grafana-dashboard-card p {
-  margin: 0;
+  margin: 0 26px;
   color: var(--muted);
   font-size: 14px;
   line-height: 1.62;
+}
+
+.grafana-panel-disclosure {
+  margin: auto 26px 0;
+}
+
+.grafana-panel-disclosure summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(8, 119, 242, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.52);
+  color: var(--secondary-text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 850;
+  list-style: none;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.grafana-panel-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.grafana-panel-disclosure summary::after {
+  content: "↓";
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(8, 119, 242, 0.12);
+  color: var(--brand);
+  transition: transform 0.16s ease;
+}
+
+[data-theme="dark"] .grafana-panel-disclosure summary {
+  border-color: rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.04);
+  color: #edf5ff;
+}
+
+[data-theme="dark"] .grafana-panel-disclosure summary::after {
+  background: rgba(30, 64, 175, 0.22);
+  color: #93c5fd;
+}
+
+.grafana-panel-disclosure[open] summary::after {
+  transform: rotate(180deg);
 }
 
 .grafana-dashboard-card ul {
   display: grid;
   align-content: start;
   gap: 10px;
-  margin: auto 0 0;
+  margin: 10px 0 0;
   padding: 0;
   list-style: none;
 }
@@ -1567,7 +1658,14 @@ h2 {
 }
 
 .grafana-dashboard-card li:hover::after {
-  max-height: 36px;
+  max-height: 0;
+  margin-top: 0;
+  opacity: 0;
+  transform: translateY(-2px);
+}
+
+.grafana-panel-disclosure[open] li::after {
+  max-height: 42px;
   margin-top: 2px;
   opacity: 1;
   transform: translateY(0);
@@ -1603,10 +1701,10 @@ h2 {
   border-color: rgba(255, 255, 255, 0.12);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 42%),
-    radial-gradient(ellipse at 50% 18%, rgba(16, 185, 129, 0.08), transparent 44%);
-  grid-template-rows: 180px auto auto auto 1fr;
+    radial-gradient(ellipse at 50% 18%, rgba(30, 64, 175, 0.14), transparent 44%);
+  grid-template-rows: 164px auto auto auto 1fr;
   gap: 14px;
-  min-height: 560px;
+  min-height: 540px;
   padding: 0 0 20px;
   border-radius: 10px;
   overflow: hidden;
@@ -1617,10 +1715,10 @@ h2 {
 
 [data-theme="dark"] .grafana-dashboard-card:hover,
 [data-theme="dark"] .grafana-dashboard-card:focus-within {
-  border-color: rgba(16, 185, 129, 0.34);
+  border-color: rgba(96, 165, 250, 0.34);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 42%),
-    radial-gradient(ellipse at 50% 18%, rgba(16, 185, 129, 0.1), transparent 44%);
+    radial-gradient(ellipse at 50% 18%, rgba(30, 64, 175, 0.18), transparent 44%);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.06),
     0 30px 70px rgba(0, 0, 0, 0.34);
@@ -1633,29 +1731,22 @@ h2 {
   pointer-events: none;
   border-radius: inherit;
   background:
-    radial-gradient(ellipse at 50% 112%, rgba(16, 185, 129, 0.18), transparent 48%),
+    radial-gradient(ellipse at 50% 112%, rgba(30, 64, 175, 0.2), transparent 48%),
     repeating-radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 9px);
   opacity: 0.7;
 }
 
 [data-theme="dark"] .grafana-card-visual {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
-  min-height: 180px;
-  padding: 28px 28px 24px;
-  border-radius: 9px;
+  min-height: 164px;
+  padding: 24px 26px 22px;
   color: #ffffff;
   text-shadow: 0 20px 36px rgba(0, 0, 0, 0.34);
   background:
-    linear-gradient(90deg, rgba(3, 7, 18, 0.92), rgba(3, 7, 18, 0.28) 52%, rgba(3, 7, 18, 0.82)),
-    radial-gradient(circle at 20% 74%, rgba(16, 185, 129, 0.44), transparent 31%),
-    radial-gradient(circle at 82% 24%, rgba(20, 184, 166, 0.22), transparent 24%),
+    linear-gradient(90deg, rgba(3, 7, 18, 0.94), rgba(15, 23, 42, 0.3) 52%, rgba(3, 7, 18, 0.86)),
+    radial-gradient(circle at 20% 74%, rgba(30, 64, 175, 0.5), transparent 31%),
+    radial-gradient(circle at 82% 24%, rgba(14, 165, 233, 0.24), transparent 24%),
     repeating-radial-gradient(circle at 52% 52%, rgba(255, 255, 255, 0.12) 0 1px, transparent 1px 7px),
-    linear-gradient(135deg, #040706, #071512 48%, #020404);
+    linear-gradient(135deg, #030711, #071329 48%, #02040b);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     inset 0 -34px 60px rgba(0, 0, 0, 0.38),
@@ -1664,17 +1755,17 @@ h2 {
 
 [data-theme="dark"] .grafana-card-visual strong {
   color: #ffffff;
-  font-size: clamp(2.55rem, 4vw, 4.8rem);
+  font-size: clamp(2.05rem, 3.35vw, 3.8rem);
   font-weight: 950;
   line-height: 0.9;
   letter-spacing: 0;
 }
 
 [data-theme="dark"] .grafana-card-visual span {
-  margin-top: 16px;
+  margin-top: 12px;
   max-width: 9ch;
   color: rgba(255, 255, 255, 0.92);
-  font-size: clamp(2.1rem, 3.2vw, 3.85rem);
+  font-size: clamp(1.65rem, 2.55vw, 3rem);
   font-weight: 250;
   line-height: 0.96;
   letter-spacing: 0;
@@ -1682,10 +1773,10 @@ h2 {
 
 [data-theme="dark"] .grafana-dashboard-card::after {
   inset: 8px 8px auto 8px;
-  height: 176px;
+  height: 160px;
   border-radius: 8px;
   background:
-    linear-gradient(120deg, transparent 0 42%, rgba(20, 184, 166, 0.16) 48%, transparent 58%),
+    linear-gradient(120deg, transparent 0 42%, rgba(59, 130, 246, 0.16) 48%, transparent 58%),
     radial-gradient(ellipse at 62% 20%, rgba(125, 211, 252, 0.16), transparent 34%);
   opacity: 0.9;
   mix-blend-mode: screen;
@@ -1695,17 +1786,17 @@ h2 {
   background:
     linear-gradient(90deg, rgba(3, 7, 18, 0.94), rgba(3, 7, 18, 0.22) 50%, rgba(3, 7, 18, 0.78)),
     repeating-linear-gradient(104deg, rgba(125, 211, 252, 0.16) 0 1px, transparent 1px 8px),
-    radial-gradient(circle at 72% 22%, rgba(34, 211, 238, 0.42), transparent 26%),
-    radial-gradient(circle at 24% 74%, rgba(16, 185, 129, 0.28), transparent 30%),
-    linear-gradient(135deg, #020505, #071116 46%, #020404);
+    radial-gradient(circle at 72% 22%, rgba(59, 130, 246, 0.42), transparent 26%),
+    radial-gradient(circle at 24% 74%, rgba(14, 165, 233, 0.25), transparent 30%),
+    linear-gradient(135deg, #020511, #07142c 46%, #02040b);
 }
 
 [data-theme="dark"] .grafana-dashboard-card:nth-child(3) .grafana-card-visual {
   background:
     linear-gradient(90deg, rgba(3, 7, 18, 0.9), rgba(3, 7, 18, 0.28) 50%, rgba(3, 7, 18, 0.82)),
-    radial-gradient(ellipse at 50% 68%, rgba(16, 185, 129, 0.46), transparent 38%),
-    repeating-radial-gradient(ellipse at 58% 64%, rgba(20, 184, 166, 0.18) 0 1px, transparent 1px 9px),
-    linear-gradient(135deg, #020504, #061311 48%, #020404);
+    radial-gradient(ellipse at 50% 68%, rgba(30, 64, 175, 0.48), transparent 38%),
+    repeating-radial-gradient(ellipse at 58% 64%, rgba(59, 130, 246, 0.18) 0 1px, transparent 1px 9px),
+    linear-gradient(135deg, #020511, #061329 48%, #02040b);
 }
 
 [data-theme="dark"] .grafana-dashboard-heading h2 {
@@ -1719,7 +1810,7 @@ h2 {
 [data-theme="dark"] .dashboard-card > .badge:first-child,
 [data-theme="dark"] .grafana-dashboard-card h2,
 [data-theme="dark"] .grafana-dashboard-card p,
-[data-theme="dark"] .grafana-dashboard-card ul {
+[data-theme="dark"] .grafana-panel-disclosure {
   margin-right: 28px;
   margin-left: 28px;
 }
@@ -1728,7 +1819,7 @@ h2 {
   margin-top: 8px;
   border: 0;
   background: transparent;
-  color: #0fa77a;
+  color: #7fb0ff;
   padding: 0;
   font-size: 12px;
   text-transform: none;
@@ -1743,13 +1834,13 @@ h2 {
 }
 
 [data-theme="dark"] .grafana-dashboard-card li:hover {
-  border-color: rgba(123, 184, 160, 0.34);
-  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(96, 165, 250, 0.34);
+  background: rgba(30, 64, 175, 0.16);
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
 }
 
 [data-theme="dark"] .grafana-dashboard-card.is-scrollable ul::-webkit-scrollbar-thumb {
-  background: rgba(123, 184, 160, 0.3);
+  background: rgba(96, 165, 250, 0.3);
 }
 
 [data-theme="dark"] .grafana-dashboard-card h2 {
@@ -1832,12 +1923,18 @@ textarea,
 input,
 select {
   width: 100%;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--input-bg);
+  border: 1px solid rgba(255, 255, 255, 0.46);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.46));
   color: var(--input-text);
   padding: 11px 14px;
   outline: none;
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  backdrop-filter: blur(14px) saturate(130%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.44),
+    0 10px 24px rgba(15, 23, 42, 0.05);
   transition:
     border-color 0.16s ease,
     box-shadow 0.16s ease,
@@ -1852,7 +1949,21 @@ textarea:focus,
 input:focus,
 select:focus {
   border-color: var(--focus);
-  box-shadow: 0 0 0 3px var(--focus-ring);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 0 0 3px var(--focus-ring),
+    0 16px 34px rgba(15, 23, 42, 0.08);
+}
+
+[data-theme="dark"] textarea,
+[data-theme="dark"] input,
+[data-theme="dark"] select {
+  border-color: rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.032));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 14px 34px rgba(0, 0, 0, 0.16);
 }
 
 .toggle-row {
@@ -2050,9 +2161,24 @@ select:focus {
   width: 100%;
   padding: 10px;
   margin-top: 0;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--card-soft);
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.36));
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  backdrop-filter: blur(14px) saturate(130%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+[data-theme="dark"] .enforcement-badges {
+  border-color: rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 14px 34px rgba(0, 0, 0, 0.16);
 }
 
 .status-badge,
@@ -2535,10 +2661,25 @@ pre[data-empty="true"] {
 .setup-install-card {
   padding: var(--card-padding-sm);
   margin-bottom: 16px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--card);
-  box-shadow: var(--shadow-soft);
+  border: 1px solid rgba(255, 255, 255, 0.44);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0.42));
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+  backdrop-filter: blur(18px) saturate(130%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    0 14px 34px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme="dark"] .setup-install-card {
+  border-color: rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.028)),
+    radial-gradient(ellipse at 20% 0%, rgba(30, 64, 175, 0.13), transparent 44%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 20px 48px rgba(0, 0, 0, 0.22);
 }
 
 .setup-control-row {
@@ -2557,10 +2698,6 @@ pre[data-empty="true"] {
 
 .setup-cluster-field input {
   min-height: 42px;
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
-  background: var(--input-bg);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   transition:
     border-color 0.16s ease,
     box-shadow 0.16s ease,
@@ -2602,6 +2739,31 @@ pre[data-empty="true"] {
 .analysis-card,
 .auth-required {
   padding: var(--card-padding-sm);
+}
+
+.setup-cluster-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.44);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0.42));
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+  backdrop-filter: blur(18px) saturate(130%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    0 14px 34px rgba(15, 23, 42, 0.06);
+}
+
+[data-theme="dark"] .setup-cluster-card {
+  border-color: rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 44%),
+    radial-gradient(ellipse at 50% 0%, rgba(30, 64, 175, 0.16), transparent 48%),
+    repeating-radial-gradient(circle at 52% 48%, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 9px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04),
+    0 24px 58px rgba(0, 0, 0, 0.28);
 }
 
 .auth-required > .badge:first-child {
@@ -2831,16 +2993,50 @@ pre[data-empty="true"] {
   gap: 12px;
 }
 
+.cluster-list {
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-gutter: stable;
+}
+
+.cluster-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.cluster-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(8, 119, 242, 0.24);
+}
+
+[data-theme="dark"] .cluster-list::-webkit-scrollbar-thumb {
+  background: rgba(96, 165, 250, 0.3);
+}
+
 .cluster-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(130px, auto);
   gap: 12px;
   align-items: start;
   padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--card);
-  box-shadow: var(--shadow-soft);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.38));
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  backdrop-filter: blur(14px) saturate(130%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+[data-theme="dark"] .cluster-row {
+  border-color: rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 14px 34px rgba(0, 0, 0, 0.16);
 }
 
 .cluster-row-copy {

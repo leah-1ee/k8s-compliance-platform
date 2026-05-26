@@ -1037,7 +1037,7 @@ function syncPolicyPromptMode() {
 }
 
 function syncEnforcementBadges() {
-  const selected = $("#enforcementAction")?.value || "deny";
+  const selected = $("#enforcementAction")?.value || "dryrun";
   document.querySelectorAll("[data-enforcement-badge]").forEach((badge) => {
     badge.classList.toggle("is-selected", badge.dataset.enforcementBadge === selected);
   });

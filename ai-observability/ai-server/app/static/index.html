@@ -234,13 +234,16 @@
                 <span class="badge ready">Gatekeeper</span>
                 <h2>Gatekeeper Compliance Overview</h2>
                 <p>Gatekeeper 감사 상태, 정책 위반 추이, enforcement action별 위반 수를 한 화면에서 확인합니다.</p>
-                <ul>
+                <details class="grafana-panel-disclosure">
+                  <summary>Dashboard panels</summary>
+                  <ul>
                   <li data-tip="AI 분류 요청량을 추적합니다.">AI Classification Requests</li>
                   <li data-tip="분류 실패와 오류 흐름을 확인합니다.">AI Classification Errors</li>
                   <li data-tip="enforcement action별 위반 수를 비교합니다.">Gatekeeper Violations by Enforcement</li>
                   <li data-tip="정책별 위반 집중도를 확인합니다.">Policy Violations by Policy</li>
                   <li data-tip="Gatekeeper audit 성능을 점검합니다.">Gatekeeper Audit Duration</li>
-                </ul>
+                  </ul>
+                </details>
               </article>
               <article class="dashboard-card grafana-dashboard-card is-scrollable">
                 <div class="grafana-card-visual" aria-hidden="true">
@@ -250,7 +253,9 @@
                 <span class="badge loading">Runtime</span>
                 <h2>Runtime Detection</h2>
                 <p>Falco Sidekick 런타임 이벤트, severity 분포, 자동 대응 결과를 운영 관점에서 추적합니다.</p>
-                <ul>
+                <details class="grafana-panel-disclosure">
+                  <summary>Dashboard panels</summary>
+                  <ul>
                   <li data-tip="고위험 이벤트가 없는 상태를 점수화합니다.">High-Severity Free Score</li>
                   <li data-tip="저장된 전체 런타임 이벤트 수입니다.">Total Events</li>
                   <li data-tip="high severity 이벤트 수입니다.">HIGH Events</li>
@@ -274,7 +279,8 @@
                   <li data-tip="1MB 상한을 넘긴 요청 수입니다.">바디 크기 초과 (DoS 시도)</li>
                   <li data-tip="거부 사유별 누적 분포입니다.">사유별 거부 건수 (누적)</li>
                   <li data-tip="거부 사유별 초당 발생률 추이입니다.">웹훅 거부 시계열 (사유별 초당 발생률)</li>
-                </ul>
+                  </ul>
+                </details>
               </article>
               <article class="dashboard-card grafana-dashboard-card">
                 <div class="grafana-card-visual" aria-hidden="true">
@@ -284,13 +290,16 @@
                 <span class="badge medium">AI</span>
                 <h2>KubeOwl Observability</h2>
                 <p>사용자 클러스터의 이벤트 집계와 리포팅 상태를 KubeOwl 메트릭 기준으로 확인합니다.</p>
-                <ul>
+                <details class="grafana-panel-disclosure">
+                  <summary>Dashboard panels</summary>
+                  <ul>
                   <li data-tip="메트릭을 보내는 클러스터 수를 확인합니다.">Reporting Clusters</li>
                   <li data-tip="저장된 전체 런타임 이벤트 수입니다.">Total Events</li>
                   <li data-tip="high 심각도 이벤트 집계입니다.">High Events</li>
                   <li data-tip="medium 심각도 이벤트 집계입니다.">Medium Events</li>
                   <li data-tip="KubeOwl DB에 저장된 런타임 이벤트입니다.">Stored Runtime Events</li>
-                </ul>
+                  </ul>
+                </details>
               </article>
             </div>
           </section>
@@ -328,7 +337,7 @@
                     <select id="enforcementAction">
                       <option value="deny">deny</option>
                       <option value="warn">warn</option>
-                      <option value="dryrun">dryrun</option>
+                      <option value="dryrun" selected>dryrun</option>
                     </select>
                   </label>
                   <div class="enforcement-badges" aria-label="Enforcement action guide">
@@ -491,7 +500,7 @@
                     <pre id="setupInstallCommand" class="terminal-body" data-empty="true">클러스터를 등록하거나 토큰을 재발급하면 여기에 설치 명령이 표시됩니다.</pre>
                   </div>
                 </article>
-                <article>
+                <article class="setup-cluster-card">
                   <h2>내 클러스터</h2>
                   <div class="cluster-list" id="userClusters">
                     <p>클러스터 목록을 불러오는 중입니다.</p>
