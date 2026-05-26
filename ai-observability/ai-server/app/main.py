@@ -62,6 +62,8 @@ GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 current_request: ContextVar[Request | None] = ContextVar("current_request", default=None)
 AUDIT_ADMIN_USER_ID = "kubeowl-admin"
 AUDIT_ADMIN_EMAIL = "kubeowl-admin@local"
+AUDIT_PUBLIC_USER_ID = "public"
+AUDIT_PUBLIC_EMAIL = "public actor"
 
 
 def sanitize_llm_api_key(value: str | None) -> str:
@@ -1600,6 +1602,7 @@ def admin_list_audit_events(
     target_type: str = "",
     target_id: str = "",
     actor_user_id: str = "",
+    actor_type: str = "",
     date_from: str = "",
     date_to: str = "",
     x_admin_token: str | None = Header(default=None),
@@ -1614,6 +1617,7 @@ def admin_list_audit_events(
             target_type=target_type,
             target_id=target_id,
             actor_user_id=actor_user_id,
+            actor_type=actor_type,
             date_from=date_from,
             date_to=date_to,
         ),
@@ -1622,6 +1626,7 @@ def admin_list_audit_events(
             target_type=target_type,
             target_id=target_id,
             actor_user_id=actor_user_id,
+            actor_type=actor_type,
             date_from=date_from,
             date_to=date_to,
         ),
@@ -1853,11 +1858,15 @@ def _slack_event_payload(cluster: dict, event: dict) -> dict:
 def generate(
     request: Request,
     payload: PolicyGenerationRequest,
+    compliance_ai_session: str | None = Cookie(default=None),
     x_llm_provider: str | None = Header(default=None),
     x_llm_api_key: str | None = Header(default=None),
 ) -> PolicyGenerationResponse:
     # 정책 생성
     try:
+        audit_user = current_user(compliance_ai_session)
+        actor_user_id = str(audit_user.get("id", "")).strip() if audit_user else AUDIT_PUBLIC_USER_ID
+        actor_email = str(audit_user.get("email", "")).strip().lower() if audit_user else AUDIT_PUBLIC_EMAIL
         response = generate_policy(
             payload,
             llm_provider=sanitize_llm_provider(x_llm_provider),
@@ -1868,9 +1877,12 @@ def generate(
             "policy.generate",
             "policy",
             str(getattr(payload, "policy_kind", "") or ""),
+            actor_user_id=actor_user_id,
+            actor_email=actor_email,
             details={
                 "policy_kind": str(getattr(payload, "policy_kind", "") or ""),
                 "use_llm": bool(getattr(payload, "use_llm", False)),
+                "actor_type": "login" if audit_user else "public",
             },
             after=response.model_dump() if hasattr(response, "model_dump") else response.dict(),
         )

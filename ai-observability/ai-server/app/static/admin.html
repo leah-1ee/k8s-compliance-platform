@@ -666,6 +666,15 @@
             <input id="auditTargetIdFilter" placeholder="user-id, cluster-id" />
           </label>
           <label>
+            Actor 유형
+            <select id="auditActorTypeFilter">
+              <option value="">전체</option>
+              <option value="public">public</option>
+              <option value="login">login user</option>
+              <option value="admin">admin</option>
+            </select>
+          </label>
+          <label>
             시작일
             <input id="auditDateFromFilter" type="date" />
           </label>
@@ -738,6 +747,7 @@
       const auditActionFilter = document.querySelector("#auditActionFilter");
       const auditTargetTypeFilter = document.querySelector("#auditTargetTypeFilter");
       const auditTargetIdFilter = document.querySelector("#auditTargetIdFilter");
+      const auditActorTypeFilter = document.querySelector("#auditActorTypeFilter");
       const auditDateFromFilter = document.querySelector("#auditDateFromFilter");
       const auditDateToFilter = document.querySelector("#auditDateToFilter");
       const auditSummaryEl = document.querySelector("#auditSummary");
@@ -893,7 +903,8 @@
               <strong>${escapeHtml(event.action || "-")} · ${escapeHtml(event.result || "success")}</strong>
               <div class="audit-log-meta">
                 time=${escapeHtml(event.created_at || "-")} ·
-                actor=${escapeHtml(event.actor_email || event.actor_user_id || "-")} ·
+                actor=${escapeHtml(event.actor_email || event.actor_user_id || "public actor")} ·
+                actor_type=<span class="pill">${escapeHtml(event.actor_type || "public")}</span> ·
                 target=<span class="pill">${escapeHtml(event.target_type || "-")}</span> ${escapeHtml(event.target_id || "-")} ·
                 request_id=${escapeHtml(event.request_id || "-")} ·
                 before_hash=${escapeHtml(event.before_hash || "-")} ·
@@ -919,9 +930,9 @@
         }
         const actorCards = actors.map((actor) => `
           <div class="audit-summary-card">
-            <span>${escapeHtml(actor.actor_email || actor.actor_user_id || "unknown actor")}</span>
+            <span>${escapeHtml(actor.actor_email || actor.actor_user_id || "public actor")}</span>
             <strong>${escapeHtml(actor.count || 0)}</strong>
-            <span>latest=${escapeHtml(actor.latest_at || "-")}</span>
+            <span>${escapeHtml(actor.actor_type || "public")} · latest=${escapeHtml(actor.latest_at || "-")}</span>
           </div>
         `).join("");
         auditSummaryEl.innerHTML = `
@@ -1049,6 +1060,9 @@
         if (auditTargetIdFilter.value.trim()) {
           params.set("target_id", auditTargetIdFilter.value.trim());
         }
+        if (auditActorTypeFilter.value) {
+          params.set("actor_type", auditActorTypeFilter.value);
+        }
         if (auditDateFromFilter.value) {
           params.set("date_from", auditDateFromFilter.value);
         }
@@ -1112,7 +1126,7 @@
         });
       });
 
-      [auditDateFromFilter, auditDateToFilter].forEach((input) => {
+      [auditActorTypeFilter, auditDateFromFilter, auditDateToFilter].forEach((input) => {
         input.addEventListener("change", () => {
           loadAuditLogs().catch((error) => setMessage(error.message));
         });

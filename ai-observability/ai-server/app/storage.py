@@ -691,12 +691,45 @@ def record_audit_event(
         )
 
 
+def _audit_actor_filter(actor_type: str) -> str:
+    normalized = str(actor_type or "").strip().lower()
+    public_condition = "((actor_user_id = '' AND actor_email = '') OR actor_user_id = 'public' OR actor_email = 'public actor')"
+    admin_condition = "(actor_user_id = 'kubeowl-admin' OR actor_email = 'kubeowl-admin@local')"
+    if normalized == "public":
+        return public_condition
+    if normalized == "admin":
+        return admin_condition
+    if normalized == "login":
+        return f"(NOT {public_condition} AND NOT {admin_condition})"
+    return ""
+
+
+def _audit_actor_type(actor_user_id: str, actor_email: str) -> str:
+    user_id = str(actor_user_id or "").strip()
+    email = str(actor_email or "").strip().lower()
+    if (not user_id and not email) or user_id == "public" or email == "public actor":
+        return "public"
+    if user_id == "kubeowl-admin" or email == "kubeowl-admin@local":
+        return "admin"
+    return "login"
+
+
+def _normalize_audit_actor(row: dict[str, Any]) -> dict[str, Any]:
+    actor_type = _audit_actor_type(str(row.get("actor_user_id", "")), str(row.get("actor_email", "")))
+    row["actor_type"] = actor_type
+    if actor_type == "public":
+        row["actor_user_id"] = row.get("actor_user_id") or "public"
+        row["actor_email"] = row.get("actor_email") or "public actor"
+    return row
+
+
 def list_audit_events(
     limit: int = 100,
     action: str = "",
     target_type: str = "",
     target_id: str = "",
     actor_user_id: str = "",
+    actor_type: str = "",
     date_from: str = "",
     date_to: str = "",
 ) -> list[dict[str, Any]]:
@@ -706,6 +739,7 @@ def list_audit_events(
     normalized_target_type = str(target_type or "").strip()
     normalized_target_id = str(target_id or "").strip()
     normalized_actor_user_id = str(actor_user_id or "").strip()
+    normalized_actor_type = str(actor_type or "").strip().lower()
     normalized_date_from = str(date_from or "").strip()
     normalized_date_to = str(date_to or "").strip()
     filters: list[str] = []
@@ -722,6 +756,9 @@ def list_audit_events(
     if normalized_actor_user_id:
         filters.append("actor_user_id = ?")
         params.append(normalized_actor_user_id)
+    actor_type_filter = _audit_actor_filter(normalized_actor_type)
+    if actor_type_filter:
+        filters.append(actor_type_filter)
     if normalized_date_from:
         filters.append("date(created_at) >= date(?)")
         params.append(normalized_date_from)
@@ -748,7 +785,7 @@ def list_audit_events(
             event["details"] = json.loads(event.pop("details_json") or "{}")
         except json.JSONDecodeError:
             event["details"] = {}
-        events.append(event)
+        events.append(_normalize_audit_actor(event))
     return events
 
 
@@ -757,6 +794,7 @@ def summarize_audit_events(
     target_type: str = "",
     target_id: str = "",
     actor_user_id: str = "",
+    actor_type: str = "",
     date_from: str = "",
     date_to: str = "",
 ) -> dict[str, Any]:
@@ -765,6 +803,7 @@ def summarize_audit_events(
     normalized_target_type = str(target_type or "").strip()
     normalized_target_id = str(target_id or "").strip()
     normalized_actor_user_id = str(actor_user_id or "").strip()
+    normalized_actor_type = str(actor_type or "").strip().lower()
     normalized_date_from = str(date_from or "").strip()
     normalized_date_to = str(date_to or "").strip()
     filters: list[str] = []
@@ -781,6 +820,9 @@ def summarize_audit_events(
     if normalized_actor_user_id:
         filters.append("actor_user_id = ?")
         params.append(normalized_actor_user_id)
+    actor_type_filter = _audit_actor_filter(normalized_actor_type)
+    if actor_type_filter:
+        filters.append(actor_type_filter)
     if normalized_date_from:
         filters.append("date(created_at) >= date(?)")
         params.append(normalized_date_from)
@@ -814,7 +856,7 @@ def summarize_audit_events(
         ).fetchall()
     return {
         "total": int(total_row["count"] or 0),
-        "actors": [dict(row) for row in actor_rows],
+        "actors": [_normalize_audit_actor(dict(row)) for row in actor_rows],
         "actions": [dict(row) for row in action_rows],
     }
 

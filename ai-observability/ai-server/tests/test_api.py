@@ -106,6 +106,7 @@ def test_admin_is_served():
     assert "Admin Grafana" in response.text
     assert "감사 로그" in response.text
     assert "auditActionFilter" in response.text
+    assert "auditActorTypeFilter" in response.text
     assert "auditDateFromFilter" in response.text
     assert "auditSummary" in response.text
     assert "data-enable" in response.text
@@ -842,6 +843,57 @@ def test_generate_policy_rejects_prompt_injection():
     assert response.status_code == 400
     assert "안전장치 우회" in body["error"]
     assert body["examples"]
+
+
+def test_policy_generate_audit_separates_public_and_login_actor():
+    public_response = client.post(
+        "/generate-policy",
+        headers={"X-LLM-API-Key": "rate-limit-bypass-key"},
+        json={
+            "prompt": "latest 태그를 금지해줘",
+            "policy_kind": "latest-tag",
+            "constraint_name": "audit-public-latest-tag",
+        },
+    )
+    assert public_response.status_code == 200
+
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="audit-login-generator@example.test",
+        email="audit-login-generator@example.test",
+    )
+    session = storage.create_session(user["id"])
+    login_response = client.post(
+        "/generate-policy",
+        headers={"X-LLM-API-Key": "rate-limit-bypass-key"},
+        cookies={"compliance_ai_session": session},
+        json={
+            "prompt": "non-root 정책을 만들어줘",
+            "policy_kind": "non-root",
+            "constraint_name": "audit-login-non-root",
+        },
+    )
+    assert login_response.status_code == 200
+
+    public_audit_response = client.get(
+        "/admin/api/audit-events?action=policy.generate&actor_type=public&target_id=latest-tag",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    public_audit_body = public_audit_response.json()
+
+    assert public_audit_response.status_code == 200
+    assert public_audit_body["audit_summary"]["total"] >= 1
+    assert all(event["actor_type"] == "public" for event in public_audit_body["audit_events"])
+    assert any(event["actor_email"] == "public actor" for event in public_audit_body["audit_events"])
+
+    login_audit_response = client.get(
+        "/admin/api/audit-events?action=policy.generate&actor_type=login&target_id=non-root",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    login_audit_body = login_audit_response.json()
+
+    assert login_audit_response.status_code == 200
+    assert any(event["actor_email"] == user["email"] for event in login_audit_body["audit_events"])
 
 
 def test_llm_partial_review_is_completed(monkeypatch):
@@ -1582,6 +1634,12 @@ def test_runtime_features_require_login():
     assert client.get("/api/observability/summary").status_code == 401
     assert client.get("/compliance-report").status_code == 401
     assert client.post("/api/clusters/missing-cluster/policy-applies", json={"manifest": "kind: Pod"}).status_code == 401
+    public_apply_audit = client.get(
+        "/admin/api/audit-events?action=policy.apply&actor_type=public",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    assert public_apply_audit.status_code == 200
+    assert public_apply_audit.json()["audit_summary"]["total"] == 0
 
 
 def test_dashboard_summary_uses_user_scoped_policy_and_event_counts():
