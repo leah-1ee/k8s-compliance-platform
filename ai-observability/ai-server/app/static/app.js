@@ -588,16 +588,20 @@ function analysisContextRows(payload) {
 }
 
 function renderYamlSnippet(yamlSnippet) {
+  const originalManifest = $("#resourceManifest")?.value.trim() || "";
   if (!yamlSnippet) {
     return `
       <div class="analysis-code-block">
-        <h3>수정 YAML 스니펫</h3>
-        <p>이 이벤트에는 바로 적용할 수 있는 YAML 스니펫이 없습니다.</p>
+        <h3>매니페스트 변경 제안</h3>
+        <p>이 이벤트에는 바로 적용할 수 있는 YAML 패치 제안이 없습니다.</p>
       </div>
     `;
   }
+  const originalLines = originalManifest
+    ? renderManifestLines(originalManifest, "context")
+    : `<span class="diff-line muted">저장된 리소스 매니페스트가 없습니다. 상단의 매니페스트 조회 버튼으로 kubectl 조회 명령을 확인하세요.</span>`;
   return `
-    <div class="analysis-code-block">
+    <div class="analysis-code-block manifest-diff-block">
       <div class="card-heading">
         <button class="copy-section copy-yaml-snippet" aria-label="수정 YAML 스니펫 복사" title="복사">
           <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -608,11 +612,28 @@ function renderYamlSnippet(yamlSnippet) {
             <path d="M20 6 9 17l-5-5"></path>
           </svg>
         </button>
-        <h3>수정 YAML 스니펫</h3>
+        <h3>매니페스트 변경 제안</h3>
       </div>
-      <pre><code id="analysisYamlOutput">${escapeHtml(yamlSnippet)}</code></pre>
+      <div class="manifest-diff-grid">
+        <section class="manifest-diff-pane">
+          <h4>기존 리소스 매니페스트</h4>
+          <pre><code>${originalLines}</code></pre>
+        </section>
+        <section class="manifest-diff-pane">
+          <h4>AI 제안 패치</h4>
+          <pre><code id="analysisYamlOutput">${renderManifestLines(yamlSnippet, "added")}</code></pre>
+        </section>
+      </div>
     </div>
   `;
+}
+
+function renderManifestLines(value, mode = "context") {
+  const className = mode === "added" ? "diff-line diff-added" : "diff-line";
+  return String(value || "")
+    .split("\n")
+    .map((line) => `<span class="${className}">${escapeHtml(line || " ")}</span>`)
+    .join("\n");
 }
 
 function renderViolationAnalysis(result, payload) {
@@ -1773,10 +1794,6 @@ async function generateReport() {
       <h3>권장 조치</h3>
       <div class="analysis-code-block report-terminal-window">
         <ul>${recommendations}</ul>
-      </div>
-      <h3>원본 리포트 JSON</h3>
-      <div class="analysis-code-block report-terminal-window">
-        <pre><code>${escapeHtml(latestReportText)}</code></pre>
       </div>
     `;
     latestReportHtml = $("#reportResult").innerHTML;

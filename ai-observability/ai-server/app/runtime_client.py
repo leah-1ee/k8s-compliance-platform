@@ -929,13 +929,31 @@ def _report_recommendations(summary: dict[str, Any], events: list[dict[str, Any]
     recommendations = []
     by_severity = summary.get("by_severity", {})
     if by_severity.get("high", 0):
-        recommendations.append("High 이벤트가 있어 자동 격리 결과와 영향을 받은 namespace를 우선 확인하세요.")
+        recommendations.append(
+            "High 이벤트는 먼저 affected cluster, namespace, pod를 확인하고 동일 rule 반복 여부를 점검하세요. "
+            "Pod 정보가 있는 이벤트는 Violation Detail에서 매니페스트를 조회한 뒤 네트워크 격리, 서비스 계정 권한 축소, "
+            "securityContext 강화 순서로 대응하는 것이 좋습니다."
+        )
     if by_severity.get("medium", 0):
-        recommendations.append("Medium 이벤트는 반복 rule과 예외 필요 여부를 검토하세요.")
+        recommendations.append(
+            "Medium 이벤트는 즉시 차단보다 반복 패턴 확인이 우선입니다. 같은 rule이 같은 namespace에서 반복되면 정책 예외가 필요한지, "
+            "배포 템플릿에 기본 보안 컨텍스트와 resource limits가 빠져 있는지 함께 검토하세요."
+        )
     if any(event.get("source") == "gatekeeper" for event in events):
-        recommendations.append("Gatekeeper deny 이벤트는 리소스 매니페스트 수정 후 재배포 검증이 필요합니다.")
+        recommendations.append(
+            "Gatekeeper deny 이벤트는 실패한 리소스 매니페스트를 수정한 뒤 dry-run으로 검증하세요. "
+            "latest tag, root 실행, 허용되지 않은 registry, host namespace 사용 같은 원인은 배포 파이프라인 단계에서 먼저 잡는 편이 안전합니다."
+        )
+    if any(event.get("source") == "sidekick" for event in events):
+        recommendations.append(
+            "Falco Sidekick 이벤트는 런타임 행위 기반이므로 배포 시점 정책만으로 끝내지 말고, 실행 중 프로세스, 사용자, 컨테이너 이미지, "
+            "서비스 계정 권한을 함께 확인하세요. Pod 맥락이 없는 host 성격 이벤트는 노드/에이전트 이벤트로 분리해 해석하세요."
+        )
     if not recommendations:
-        recommendations.append("최근 수집된 위반 이벤트가 없거나 모두 낮은 위험으로 분류되었습니다.")
+        recommendations.append(
+            "최근 수집된 위반 이벤트가 없거나 모두 낮은 위험으로 분류되었습니다. 현재 기준선을 유지하되, 새 클러스터 등록 후 "
+            "Sidekick ingest, Gatekeeper audit, Grafana scrape가 모두 정상인지 주기적으로 확인하세요."
+        )
     return recommendations
 
 

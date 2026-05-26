@@ -3190,6 +3190,51 @@ body.is-modal-open {
   overflow-wrap: anywhere;
 }
 
+.manifest-diff-block {
+  display: grid;
+  gap: 12px;
+}
+
+.manifest-diff-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.manifest-diff-pane {
+  min-width: 0;
+}
+
+.manifest-diff-pane h4 {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.manifest-diff-pane pre {
+  min-height: 260px;
+  max-height: 460px;
+  overflow: auto;
+}
+
+.diff-line {
+  display: block;
+  min-height: 1.45em;
+  padding: 0 8px;
+  border-left: 3px solid transparent;
+}
+
+.diff-added {
+  border-left-color: #16a34a;
+  background: rgba(22, 163, 74, 0.18);
+}
+
+.diff-removed {
+  border-left-color: #dc2626;
+  background: rgba(220, 38, 38, 0.16);
+}
+
 .analysis-insight-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3489,6 +3534,7 @@ button.event-row:focus-visible {
   .metric-grid,
   .llm-key-grid,
   .runtime-filters,
+  .manifest-diff-grid,
   .analysis-insight-grid,
   .analysis-context-grid {
     grid-template-columns: 1fr;
