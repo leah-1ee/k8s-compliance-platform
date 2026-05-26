@@ -4,6 +4,18 @@
 
 Finish the next deployment and verification pass after TASK-10 policy apply flow work. The focus is not a new redesign: deploy the current AI server/UI changes, apply provisioned Grafana dashboard title updates, verify `Active Policies` against live Gatekeeper constraints, and close the evaluator demo path.
 
+## TASK-10 Carryover
+
+TASK-10 is complete for local implementation, API contract, fallback behavior, UI wiring, and tests. It is not fully complete as a live/demo milestone until these verification items are done on the VM:
+
+- Build and deploy the current AI server/UI image (`0.1.18`).
+- Apply the updated Grafana dashboard ConfigMaps and verify provisioned titles in Grafana.
+- Confirm `Active Policies` reflects live Gatekeeper constraints after granting read-only `constraints.gatekeeper.sh` RBAC to `compliance-system:ai-classifier`.
+- Run the end-to-end evaluator path: generate policy, apply or fallback apply, observe policy/violation/runtime signal, open Violation Detail, generate AI Report PDF, and verify Grafana panels.
+- Decide whether the visible `Grafana Overview` dashboard should remain, be renamed, or be removed. It is not the same repo-managed dashboard as `Gatekeeper Compliance Overview`.
+
+These items are now owned by TASK-11. Do not reopen TASK-10 for new implementation unless the VM smoke exposes a code bug in the policy apply flow.
+
 ## Current state
 
 - Latest local commits before this handoff:
@@ -181,4 +193,3 @@ python3 -m json.tool ai-observability/dashboards/grafana/compliance-overview-cla
 python3 -m json.tool ai-observability/dashboards/grafana/compliance-overview.json >/tmp/compliance-v2.json
 python3 -m json.tool runtime-detection/manifests/grafana/runtime-dashboard.json >/tmp/runtime-dashboard.json
 ```
-

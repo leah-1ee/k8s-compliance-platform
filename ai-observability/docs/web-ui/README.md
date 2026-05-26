@@ -1,8 +1,8 @@
-# Compliance AI Console
+# KubeOwl Web UI
 
 ## Purpose
 
-Compliance AI Console은 LLM 정책 생성, Gatekeeper 정책 YAML 확인, Falco/Gatekeeper 위반 이벤트 분석을 한 화면에서 수행하기 위한 웹 UI이다.
+KubeOwl 웹 UI는 LLM 정책 생성, Gatekeeper 정책 YAML 확인, Falco/Gatekeeper 위반 이벤트 분석을 한 화면에서 수행하기 위한 웹 UI이다.
 
 ## Run
 
@@ -16,6 +16,8 @@ uvicorn app.main:app --reload --port 8000
 ```text
 http://127.0.0.1:8000/ui
 ```
+
+공개 문서는 로그인 없이 `/docs` 에서 확인한다.
 
 ## APIs
 
@@ -123,6 +125,7 @@ curl -I http://127.0.0.1:8000/ui
 ## Notes
 
 - 현재 정책 생성은 재현 가능한 템플릿 기반으로 동작한다.
+- `/docs` 는 공개 진입점이며 로그인 없이 접근 가능해야 한다.
 - LLM API 연동 시 `LLM_API_URL`, `LLM_API_KEY`, `LLM_MODEL` 환경 변수를 사용한다.
 - LLM 응답 장애 시 템플릿 기반 정책 생성 결과를 유지한다.
 - 기본 제외 네임스페이스는 `kube-system`, `gatekeeper-system`, `kube-flannel`, `monitoring` 이다.

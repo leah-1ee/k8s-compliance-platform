@@ -3,14 +3,14 @@
 ## 로컬 단위 테스트
 
 ```bash
-.venv/bin/python -m pytest ai-observability/ai-server/tests -q
+.venv/bin/python -m pytest ai-observability/ai-server/tests/
 ```
 
 ## 로컬 API 실행
 
 ```bash
 cd ai-observability/ai-server
-../../.venv/bin/uvicorn app.main:app --reload --port 8000
+../../.venv/bin/python -m uvicorn app.main:app --reload --port 8000
 ```
 
 ```bash
@@ -33,24 +33,24 @@ curl http://127.0.0.1:8000/healthz
 
 ```bash
 docker buildx build --platform linux/amd64 \
-  -t [DOCKER_ID]/compliance-ai-server:0.1.0 \
+  -t [DOCKER_ID]/compliance-ai-server:0.2.8 \
   ai-observability/ai-server \
   --push
 ```
 
 ```bash
 docker buildx build --platform linux/amd64 \
-  -t [DOCKER_ID]/compliance-response-server:0.1.0 \
+  -t [DOCKER_ID]/compliance-response-server:<response-tag> \
   runtime-detection/response-server \
   --push
 ```
 
 ```bash
-kubectl apply -f ai-observability/k8s/ai-server.yaml
+kubectl apply -f cloud-deploy/ai-server.yaml
 ```
 
 ```bash
-kubectl rollout status deployment/ai-classifier -n compliance-system
+kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s
 ```
 
 ## 운영 검증 예시
@@ -76,10 +76,10 @@ curl -s -X POST "https://<vm-host>/api/clusters/<cluster-id>/policy-applies" \
 
 ## response-server 연동
 
-`ai-observability/k8s/response-server.yaml`은 `AI_ENDPOINT`가 이미 설정된 파일이다.
+`cloud-deploy/response-server.yaml`은 학교 클라우드 VM 배포 사본이다.
 
 ```bash
-kubectl apply -f ai-observability/k8s/response-server.yaml
+kubectl apply -f cloud-deploy/response-server.yaml
 kubectl rollout status deployment/response-server -n compliance-system
 ```
 

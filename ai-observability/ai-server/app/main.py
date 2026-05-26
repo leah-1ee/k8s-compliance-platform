@@ -367,7 +367,7 @@ def healthz() -> dict[str, str]:
 
 @app.get("/favicon.ico")
 def favicon() -> FileResponse:
-    return FileResponse(STATIC_DIR / "assets" / "kubeowl-logo.png", media_type="image/png")
+    return FileResponse(STATIC_DIR / "assets" / "main-logo.png", media_type="image/png")
 
 
 @app.get("/config")

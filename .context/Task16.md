@@ -94,6 +94,28 @@ If 502s persist, distinguish:
 - ai-server upstream Grafana unavailable
 - Grafana root `/public` asset rewrite failure
 
+Latest VM log finding:
+
+```text
+POST /api/ds/query?... HTTP/1.1" 200 OK
+GET /api/annotations?... HTTP/1.1" 200 OK
+WebSocket /grafana-ui/api/live/ws 403
+```
+
+Interpretation:
+
+- Runtime dashboard data queries are healthy inside the cluster.
+- Annotation calls are healthy inside the cluster.
+- The visible browser instability is not the runtime metrics pipeline.
+- Grafana Live WebSocket requests are rejected with `403` through the KubeOwl `/grafana-ui/` proxy path.
+- Browser-side `502` reports can still appear on the public zrok URL even when ai-server logs show upstream Grafana HTTP calls succeeding.
+
+TASK-16 should handle Grafana Live explicitly:
+
+- Either proxy `/grafana-ui/api/live/ws` as a real WebSocket with the same auth context as the HTTP Grafana proxy.
+- Or disable/suppress Grafana Live for the demo path if it is not needed, so the browser no longer retries a guaranteed `403`.
+- Keep `/api/ds/query` and `/api/annotations` HTTP proxy behavior unchanged; they are currently returning `200 OK`.
+
 ### 4. Polish Grafana panels
 
 The runtime data path is correct, but several panels are visually noisy:
