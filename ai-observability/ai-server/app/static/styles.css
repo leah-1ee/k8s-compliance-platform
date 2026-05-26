@@ -2582,7 +2582,14 @@ pre[data-empty="true"] {
   padding: 16px 18px;
   border: 1px solid rgba(125, 211, 252, 0.24);
   border-radius: 14px;
+  background: #08111f;
+  color: #dbeafe;
+  caret-color: #7dd3fc;
   resize: vertical;
+}
+
+.terminal-textarea::placeholder {
+  color: rgba(219, 234, 254, 0.58);
 }
 
 .terminal-textarea:focus {

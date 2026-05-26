@@ -15,6 +15,7 @@ let landingTypewriterStarted = false;
 let apiBackoffUntil = 0;
 const SESSION_KEY = "complianceAiLlmApiKey";
 const THEME_KEY = "complianceOpsTheme";
+const LAST_AUTH_EMAIL_KEY = "kubeowlLastAuthEmail";
 const DEFAULT_RUNTIME_LIMIT = "50";
 const INFRA_NAMESPACES = new Set([
   "kube-system",
@@ -2242,6 +2243,21 @@ async function loadAuthStatus() {
   renderAuthStatus();
 }
 
+function lastAuthEmail() {
+  return (localStorage.getItem(LAST_AUTH_EMAIL_KEY) || "").trim().toLowerCase();
+}
+
+function updateLoginLinks() {
+  const hint = lastAuthEmail();
+  const href = hint ? `/auth/google/login?login_hint=${encodeURIComponent(hint)}` : "/auth/google/login";
+  ["#loginLink", "#landingLoginLink"].forEach((selector) => {
+    const link = $(selector);
+    if (link) {
+      link.href = href;
+    }
+  });
+}
+
 function renderAuthStatus() {
   const status = $("#authStatus");
   const loginLink = $("#loginLink");
@@ -2251,6 +2267,10 @@ function renderAuthStatus() {
   document.body.classList.toggle("logged-in", Boolean(authState.authenticated));
   if (authState.authenticated) {
     status.textContent = authState.user?.email || "로그인됨";
+    if (authState.user?.email) {
+      localStorage.setItem(LAST_AUTH_EMAIL_KEY, authState.user.email.trim().toLowerCase());
+    }
+    updateLoginLinks();
     status.hidden = false;
     loginLink.hidden = true;
     accountDeleteButton.hidden = false;
@@ -2258,6 +2278,7 @@ function renderAuthStatus() {
     renderAuthGates();
     return;
   }
+  updateLoginLinks();
   status.hidden = true;
   loginLink.hidden = false;
   accountDeleteButton.hidden = true;
@@ -2266,9 +2287,13 @@ function renderAuthStatus() {
 }
 
 async function logout() {
+  const previousEmail = authState.user?.email || "";
   const response = await fetch("/logout", { method: "POST" });
   if (!response.ok) {
     throw new Error(await response.text());
+  }
+  if (previousEmail) {
+    localStorage.setItem(LAST_AUTH_EMAIL_KEY, previousEmail.trim().toLowerCase());
   }
   closeAccountDeletionModal();
   authState = { authenticated: false, user: null, auth: authState.auth };

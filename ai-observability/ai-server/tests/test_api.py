@@ -303,6 +303,20 @@ def test_google_login_requires_oauth_configuration():
     assert response.json()["error"] == "Google OAuth is not configured"
 
 
+def test_google_login_forwards_login_hint(monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "google-client-id")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "google-client-secret")
+
+    response = client.get(
+        "/auth/google/login?login_hint=Student@Example.Test",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert "login_hint=student%40example.test" in response.headers["location"]
+    assert "prompt=select_account" not in response.headers["location"]
+
+
 def test_dev_login_requires_explicit_enable():
     response = client.get("/auth/dev-login", follow_redirects=False)
 

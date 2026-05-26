@@ -395,12 +395,13 @@ def me(compliance_ai_session: str | None = Cookie(default=None)) -> dict:
 
 
 @app.get("/auth/google/login")
-def google_login(request: Request):
+def google_login(request: Request, login_hint: str = ""):
     # Google OAuth 시작
     client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
     if not auth_configured():
         return JSONResponse(status_code=503, content={"error": "Google OAuth is not configured"})
     state = secrets.token_urlsafe(24)
+    normalized_hint = login_hint.strip().lower()
     params = {
         "client_id": client_id,
         "redirect_uri": oauth_redirect_uri(request),
@@ -409,6 +410,8 @@ def google_login(request: Request):
         "state": state,
         "access_type": "online",
     }
+    if normalized_hint and "@" in normalized_hint and len(normalized_hint) <= 320:
+        params["login_hint"] = normalized_hint
     response = RedirectResponse(f"{GOOGLE_AUTH_URL}?{urlencode(params)}", status_code=302)
     response.set_cookie(
         OAUTH_STATE_COOKIE_NAME,
