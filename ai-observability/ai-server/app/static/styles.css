@@ -3184,6 +3184,12 @@ body.is-modal-open {
   margin-top: 10px;
 }
 
+.report-summary-block p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .analysis-insight-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3272,6 +3278,11 @@ body.is-modal-open {
 
 .runtime-events {
   margin-bottom: var(--section-gap);
+}
+
+.analysis-selection-hint {
+  margin: -8px 0 var(--section-gap);
+  font-size: 13px;
 }
 
 button.event-row {

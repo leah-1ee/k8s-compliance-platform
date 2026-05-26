@@ -1760,7 +1760,7 @@ async function generateReport() {
       .map((item) => `<li>${escapeHtml(item.rule)}: ${escapeHtml(item.count)}</li>`)
       .join("");
     const llmSummary = report.llm_summary
-      ? `<div class="analysis-code-block"><p>${escapeHtml(report.llm_summary)}</p></div>`
+      ? `<div class="analysis-code-block report-summary-block"><p>${escapeHtml(report.llm_summary)}</p></div>`
       : `<p>${escapeHtml(report.llm_error || "LLM 요약을 생성하지 못해 규칙 기반 리포트만 표시합니다.")}</p>`;
     $("#reportResult").innerHTML = `
       <span class="badge ${report.llm_used ? "ready" : "loading"}">${report.llm_used ? "LLM report" : "rule report"}</span>
@@ -1774,6 +1774,7 @@ async function generateReport() {
       <div class="analysis-code-block report-terminal-window">
         <ul>${recommendations}</ul>
       </div>
+      <h3>원본 리포트 JSON</h3>
       <div class="analysis-code-block report-terminal-window">
         <pre><code>${escapeHtml(latestReportText)}</code></pre>
       </div>

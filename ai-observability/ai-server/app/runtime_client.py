@@ -892,9 +892,10 @@ def _safe_llm_report_summary(
                     "You are a Kubernetes compliance analyst. "
                     "Write a concise Korean executive summary for operators. "
                     "Mention risk level, top causes, and the next actions. "
-                    "Do not invent events that are not in the JSON."
+                    "Do not invent events that are not in the JSON. "
+                    "End with a complete sentence."
                 ),
-                max_tokens=900,
+                max_tokens=1400,
             ).strip(),
             "",
         )
@@ -918,7 +919,8 @@ def _build_report_prompt(report: dict[str, Any]) -> str:
     redacted_report = _redact_for_llm(compact_report)
     return (
         "다음 Kubernetes 컴플라이언스 리포트 JSON을 운영자용으로 요약하세요.\n"
-        "출력은 한국어 4~6문장으로 작성하고, 조치 우선순위를 포함하세요.\n\n"
+        "출력은 한국어 4~6문장으로 작성하고, 조치 우선순위를 포함하세요.\n"
+        "마지막 문장은 반드시 완결된 문장으로 끝내세요.\n\n"
         f"{json.dumps(redacted_report, ensure_ascii=False)}"
     )
 

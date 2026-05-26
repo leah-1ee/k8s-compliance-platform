@@ -2019,7 +2019,7 @@ def test_compliance_report_uses_llm_when_configured(monkeypatch):
     assert body["llm_error"] == ""
     assert calls[0]["provider"] == "google"
     assert "컴플라이언스 리포트" in calls[0]["prompt"]
-    assert calls[0]["max_tokens"] == 900
+    assert calls[0]["max_tokens"] == 1400
 
 
 def test_compliance_report_redacts_sensitive_values_before_llm(monkeypatch):
