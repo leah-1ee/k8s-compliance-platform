@@ -674,6 +674,11 @@
                 <span class="topic-main"><strong>Service Pattern</strong><span>lightweight BFF</span></span>
                 <span class="topic-arrow">›</span>
               </button>
+              <button class="topic-button" type="button" data-docs-topic="arch-stack">
+                <span class="topic-number">6</span>
+                <span class="topic-main"><strong>Frontend / Backend / DB</strong><span>static ui / fastapi / sqlite pvc</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
             </div>
             <div class="topic-detail-wrap">
               <article class="topic-detail is-active" data-docs-panel="arch-cluster">
@@ -710,6 +715,16 @@
                 <h3>이 서비스는 경량 BFF + 모듈형 백엔드 + 프록시된 관측 도구 패턴으로 구성합니다.</h3>
                 <p>KubeOwl은 프론트, 정책 생성, 런타임 분석, 관리자 기능을 하나의 FastAPI 백엔드에서 통합하는 경량 BFF 형태에 가깝습니다. 사용자-facing 경로는 public landing과 public docs, 인증된 사용자 콘솔로 나뉘고, 데이터가 민감한 경로는 user_id와 admin token으로 다시 한 번 좁힙니다. Grafana와 외부 LLM은 직접 노출하지 않고 프록시 또는 세션 단위 경계 안에 둡니다.</p>
                 <div class="topic-chips"><span>lightweight BFF</span><span>modular backend</span><span>proxy boundary</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="arch-stack">
+                <span class="kicker">Frontend / Backend / DB</span>
+                <h3>프론트, 백엔드, DB는 하나의 AI 서버 배포 안에서 동작하고, DB는 SQLite 파일을 PVC에 저장합니다.</h3>
+                <p>프론트엔드는 별도 SPA 빌드 서버나 별도 프론트 Pod가 아니라 FastAPI가 제공하는 정적 HTML/CSS/JavaScript입니다. <code>/</code>, <code>/ui</code>, <code>/admin</code>, <code>/docs</code> 같은 화면은 같은 AI 서버에서 서빙되고, 브라우저는 API 호출만 FastAPI 엔드포인트로 보냅니다.</p>
+                <p>백엔드는 <code>ai-classifier</code> FastAPI 배포가 담당합니다. Google OAuth 콜백, 세션 쿠키, 정책 생성, 클러스터 토큰 발급, Falco 이벤트 ingest, 감사 로그, Grafana 프록시, LLM 호출 경계를 모두 이 계층에서 통제합니다.</p>
+                <p>DB는 별도 PostgreSQL/MySQL 서버가 아니라 SQLite만 사용합니다. Kubernetes에서는 <code>SQLITE_PATH=/data/compliance-ai-server.sqlite3</code>로 설정하고, <code>ai-classifier-data</code> PVC를 <code>/data</code>에 마운트해 Pod 재시작 후에도 사용자, 클러스터, 세션, 감사 로그, 이벤트 메타데이터가 유지되도록 합니다.</p>
+                <p>SQLite는 WAL 모드로 열고, 동시 쓰기 충돌을 줄이기 위해 배포는 <code>replicas: 1</code>과 <code>strategy.type: Recreate</code>를 유지합니다. 즉, PVC는 앱 DB 파일을 보존하기 위한 저장소이고, Grafana/Prometheus는 관측용 서비스일 뿐 KubeOwl의 주 DB가 아닙니다.</p>
+                <p>Google Auth는 비밀번호와 계정 신원 확인을 Google에 위임합니다. KubeOwl DB에는 Google provider subject와 내부 <code>user_id</code>, 이메일, 표시 이름, 세션 토큰 해시, 사용자별 클러스터/설정처럼 서비스 운영에 필요한 최소 정보만 저장합니다.</p>
+                <div class="topic-chips"><span>static frontend</span><span>FastAPI BFF</span><span>SQLite WAL</span><span>PVC persisted</span><span>Google OAuth delegated</span></div>
               </article>
             </div>
           </div>
