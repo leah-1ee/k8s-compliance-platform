@@ -960,24 +960,44 @@ async function analyzeViolation() {
   }
   clearInlineAlert();
   setAnalysisLoading(true);
-  setAnalysisState(
-    "loading",
-    "위반 상세 분석 중",
-    $("#useViolationLlm").checked
-      ? "이벤트 JSON과 리소스 매니페스트를 LLM에 함께 전달하고 있습니다."
-      : "이벤트 JSON과 리소스 매니페스트를 규칙 기반으로 분석하고 있습니다.",
-  );
-  let payload;
   try {
-    payload = JSON.parse($("#eventPayload").value);
-  } catch (error) {
-    setAnalysisState("error", "JSON 형식 오류", error.message);
-    throw error;
-  }
-  try {
-    payload.resource_manifest = $("#resourceManifest").value;
-    payload.use_llm = $("#useViolationLlm").checked;
-    const result = await postJson("/analyze-violation", payload);
+    const useLlm = $("#useViolationLlm").checked;
+    const hasSelectedEvent = Boolean(selectedRuntimeEvent?.id);
+    let payload;
+    setAnalysisState(
+      "loading",
+      "위반 상세 분석 중",
+      hasSelectedEvent
+        ? (useLlm
+          ? "선택한 런타임 이벤트와 저장된 매니페스트를 LLM에 함께 전달하고 있습니다."
+          : "선택한 런타임 이벤트를 규칙 기반으로 분석하고 있습니다.")
+        : (useLlm
+          ? "이벤트 JSON과 리소스 매니페스트를 LLM에 함께 전달하고 있습니다."
+          : "이벤트 JSON과 리소스 매니페스트를 규칙 기반으로 분석하고 있습니다."),
+    );
+    let result;
+    if (hasSelectedEvent) {
+      payload = eventToAnalysisPayload(selectedRuntimeEvent);
+      const response = await fetch(`/analyze-runtime-event/${encodeURIComponent(selectedRuntimeEvent.id)}`, {
+        method: "POST",
+        headers: llmHeaders(),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(formatErrorMessage(body.error || body.detail || `HTTP ${response.status}`));
+      }
+      result = body;
+    } else {
+      try {
+        payload = JSON.parse($("#eventPayload").value);
+      } catch (error) {
+        setAnalysisState("error", "JSON 형식 오류", error.message);
+        throw error;
+      }
+      payload.resource_manifest = $("#resourceManifest").value;
+      payload.use_llm = useLlm;
+      result = await postJson("/analyze-violation", payload);
+    }
     renderViolationAnalysis(result, payload);
     latestAnalysisText = JSON.stringify(result, null, 2);
     showToast("분석 완료");
