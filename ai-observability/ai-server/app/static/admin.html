@@ -235,7 +235,7 @@
       }
       .audit-log-card {
         display: grid;
-        gap: 16px;
+        gap: 14px;
       }
       .audit-log-heading {
         display: flex;
@@ -246,11 +246,74 @@
       .audit-log-heading h2 {
         margin-bottom: 0;
       }
+      .audit-refresh-button {
+        white-space: nowrap;
+      }
+      .audit-filter-panel {
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+        border: 1px solid rgba(8, 119, 242, 0.14);
+        border-radius: 12px;
+        background: rgba(244, 251, 255, 0.7);
+      }
+      body[data-theme="dark"] .audit-filter-panel {
+        background: rgba(15, 23, 42, 0.62);
+      }
       .audit-log-filters {
         display: grid;
-        grid-template-columns: 180px minmax(220px, 1.3fr) minmax(170px, 0.9fr) minmax(180px, 1fr) 150px 150px;
+        grid-template-columns: 180px minmax(220px, 1fr) minmax(160px, 0.8fr) minmax(200px, 1fr);
         gap: 12px;
-        align-items: end;
+        align-items: start;
+      }
+      .audit-date-range {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .filter-label-row {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .help-tooltip {
+        position: relative;
+        display: inline-grid;
+        place-items: center;
+        width: 18px;
+        height: 18px;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 900;
+        cursor: help;
+      }
+      .help-tooltip::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        left: 50%;
+        bottom: calc(100% + 8px);
+        z-index: 8;
+        width: max-content;
+        max-width: 280px;
+        padding: 9px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel-strong);
+        color: var(--text);
+        box-shadow: var(--shadow-soft);
+        font-size: 11px;
+        line-height: 1.45;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateX(-50%) translateY(4px);
+        transition: opacity 0.14s ease, transform 0.14s ease;
+      }
+      .help-tooltip:hover::after,
+      .help-tooltip:focus-visible::after {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
       }
       .field-help {
         display: block;
@@ -305,7 +368,7 @@
         font-size: 24px;
       }
       .audit-hash-note {
-        margin: -4px 0 0;
+        margin: 0;
         color: var(--muted);
         font-size: 12px;
         font-weight: 760;
@@ -643,6 +706,9 @@
         .summary-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
+        .audit-log-filters {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
       }
       @media (max-width: 640px) {
         header {
@@ -655,6 +721,14 @@
         .filters,
         .audit-log-filters {
           grid-template-columns: 1fr;
+        }
+        .audit-log-heading,
+        .audit-date-range {
+          grid-template-columns: 1fr;
+        }
+        .audit-log-heading {
+          align-items: stretch;
+          flex-direction: column;
         }
       }
     </style>
@@ -712,46 +786,52 @@
       <section class="audit-log-card">
         <div class="audit-log-heading">
           <h2>감사 로그</h2>
-          <button id="refreshAuditLogs">감사 로그 새로고침</button>
+          <button class="audit-refresh-button" id="refreshAuditLogs">감사 로그 새로고침</button>
         </div>
-        <div class="audit-log-filters">
-          <label>
-            Actor 유형
-            <select id="auditActorTypeFilter">
-              <option value="">전체</option>
-              <option value="public">public</option>
-              <option value="login">login user</option>
-              <option value="admin">admin</option>
-            </select>
-            <span class="field-help">public=비로그인 정책 생성, login=로그인 사용자, admin=관리자 작업</span>
-          </label>
-          <label>
-            액션 필터
-            <input id="auditActionFilter" placeholder="cluster.create, policy.generate, policy.apply" />
-            <span class="field-help">예: policy.generate, policy.apply, cluster.rotate_token</span>
-          </label>
-          <label>
-            대상 유형
-            <input id="auditTargetTypeFilter" placeholder="user, cluster, grafana, policy" />
-            <span class="field-help">예: policy, cluster, user, grafana</span>
-          </label>
-          <label>
-            대상 ID
-            <input id="auditTargetIdFilter" placeholder="user-id, cluster-id" />
-            <span class="field-help">이메일/학번이 아니라 로그의 target 값입니다. 예: cluster-..., user-..., latest-tag</span>
-          </label>
-          <label>
-            시작일
-            <input id="auditDateFromFilter" type="date" />
-          </label>
-          <label>
-            종료일
-            <input id="auditDateToFilter" type="date" />
-          </label>
+        <div class="audit-filter-panel">
+          <div class="audit-log-filters">
+            <label>
+              <span class="filter-label-row">
+                Actor 유형
+                <span class="help-tooltip" tabindex="0" data-tooltip="public=비로그인 정책 생성, login=로그인 사용자, admin=관리자 작업">?</span>
+              </span>
+              <select id="auditActorTypeFilter">
+                <option value="">전체</option>
+                <option value="public">public</option>
+                <option value="login">login user</option>
+                <option value="admin">admin</option>
+              </select>
+            </label>
+            <label>
+              액션 필터
+              <input id="auditActionFilter" placeholder="policy.generate, policy.apply, cluster.rotate_token" />
+            </label>
+            <label>
+              대상 유형
+              <input id="auditTargetTypeFilter" placeholder="policy, cluster, user, grafana" />
+            </label>
+            <label>
+              <span class="filter-label-row">
+                대상 ID
+                <span class="help-tooltip" tabindex="0" data-tooltip="이메일/학번이 아니라 로그의 target 값입니다. 예: cluster-..., user-..., latest-tag">?</span>
+              </span>
+              <input id="auditTargetIdFilter" placeholder="cluster-..., user-..., latest-tag" />
+            </label>
+          </div>
+          <div class="audit-date-range">
+            <label>
+              시작일
+              <input id="auditDateFromFilter" type="date" />
+            </label>
+            <label>
+              종료일
+              <input id="auditDateToFilter" type="date" />
+            </label>
+          </div>
+          <p class="audit-hash-note">
+            before_hash / after_hash는 변경 전후 객체를 원문 대신 SHA-256 해시로 남긴 값이며, 화면에는 앞 12자리만 표시합니다.
+          </p>
         </div>
-        <p class="audit-hash-note">
-          before_hash / after_hash는 변경 전후 객체를 원문 대신 SHA-256 해시로 남긴 값입니다. 화면에는 앞 12자리만 표시하고, 전체값은 복사 버튼으로만 다룹니다.
-        </p>
         <div class="audit-summary-grid" id="auditSummary"></div>
         <div id="auditLogs"></div>
       </section>
