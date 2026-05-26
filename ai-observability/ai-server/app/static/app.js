@@ -5,7 +5,9 @@ let latestPolicyManifestText = "";
 let latestAnalysisText = "";
 let latestYamlSnippet = "";
 let latestReportText = "";
+let latestReportReadableText = "";
 let latestReportHtml = "";
+let latestReportRawVisible = false;
 let latestManifestCommand = "";
 let selectedRuntimeEvent = null;
 let authState = { authenticated: false, user: null, auth: { google_configured: false, dev_enabled: false } };
@@ -587,6 +589,31 @@ function analysisContextRows(payload) {
     .join("");
 }
 
+function analysisScopeTrail(payload) {
+  const nodes = [
+    { label: "Cluster", value: payload.cluster || "current-cluster", icon: "C" },
+    { label: "Namespace", value: fieldValue(payload, "k8s.ns.name"), icon: "NS" },
+    { label: "Pod", value: fieldValue(payload, "k8s.pod.name"), icon: "P" },
+    { label: "Container", value: fieldValue(payload, "container.name"), icon: "CT", alert: true },
+  ];
+  return `
+    <div class="analysis-scope-trail" aria-label="runtime violation resource path">
+      ${nodes
+        .map(
+          (node, index) => `
+            <div class="scope-node ${node.alert ? "is-alert" : ""}">
+              <span class="scope-icon" aria-hidden="true">${escapeHtml(node.alert ? "🚨" : node.icon)}</span>
+              <span class="scope-label">${escapeHtml(node.label)}</span>
+              <strong class="scope-value">${escapeHtml(node.value || "unknown")}</strong>
+            </div>
+            ${index < nodes.length - 1 ? '<span class="scope-arrow" aria-hidden="true">→</span>' : ""}
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 function renderYamlSnippet(yamlSnippet) {
   const originalManifest = $("#resourceManifest")?.value.trim() || "";
   if (!yamlSnippet) {
@@ -678,6 +705,7 @@ function renderViolationAnalysis(result, payload) {
       <span class="badge ${result.llm_used ? "ready" : "loading"}">${result.llm_used ? "LLM 분석" : "기본 분석"}</span>
     </div>
     <h2>${escapeHtml(payload.rule || result.summary)}</h2>
+    ${analysisScopeTrail(payload)}
     <div class="analysis-context-grid" aria-label="analysis target context">${analysisContextRows(payload)}</div>
     <div class="analysis-insight-grid">
       <section class="analysis-insight-card">
@@ -1819,6 +1847,8 @@ async function generateReport() {
     const llmSummary = report.llm_summary
       ? `<div class="analysis-code-block report-summary-block"><p>${escapeHtml(report.llm_summary)}</p></div>`
       : `<p>${escapeHtml(report.llm_error || "LLM 요약을 생성하지 못해 규칙 기반 리포트만 표시합니다.")}</p>`;
+    latestReportReadableText = buildReadableReportText(report);
+    latestReportRawVisible = false;
     $("#reportResult").innerHTML = `
       <span class="badge ${report.llm_used ? "ready" : "loading"}">${report.llm_used ? "LLM report" : "rule report"}</span>
       <h2>AI 컴플라이언스 리포트</h2>
@@ -1831,11 +1861,48 @@ async function generateReport() {
       <div class="analysis-code-block report-terminal-window">
         <ul>${recommendations}</ul>
       </div>
+      <div class="analysis-code-block report-terminal-window report-json-block" id="reportRawJsonBlock" hidden>
+        <pre><code>${escapeHtml(latestReportText)}</code></pre>
+      </div>
     `;
     latestReportHtml = $("#reportResult").innerHTML;
+    $("#toggleReportJson").textContent = "원문 JSON 보기";
   } finally {
     setReportLoading(false);
   }
+}
+
+function buildReadableReportText(report) {
+  const topRules = (report.top_rules || [])
+    .map((item) => `- ${item.rule}: ${item.count}`)
+    .join("\n") || "- 수집된 rule 없음";
+  const recommendations = (report.recommendations || [])
+    .map((item) => `- ${item}`)
+    .join("\n") || "- 권장 조치 없음";
+  return [
+    "AI 컴플라이언스 리포트",
+    `generated_at: ${report.generated_at || ""}`,
+    "",
+    "LLM 요약",
+    report.llm_summary || report.llm_error || "LLM 요약 없음",
+    "",
+    "상위 위반 Rule",
+    topRules,
+    "",
+    "권장 조치",
+    recommendations,
+  ].join("\n");
+}
+
+function toggleReportRawJson() {
+  const block = $("#reportRawJsonBlock");
+  if (!block || !latestReportText) {
+    showToast("먼저 리포트를 생성해 주세요");
+    return;
+  }
+  latestReportRawVisible = !latestReportRawVisible;
+  block.hidden = !latestReportRawVisible;
+  $("#toggleReportJson").textContent = latestReportRawVisible ? "원문 JSON 숨기기" : "원문 JSON 보기";
 }
 
 function downloadReportPdf() {
@@ -2163,7 +2230,11 @@ $("#generateReport").addEventListener("click", () => {
 });
 
 $("#copyReport").addEventListener("click", () => {
-  copyText(latestReportText).catch((error) => showToast(error.message));
+  copyText(latestReportReadableText || latestReportText).catch((error) => showToast(error.message));
+});
+
+$("#toggleReportJson").addEventListener("click", () => {
+  toggleReportRawJson();
 });
 
 $("#downloadReportPdf").addEventListener("click", () => {

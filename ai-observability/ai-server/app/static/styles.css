@@ -3122,6 +3122,10 @@ body.is-modal-open {
   margin-bottom: 16px;
 }
 
+.report-json-block {
+  margin-top: 18px;
+}
+
 .analysis-card > .badge:first-child {
   width: fit-content;
   margin-right: 16px;
@@ -3177,6 +3181,86 @@ body.is-modal-open {
   color: var(--text);
   font-size: 15px;
   line-height: 1.25;
+}
+
+.analysis-scope-trail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  margin: 16px 0;
+}
+
+.scope-node {
+  position: relative;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: center;
+  min-width: 0;
+  min-height: 72px;
+  padding: 12px;
+  border: 1px solid rgba(8, 119, 242, 0.18);
+  border-radius: 8px;
+  background: rgba(248, 253, 255, 0.92);
+  box-shadow: var(--shadow-soft);
+}
+
+.scope-icon {
+  display: inline-grid;
+  grid-row: span 2;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: #e0f2fe;
+  color: #075985;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.scope-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.scope-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.scope-arrow {
+  color: #64748b;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.scope-node.is-alert {
+  border-color: rgba(220, 38, 38, 0.45);
+  background: rgba(254, 242, 242, 0.96);
+}
+
+.scope-node.is-alert .scope-icon {
+  background: #fee2e2;
+  color: #991b1b;
+  animation: alertPulse 1.25s ease-in-out infinite;
+}
+
+@keyframes alertPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.38);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(220, 38, 38, 0);
+    transform: scale(1.04);
+  }
 }
 
 .analysis-code-block {
@@ -3536,8 +3620,14 @@ button.event-row:focus-visible {
   .runtime-filters,
   .manifest-diff-grid,
   .analysis-insight-grid,
-  .analysis-context-grid {
+  .analysis-context-grid,
+  .analysis-scope-trail {
     grid-template-columns: 1fr;
+  }
+
+  .scope-arrow {
+    transform: rotate(90deg);
+    justify-self: center;
   }
 
   .runtime-filters .runtime-actions {
@@ -3546,6 +3636,10 @@ button.event-row:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .scope-node.is-alert .scope-icon {
+    animation: none;
+  }
+
   .landing-title {
     animation: none;
   }
