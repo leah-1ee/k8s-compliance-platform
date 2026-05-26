@@ -1158,7 +1158,7 @@ function setupLandingScrollAnimation() {
     const showcasePoint = showcase ? Math.max(180, showcase.offsetTop - window.innerHeight * 0.35) : Math.max(240, window.innerHeight * 0.55);
     const reachedShowcase = window.scrollY > showcasePoint;
     topCue?.classList.toggle("is-visible", landingVisible && reachedShowcase);
-    downCue?.classList.toggle("is-hidden", !landingVisible || reachedShowcase);
+    downCue?.classList.toggle("is-hidden", !landingVisible);
   };
   window.addEventListener("scroll", updateLandingCues, { passive: true });
   window.addEventListener("resize", updateLandingCues);

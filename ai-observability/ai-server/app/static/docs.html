@@ -618,7 +618,7 @@
         <div class="docs-copy">
           <p class="eyebrow">KubeOwl Docs</p>
           <h1>Documentation</h1>
-          <p>정책 생성, 런타임 이벤트 수집, Grafana 관측, zrok 공개 접근까지 데모와 운영에 필요한 큰 그림을 빠르게 확인합니다.</p>
+          <p>정책 생성, 런타임 이벤트 수집, Grafana 관측, zrok 공개 접근까지 데모와 운영에 필요한 큰 그림을 빠르게 확인합니다. 로그인 없이도 열람할 수 있는 공개 문서입니다.</p>
         </div>
       </section>
 
@@ -988,18 +988,13 @@ scope=current browser session
                 <span class="topic-main"><strong>Prompt Injection</strong><span>jailbreak guard</span></span>
                 <span class="topic-arrow">›</span>
               </button>
-              <button class="topic-button" type="button" data-docs-topic="ops-rbac">
-                <span class="topic-number">11</span>
-                <span class="topic-main"><strong>Authorization</strong><span>rbac governance</span></span>
-                <span class="topic-arrow">›</span>
-              </button>
               <button class="topic-button" type="button" data-docs-topic="ops-audit">
-                <span class="topic-number">12</span>
+                <span class="topic-number">11</span>
                 <span class="topic-main"><strong>Audit Trail</strong><span>who changed what</span></span>
                 <span class="topic-arrow">›</span>
               </button>
               <button class="topic-button" type="button" data-docs-topic="ops-secret">
-                <span class="topic-number">13</span>
+                <span class="topic-number">12</span>
                 <span class="topic-main"><strong>Secret Management</strong><span>least privilege tokens</span></span>
                 <span class="topic-arrow">›</span>
               </button>
@@ -1123,17 +1118,6 @@ scope=current browser session
                   <li>최종 적용은 dry-run, diff, 승인 로그, 권한 있는 사용자 승인까지 거치도록 설계해야 하며, LLM은 결정을 내리는 주체가 아니라 보조 생성기입니다.</li>
                 </ul>
                 <div class="topic-chips"><span>jailbreak guard</span><span>intent classifier</span><span>human approval</span><span>dry-run diff</span></div>
-              </article>
-              <article class="topic-detail" data-docs-panel="ops-rbac">
-                <span class="kicker">Authorization / Kubernetes RBAC</span>
-                <h3>Q. 로그인한 모든 사용자가 cluster-wide Gatekeeper 정책을 배포할 수 있습니까?</h3>
-                <ul>
-                  <li><strong>A.</strong> 실제 운영에서는 그러면 안 됩니다. 인증(Authentication)과 인가(Authorization)는 분리해야 하고, Viewer, Operator, Security Admin 같은 역할이 필요합니다.</li>
-                  <li>현재 데모는 사용자 소유 클러스터 범위와 클러스터 status 검사를 통해 기본 격리를 제공하지만, 기업형 RBAC 거버넌스는 별도 확장 과제입니다.</li>
-                  <li>설계 방향은 KubeOwl role을 Kubernetes RBAC 또는 조직 IdP group과 매핑하고, 정책 생성, dry-run, apply, restore, delete 같은 write action마다 권한을 분리하는 것입니다.</li>
-                  <li>cluster-wide Constraint 배포는 보안 담당자 또는 승인된 관리자만 수행하고, 일반 개발자는 리포트 조회나 PR 기반 제안까지만 허용하는 모델이 안전합니다.</li>
-                </ul>
-                <div class="topic-chips"><span>viewer</span><span>operator</span><span>security admin</span><span>rbac mapping</span></div>
               </article>
               <article class="topic-detail" data-docs-panel="ops-audit">
                 <span class="kicker">Platform Audit Trail</span>

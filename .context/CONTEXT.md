@@ -5,9 +5,9 @@ Policy-as-Code based Kubernetes compliance automation platform.
 Natural language → Rego policy via LLM, Falco event AI classification, real-time dashboard.
 
 ## Current Image Version
-Current VM image observed by user during TASK-16 stabilization: `docker.io/leeon3345/compliance-ai-server:0.1.47`
-Next build/deploy tag for TASK-17 UI changes: use a fresh tag after `docker.io/leeon3345/compliance-ai-server:0.1.47`; do not overwrite or reuse older tags.
-`0.1.10` was the older deployed image. `0.1.11` was prepared by TASK-04, `0.1.12` by TASK-05, `0.1.13` by TASK-06, `0.1.15` by TASK-10 branding/deploy prep, `0.1.16`/`0.1.17` were used during TASK-10 policy apply/UI iteration, `0.1.18` is the TASK-10 completed/Grafana-title image observed in use, `0.1.20` is the TASK-11 UI/trash cleanup follow-up target, `0.1.43` started the TASK-15/16 Grafana proxy and dashboard recovery image line, and `0.1.47` includes TASK-16 Grafana Live, splash storage, favicon, and transient Grafana retry hardening.
+Current VM image observed by user during TASK-17/18/19 UI-docs stabilization: `docker.io/leeon3345/compliance-ai-server:0.2.2`
+Next build/deploy tag for TASK-20 demo polish: use a fresh tag after `docker.io/leeon3345/compliance-ai-server:0.2.2`; do not overwrite or reuse older tags.
+`0.1.10` was the older deployed image. `0.1.11` was prepared by TASK-04, `0.1.12` by TASK-05, `0.1.13` by TASK-06, `0.1.15` by TASK-10 branding/deploy prep, `0.1.16`/`0.1.17` were used during TASK-10 policy apply/UI iteration, `0.1.18` is the TASK-10 completed/Grafana-title image observed in use, `0.1.20` is the TASK-11 UI/trash cleanup follow-up target, `0.1.43` started the TASK-15/16 Grafana proxy and dashboard recovery image line, `0.1.47` included TASK-16 Grafana Live, splash storage, favicon, and transient Grafana retry hardening, and `0.2.2` is the current UI/docs polish and demo-prep image line.
 
 ## Tech Stack
 - Backend: Python (FastAPI), SQLite (WAL mode, PVC persistent)
@@ -20,6 +20,7 @@ Next build/deploy tag for TASK-17 UI changes: use a fresh tag after `docker.io/l
 - Gatekeeper policy UI: public (no login required)
 - Google OAuth: live activation completed; real OAuth credentials exist and users can log in with Google
 - Dev login (`/auth/dev-login`): fallback exists; live deployment should keep `DEV_AUTH_ENABLED=false`
+- `/docs`: public documentation page, accessible without login
 - SQLite: WAL mode, PVC persistent
 - `/admin`: cluster register, token issue/rotate/disable
 - `/admin`: full user list, per-user cluster list, active/disabled status, last seen, event count
@@ -103,7 +104,7 @@ Next build/deploy tag for TASK-17 UI changes: use a fresh tag after `docker.io/l
 
 ## Deployment Notes
 
-- Current deployed image target: `docker.io/leeon3345/compliance-ai-server:0.1.47`
+- Current deployed image target: `docker.io/leeon3345/compliance-ai-server:0.2.2`
 - Active deployment in cluster: `deploy/ai-classifier -n compliance-system`
 - Current live deployment env expectations:
   - `CLUSTER_NAME=school-cloud`
@@ -144,8 +145,8 @@ Next build/deploy tag for TASK-17 UI changes: use a fresh tag after `docker.io/l
   - `docker.io/leeon3345/compliance-ai-server:0.1.20`
   - `kubectl set image deploy/ai-classifier -n compliance-system ai-classifier=docker.io/leeon3345/compliance-ai-server:0.1.20`
   - `kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s`
-- TASK-15/TASK-16 rollout target image:
-  - `docker.io/leeon3345/compliance-ai-server:0.1.47`
+- TASK-17/TASK-18/TASK-19 rollout target image:
+  - `docker.io/leeon3345/compliance-ai-server:0.2.2`
   - `kubectl apply -f cloud-deploy/ai-server.yaml`
   - `kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s`
 - TASK-11 Grafana ConfigMap apply:
@@ -169,6 +170,7 @@ Next build/deploy tag for TASK-17 UI changes: use a fresh tag after `docker.io/l
 | Feature | Auth Required |
 |---|---|
 | Policy creation (Gatekeeper) | No (public) |
+| Docs | No (public) |
 | Runtime detection | Yes |
 | Violation Detail | Yes |
 | AI Report | Yes |
@@ -179,14 +181,7 @@ Next build/deploy tag for TASK-17 UI changes: use a fresh tag after `docker.io/l
 
 ## Remaining Tasks (priority order)
 
-1. **TASK-18 Account Deletion and Final Demo Hardening (P0)** — add a safe 회원 탈퇴 flow only after deciding cluster/token/event/report/Slack/Grafana retention behavior; see `.context/Task18.md`.
-2. **Admin token security hotfix (P0)** — rotate live `ai-classifier-admin` Secret away from `change-me-before-deploy`; no code build required for the rotation itself.
-3. **TASK-16 final end-to-end demo capture (P0)** — after UI polish if desired, run the final smoke story and capture screenshots: Falco smoke event, ingest `200`, `/metrics`, Prometheus query, Runtime Detection, Violation Detail, AI Report, and user-scoped Grafana dashboards.
-4. **TASK-14 Admin Grafana Access and Metrics Export follow-up (P1)** — admin-only Grafana entrypoint exists, but master/admin dashboard UX and docs still need cleanup.
-5. **Admin cleanup controls (P1)** — first-class archive/restore/permanent-delete UX for test clusters, improved filtering/search, and separated user/cluster/event operations.
-6. **Demo data cleanup controls (P1)** — safe cleanup for old test clusters/events/apply history after admin actions are polished.
-7. **Grafana cleanup (P2)** — decide whether the visible `Grafana Overview` dashboard should be imported as a master dashboard or retired; keep repo JSON/ConfigMaps as source of truth.
-8. **Final deploy/docs verification (P2)** — deploy the TASK-17 UI/docs image, verify `/ui`, `/docs`, `/admin`, `/grafana-ui/`, and update screenshots.
+1. **TASK-20 Demo Scenario and Repository Cleanup (P0)** — finalize the demo walk-through, keep the public docs and landing experience aligned, and finish folder/file organization and stale reference cleanup; see `.context/Task20.md`.
 
 ## Do Not Change (fixed decisions)
 

@@ -776,6 +776,7 @@ body:has(#landingIntro:not([hidden])) button.primary:focus-visible {
 }
 
 .landing-intro {
+  position: relative;
   display: grid;
   flex: 1 1 auto;
   align-content: stretch;
@@ -1007,13 +1008,14 @@ body:has(#landingIntro:not([hidden])) .landing-login-actions > button:hover {
 }
 
 .landing-scroll-cue {
-  grid-row: 2;
-  place-self: end center;
+  position: absolute;
+  left: 50%;
+  bottom: clamp(4rem, 7vh, 5.4rem);
   display: inline-grid;
   place-items: center;
   width: 44px;
   height: 44px;
-  margin: 0 0 clamp(4.85rem, 10vh, 7rem);
+  margin: 0;
   border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.12);
@@ -1021,6 +1023,7 @@ body:has(#landingIntro:not([hidden])) .landing-login-actions > button:hover {
   backdrop-filter: blur(14px);
   box-shadow: 0 14px 34px rgba(3, 7, 18, 0.18);
   animation: landingCueBounce 1.7s ease-in-out infinite;
+  transform: translateX(-50%);
   transition:
     opacity 0.18s ease,
     transform 0.18s ease,
@@ -1032,7 +1035,7 @@ body:has(#landingIntro:not([hidden])) .landing-login-actions > button:hover {
   opacity: 0;
   pointer-events: none;
   animation: none;
-  transform: translateY(10px);
+  transform: translateX(-50%) translateY(10px);
 }
 
 .landing-scroll-cue span {
