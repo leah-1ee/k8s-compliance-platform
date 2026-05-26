@@ -669,8 +669,13 @@
                 <span class="topic-main"><strong>Event Flow</strong><span>policy + runtime</span></span>
                 <span class="topic-arrow">›</span>
               </button>
-              <button class="topic-button" type="button" data-docs-topic="arch-auth-abuse">
+              <button class="topic-button" type="button" data-docs-topic="arch-pattern">
                 <span class="topic-number">5</span>
+                <span class="topic-main"><strong>Service Pattern</strong><span>lightweight BFF</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="arch-auth-abuse">
+                <span class="topic-number">6</span>
                 <span class="topic-main"><strong>Auth Abuse Guard</strong><span>account suspension</span></span>
                 <span class="topic-arrow">›</span>
               </button>
@@ -704,6 +709,12 @@
                   <div class="flow-step"><span>3</span><strong>Scoped Metrics</strong><p>사용자 클러스터 기준으로 집계합니다.</p></div>
                   <div class="flow-step"><span>4</span><strong>Grafana Proxy</strong><p>인증 프록시로 대시보드를 엽니다.</p></div>
                 </div>
+              </article>
+              <article class="topic-detail" data-docs-panel="arch-pattern">
+                <span class="kicker">Service Architecture Pattern</span>
+                <h3>이 서비스는 경량 BFF + 모듈형 백엔드 + 프록시된 관측 도구 패턴으로 구성합니다.</h3>
+                <p>KubeOwl은 프론트, 정책 생성, 런타임 분석, 관리자 기능을 하나의 FastAPI 백엔드에서 통합하는 경량 BFF 형태에 가깝습니다. 사용자-facing 경로는 public landing과 public docs, 인증된 사용자 콘솔로 나뉘고, 데이터가 민감한 경로는 user_id와 admin token으로 다시 한 번 좁힙니다. Grafana와 외부 LLM은 직접 노출하지 않고 프록시 또는 세션 단위 경계 안에 둡니다.</p>
+                <div class="topic-chips"><span>lightweight BFF</span><span>modular backend</span><span>proxy boundary</span></div>
               </article>
               <article class="topic-detail" data-docs-panel="arch-auth-abuse">
                 <span class="kicker">Login Abuse / Account Governance</span>

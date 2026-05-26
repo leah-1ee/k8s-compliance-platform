@@ -1010,7 +1010,8 @@ body:has(#landingIntro:not([hidden])) .landing-login-actions > button:hover {
 .landing-scroll-cue {
   position: absolute;
   left: 50%;
-  bottom: clamp(4rem, 7vh, 5.4rem);
+  bottom: clamp(5.75rem, 11vh, 7.75rem);
+  z-index: 4;
   display: inline-grid;
   place-items: center;
   width: 44px;
@@ -1018,7 +1019,7 @@ body:has(#landingIntro:not([hidden])) .landing-login-actions > button:hover {
   margin: 0;
   border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.18);
   color: #ffffff;
   backdrop-filter: blur(14px);
   box-shadow: 0 14px 34px rgba(3, 7, 18, 0.18);

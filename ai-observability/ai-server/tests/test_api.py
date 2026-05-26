@@ -141,6 +141,7 @@ def test_docs_is_served():
     assert "왜 컴플라이언스 플랫폼이라고 부릅니까" in response.text
     assert "control catalog" in response.text
     assert "Prompt Injection / Jailbreak" in response.text
+    assert "Service Architecture Pattern" in response.text
     assert "로그인한 모든 사용자가 cluster-wide Gatekeeper 정책을 배포" not in response.text
     assert "Platform Audit Trail" in response.text
     assert "장기 관리자 kubeconfig를 평문 저장하는 구조는 피해야" in response.text
