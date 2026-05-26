@@ -50,7 +50,7 @@
         "spec": {
           "id": 1,
           "title": "AI Classification Requests",
-          "description": "선택한 시간 범위 동안 Response Server에서 AI Classifier로 전달된 분류 요청 수를 표시함. Counter 초기화 영향을 줄이기 위해 increase() 기반으로 계산함.",
+          "description": "선택 범위 AI Classification 요청 수.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -135,7 +135,7 @@
         "spec": {
           "id": 2,
           "title": "AI Classification Errors",
-          "description": "선택한 시간 범위 동안 AI 분류 처리 중 발생한 오류 수를 표시함. 값이 0이면 해당 기간의 AI 분류 요청이 정상 처리되었음을 의미함.\n",
+          "description": "선택 범위 AI Classification 오류 수.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -219,7 +219,7 @@
         "spec": {
           "id": 3,
           "title": "Seconds Since Last Gatekeeper Audit",
-          "description": "Gatekeeper의 마지막 감사 실행 이후 경과 시간을 초 단위로 표시함. 값이 계속 증가하면 감사 주기 또는 메트릭 수집 상태를 확인해야 함.",
+          "description": "마지막 Gatekeeper audit 후 경과 시간(초).",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -303,7 +303,7 @@
         "spec": {
           "id": 4,
           "title": "Gatekeeper Violations by Enforcement",
-          "description": "Gatekeeper 정책 위반을 enforcement action 기준으로 집계함. deny, warn, dryrun 상태를 구분해 정책 적용 강도를 확인할 수 있음.",
+          "description": "Gatekeeper 위반을 enforcement action별로 집계.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -413,7 +413,7 @@
         "spec": {
           "id": 5,
           "title": "Policy Violations by Policy",
-          "description": "Gatekeeper 정책별 위반 수를 집계함. 어떤 정책에서 위반이 많이 발생하는지 비교할 수 있음.",
+          "description": "위반 수 상위 Gatekeeper 정책.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -523,7 +523,7 @@
         "spec": {
           "id": 6,
           "title": "Gatekeeper Audit Duration",
-          "description": "Gatekeeper 감사 작업에 소요된 시간을 표시합니다. 메트릭이 노출되는 경우 감사 성능과 지연 여부를 확인할 수 있음.",
+          "description": "Gatekeeper audit controller 처리 시간.",
           "links": [],
           "data": {
             "kind": "QueryGroup",

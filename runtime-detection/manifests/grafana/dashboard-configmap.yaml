@@ -16,7 +16,7 @@ data:
       "annotations": {
         "list": []
       },
-      "description": "Policy-as-Code Compliance Platform — Runtime Detection Dashboard",
+      "description": "Policy-as-Code Runtime Detection Dashboard",
       "editable": true,
       "fiscalYearStartMonth": 0,
       "graphTooltip": 1,
@@ -25,7 +25,7 @@ data:
       "panels": [
         {
           "title": "High-Severity Free Score",
-          "description": "100 minus the percentage of stored runtime events classified high severity; empty data stays 100.",
+          "description": "High severity 없는 비율 점수. 데이터 없으면 100.",
           "type": "gauge",
           "gridPos": {
             "h": 6,
@@ -312,7 +312,7 @@ data:
         },
         {
           "title": "Event Burst 5m by Cluster",
-          "description": "최근 5분 동안 클러스터별로 증가한 런타임 이벤트 수입니다. 특정 클러스터가 갑자기 치솟으면 Falco 이벤트 폭증, 공격, 설정 오류, 경고 피로 위험을 우선 확인합니다.",
+          "description": "최근 5분 클러스터별 runtime event 증가 수. Falco 이벤트 폭증 확인.",
           "type": "barchart",
           "gridPos": {
             "h": 3,
@@ -540,7 +540,7 @@ data:
         },
         {
           "title": "Last Event Age by Cluster",
-          "description": "Seconds since the latest stored runtime event for each reporting cluster.",
+          "description": "클러스터별 마지막 runtime event 이후 경과 시간(초).",
           "type": "stat",
           "gridPos": {
             "h": 8,
@@ -611,7 +611,7 @@ data:
         },
         {
           "title": "Runtime Events by Severity",
-          "description": "Stored KubeOwl runtime events grouped by severity",
+          "description": "저장된 KubeOwl runtime event를 severity별 집계.",
           "type": "table",
           "gridPos": {
             "h": 8,
@@ -660,7 +660,7 @@ data:
         },
         {
           "title": "HMAC Mode",
-          "description": "1 = hard(필수), 0 = soft(선택). 프로덕션에서는 반드시 1이어야 합니다.",
+          "description": "1=hard(필수), 0=soft(선택). 운영은 1 권장.",
           "type": "stat",
           "gridPos": {
             "h": 4,

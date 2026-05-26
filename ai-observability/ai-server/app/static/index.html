@@ -238,16 +238,34 @@
                   <li data-tip="Gatekeeper audit 성능을 점검합니다.">Gatekeeper Audit Duration</li>
                 </ul>
               </article>
-              <article class="dashboard-card grafana-dashboard-card">
+              <article class="dashboard-card grafana-dashboard-card is-scrollable">
                 <span class="badge loading">Runtime</span>
                 <h2>Runtime Detection</h2>
                 <p>Falco Sidekick 런타임 이벤트, severity 분포, 자동 대응 결과를 운영 관점에서 추적합니다.</p>
                 <ul>
                   <li data-tip="고위험 이벤트가 없는 상태를 점수화합니다.">High-Severity Free Score</li>
+                  <li data-tip="저장된 전체 런타임 이벤트 수입니다.">Total Events</li>
+                  <li data-tip="high severity 이벤트 수입니다.">HIGH Events</li>
+                  <li data-tip="이벤트를 보고한 클러스터 수입니다.">Tracked Clusters</li>
+                  <li data-tip="최근 24시간 동안의 이벤트 수입니다.">Recent 24h Events</li>
+                  <li data-tip="마지막 이벤트 이후 경과 시간입니다.">Last Seen Age</li>
+                  <li data-tip="메트릭을 보내는 클러스터 수를 확인합니다.">Clusters Reporting</li>
+                  <li data-tip="최근 5분 동안 클러스터별 이벤트 증가량입니다.">Event Burst 5m by Cluster</li>
                   <li data-tip="심각도별 이벤트 추이를 봅니다.">Events by Severity Over Time</li>
                   <li data-tip="클러스터와 심각도별 분포를 비교합니다.">Events by Cluster and Severity</li>
+                  <li data-tip="메트릭을 보내는 클러스터 수를 확인합니다.">Reporting Clusters</li>
+                  <li data-tip="이벤트 source별 분포를 확인합니다.">Events by Source</li>
                   <li data-tip="클러스터별 마지막 이벤트 경과 시간을 확인합니다.">Last Event Age by Cluster</li>
                   <li data-tip="저장된 이벤트를 심각도 기준으로 요약합니다.">Stored Events by Severity</li>
+                  <li data-tip="저장된 이벤트를 테이블로 확인합니다.">Runtime Events by Severity</li>
+                  <li data-tip="Webhook 보안 지표 묶음입니다.">Webhook Security</li>
+                  <li data-tip="HMAC hard/soft 모드 상태입니다.">HMAC Mode</li>
+                  <li data-tip="보안 미들웨어가 차단한 요청 수입니다.">총 거부 요청 수</li>
+                  <li data-tip="서명 불일치 또는 타임스탬프 초과 요청 수입니다.">HMAC 인증 실패 수</li>
+                  <li data-tip="IP 차단과 Rate Limit 요청 수입니다.">IP 차단 / Rate Limit</li>
+                  <li data-tip="1MB 상한을 넘긴 요청 수입니다.">바디 크기 초과 (DoS 시도)</li>
+                  <li data-tip="거부 사유별 누적 분포입니다.">사유별 거부 건수 (누적)</li>
+                  <li data-tip="거부 사유별 초당 발생률 추이입니다.">웹훅 거부 시계열 (사유별 초당 발생률)</li>
                 </ul>
               </article>
               <article class="dashboard-card grafana-dashboard-card">

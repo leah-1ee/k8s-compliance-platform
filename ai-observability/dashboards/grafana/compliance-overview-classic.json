@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "KubeOwl compliance overview for Gatekeeper audit health, policy violations, and AI classification reliability.",
+  "description": "KubeOwl 컴플라이언스 개요.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -27,7 +27,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Selected-range AI classification requests sent by the response server.",
+      "description": "선택 범위 AI Classification 요청 수.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -94,7 +94,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Selected-range AI classification errors. A value above zero means the fallback path was likely used.",
+      "description": "선택 범위 AI Classification 오류 수.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -161,7 +161,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Seconds since the last Gatekeeper audit run.",
+      "description": "마지막 Gatekeeper audit 후 경과 시간(초).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -232,7 +232,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Current Gatekeeper violations grouped by enforcement action.",
+      "description": "Gatekeeper 위반을 enforcement action별로 집계.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -294,7 +294,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Top policy constraints by current violation count.",
+      "description": "위반 수 상위 Gatekeeper 정책.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -363,7 +363,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Gatekeeper audit controller duration over time.",
+      "description": "Gatekeeper audit controller 처리 시간.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -423,7 +423,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "AI reliability over time: request, error, and fallback rates.",
+      "description": "AI 요청, 오류, fallback 비율 추이.",
       "fieldConfig": {
         "defaults": {
           "color": {
