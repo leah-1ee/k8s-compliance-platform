@@ -50,8 +50,9 @@ def analyze_violation(
 ) -> ViolationAnalysisResponse:
     # 위반 이벤트 분석
     classification = classify_event(payload)
-    namespace = payload.output_fields.get("k8s.ns.name", "unknown")
-    pod = payload.output_fields.get("k8s.pod.name", "unknown")
+    manifest_context = _manifest_context(payload.resource_manifest)
+    namespace = payload.output_fields.get("k8s.ns.name") or manifest_context.get("namespace", "unknown")
+    pod = payload.output_fields.get("k8s.pod.name") or manifest_context.get("name", "unknown")
     proc = payload.output_fields.get("proc.name") or payload.output_fields.get(
         "proc.cmdline",
         "unknown",
@@ -70,7 +71,7 @@ def analyze_violation(
     root_cause = _root_cause(payload, namespace, pod, proc, user)
     remediation = _remediation(classification.severity, namespace, pod)
     recommended_fix = _recommended_fix(classification.severity, namespace, pod)
-    yaml_snippet = _yaml_snippet(classification.severity, namespace, pod)
+    yaml_snippet = _yaml_snippet(classification.severity, namespace, pod, manifest_context.get("app_label", ""))
     llm_used = False
     llm_error = ""
     if payload.use_llm:
@@ -323,9 +324,10 @@ def _remediation(severity: str, namespace: str, pod: str) -> str:
     )
 
 
-def _yaml_snippet(severity: str, namespace: str, pod: str) -> str:
+def _yaml_snippet(severity: str, namespace: str, pod: str, app_label: str = "") -> str:
     safe_pod_name = _safe_k8s_name(pod, "target-pod")
     safe_namespace = _safe_k8s_name(namespace, "default")
+    safe_app_label = _safe_k8s_name(app_label, safe_pod_name)
     if severity == "high":
         return "\n".join(
             [
@@ -337,7 +339,7 @@ def _yaml_snippet(severity: str, namespace: str, pod: str) -> str:
                 "spec:",
                 "  podSelector:",
                 "    matchLabels:",
-                f"      app: {safe_pod_name}",
+                f"      app: {safe_app_label}",
                 "  policyTypes:",
                 "    - Ingress",
                 "    - Egress",
@@ -356,6 +358,36 @@ def _yaml_snippet(severity: str, namespace: str, pod: str) -> str:
             "      - ALL",
         ]
     )
+
+
+def _manifest_context(manifest: str) -> dict[str, str]:
+    if not manifest:
+        return {}
+    context: dict[str, str] = {}
+    in_metadata = False
+    in_labels = False
+    for raw_line in manifest.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        indent = len(line) - len(line.lstrip(" "))
+        if not stripped or stripped.startswith("#"):
+            continue
+        if indent == 0:
+            in_metadata = stripped == "metadata:"
+            in_labels = False
+            continue
+        if in_metadata and indent == 2 and stripped == "labels:":
+            in_labels = True
+            continue
+        if in_metadata and indent == 2 and ":" in stripped:
+            key, value = stripped.split(":", 1)
+            if key in {"name", "namespace"}:
+                context[key] = value.strip().strip('"\'')
+            in_labels = False
+            continue
+        if in_metadata and in_labels and indent >= 4 and stripped.startswith("app:"):
+            context["app_label"] = stripped.split(":", 1)[1].strip().strip('"\'')
+    return context
 
 
 def _safe_k8s_name(value: str, fallback: str) -> str:

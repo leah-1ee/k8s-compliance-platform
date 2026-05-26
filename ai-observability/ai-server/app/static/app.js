@@ -598,7 +598,7 @@ function renderYamlSnippet(yamlSnippet) {
     `;
   }
   const originalLines = originalManifest
-    ? renderManifestLines(originalManifest, "context")
+    ? renderManifestLines(originalManifest, "original", yamlSnippet)
     : `<span class="diff-line muted">저장된 리소스 매니페스트가 없습니다. 상단의 매니페스트 조회 버튼으로 kubectl 조회 명령을 확인하세요.</span>`;
   return `
     <div class="analysis-code-block manifest-diff-block">
@@ -628,12 +628,43 @@ function renderYamlSnippet(yamlSnippet) {
   `;
 }
 
-function renderManifestLines(value, mode = "context") {
-  const className = mode === "added" ? "diff-line diff-added" : "diff-line";
+function renderManifestLines(value, mode = "context", suggestedPatch = "") {
+  const patchText = String(suggestedPatch || "").toLowerCase();
   return String(value || "")
     .split("\n")
-    .map((line) => `<span class="${className}">${escapeHtml(line || " ")}</span>`)
+    .map((line) => `<span class="${manifestLineClass(line, mode, patchText)}">${escapeHtml(line || " ")}</span>`)
     .join("\n");
+}
+
+function manifestLineClass(line, mode, patchText = "") {
+  if (mode === "added") {
+    return "diff-line diff-added";
+  }
+  if (mode !== "original") {
+    return "diff-line";
+  }
+  const normalized = String(line || "").trim().toLowerCase();
+  const riskyPatterns = [
+    /^privileged:\s*true$/,
+    /^allowprivilegeescalation:\s*true$/,
+    /^runasuser:\s*0$/,
+    /^runasnonroot:\s*false$/,
+    /^hostpid:\s*true$/,
+    /^hostipc:\s*true$/,
+    /^hostnetwork:\s*true$/,
+    /^automountserviceaccounttoken:\s*true$/,
+    /^image:\s*[^ ]+:latest$/,
+  ];
+  if (riskyPatterns.some((pattern) => pattern.test(normalized))) {
+    return "diff-line diff-removed";
+  }
+  if (patchText.includes("kind: networkpolicy") && /^(name|namespace|app):\s+/.test(normalized)) {
+    return "diff-line diff-removed";
+  }
+  if (patchText.includes("securitycontext") && /^(securitycontext|allowprivilegeescalation|capabilities|drop|runasnonroot|readonlyrootfilesystem):/.test(normalized)) {
+    return "diff-line diff-removed";
+  }
+  return "diff-line";
 }
 
 function renderViolationAnalysis(result, payload) {
@@ -997,7 +1028,8 @@ async function analyzeViolation() {
           : "이벤트 JSON과 리소스 매니페스트를 규칙 기반으로 분석하고 있습니다."),
     );
     let result;
-    if (hasSelectedEvent) {
+    const manualManifest = $("#resourceManifest").value.trim();
+    if (hasSelectedEvent && !manualManifest) {
       payload = eventToAnalysisPayload(selectedRuntimeEvent);
       const response = await fetch(`/analyze-runtime-event/${encodeURIComponent(selectedRuntimeEvent.id)}`, {
         method: "POST",
@@ -1009,13 +1041,17 @@ async function analyzeViolation() {
       }
       result = body;
     } else {
-      try {
-        payload = JSON.parse($("#eventPayload").value);
-      } catch (error) {
-        setAnalysisState("error", "JSON 형식 오류", error.message);
-        throw error;
+      if (hasSelectedEvent) {
+        payload = eventToAnalysisPayload(selectedRuntimeEvent);
+      } else {
+        try {
+          payload = JSON.parse($("#eventPayload").value);
+        } catch (error) {
+          setAnalysisState("error", "JSON 형식 오류", error.message);
+          throw error;
+        }
       }
-      payload.resource_manifest = $("#resourceManifest").value;
+      payload.resource_manifest = manualManifest;
       payload.use_llm = useLlm;
       result = await postJson("/analyze-violation", payload);
     }
