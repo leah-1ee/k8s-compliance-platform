@@ -184,7 +184,7 @@ spec:
           operator: Exists
       containers:
         - name: falco-watchdog
-          image: python:3.12-slim
+          image: docker.io/library/python:3.12-slim
           command: ["python3", "/scripts/watchdog.py"]
           env:
             - name: WATCHDOG_INTERVAL
