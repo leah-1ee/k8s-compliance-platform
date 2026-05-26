@@ -674,11 +674,6 @@
                 <span class="topic-main"><strong>Service Pattern</strong><span>lightweight BFF</span></span>
                 <span class="topic-arrow">›</span>
               </button>
-              <button class="topic-button" type="button" data-docs-topic="arch-auth-abuse">
-                <span class="topic-number">6</span>
-                <span class="topic-main"><strong>Auth Abuse Guard</strong><span>account suspension</span></span>
-                <span class="topic-arrow">›</span>
-              </button>
             </div>
             <div class="topic-detail-wrap">
               <article class="topic-detail is-active" data-docs-panel="arch-cluster">
@@ -715,17 +710,6 @@
                 <h3>이 서비스는 경량 BFF + 모듈형 백엔드 + 프록시된 관측 도구 패턴으로 구성합니다.</h3>
                 <p>KubeOwl은 프론트, 정책 생성, 런타임 분석, 관리자 기능을 하나의 FastAPI 백엔드에서 통합하는 경량 BFF 형태에 가깝습니다. 사용자-facing 경로는 public landing과 public docs, 인증된 사용자 콘솔로 나뉘고, 데이터가 민감한 경로는 user_id와 admin token으로 다시 한 번 좁힙니다. Grafana와 외부 LLM은 직접 노출하지 않고 프록시 또는 세션 단위 경계 안에 둡니다.</p>
                 <div class="topic-chips"><span>lightweight BFF</span><span>modular backend</span><span>proxy boundary</span></div>
-              </article>
-              <article class="topic-detail" data-docs-panel="arch-auth-abuse">
-                <span class="kicker">Login Abuse / Account Governance</span>
-                <h3>다중 계정 악용은 IP hash 기반 감지와 관리자 계정 정지로 제어합니다.</h3>
-                <ul>
-                  <li>같은 네트워크에서 24시간 내 서로 다른 계정 5개를 초과해 로그인하려 하면 추가 로그인을 차단합니다.</li>
-                  <li>IP 원문은 저장하지 않고 salt 기반 hash로 기록해 abuse 감지와 개인정보 노출 위험을 분리합니다.</li>
-                  <li>관리자는 사용자 상세에서 계정을 정지하거나 정지 해제할 수 있으며, 정지 시 기존 세션이 무효화되고 신규 로그인과 클러스터 생성이 막힙니다.</li>
-                  <li>상용 환경에서는 이 단계에 CAPTCHA, 휴대폰 인증, IdP risk signal을 붙여 추가 검증으로 확장할 수 있습니다.</li>
-                </ul>
-                <div class="topic-chips"><span>IP hash</span><span>5 accounts / 24h</span><span>account suspension</span><span>admin review</span></div>
               </article>
             </div>
           </div>
@@ -779,27 +763,49 @@
               </article>
               <article class="topic-detail" data-docs-panel="feature-apply">
                 <span class="kicker">Safe Rollout</span>
-                <h3>정책은 dryrun에서 시작해서 테스트 네임스페이스를 거쳐 확대합니다.</h3>
+                <h3>적용 가이드는 “예정 리소스 확인 → 권한 확인 → dry-run → 순차 apply → 상태 확인” 순서로 읽습니다.</h3>
                 <ul>
-                  <li>먼저 <code>dryrun</code>으로 생성해 기존 워크로드 영향도를 확인합니다.</li>
-                  <li>ConstraintTemplate과 Constraint가 함께 있는지 확인하고, 제외 네임스페이스 범위를 점검합니다.</li>
-                  <li>테스트 네임스페이스 적용 후 운영 네임스페이스로 확대합니다.</li>
-                  <li>문제가 생기면 <code>deny</code>로 밀어붙이지 말고 <code>warn</code> 또는 <code>dryrun</code>으로 되돌립니다.</li>
+                  <li><code>kubectl 단계에서 실행 예정</code>은 아직 클러스터에 반영된 상태가 아니라, 사용자가 자신의 kubeconfig context에서 순서대로 실행해야 한다는 뜻입니다.</li>
+                  <li>Mutation 정책은 일반적으로 여러 <code>Assign</code> 리소스로 나뉩니다. 예를 들어 app container와 init container에 각각 <code>runAsNonRoot</code>, <code>readOnlyRootFilesystem</code>을 주입하므로 4개 항목이 보일 수 있습니다.</li>
+                  <li>Validate 정책은 <code>ConstraintTemplate</code>을 먼저 적용하고 CRD가 준비된 뒤 <code>Constraint</code>를 적용해야 합니다. 순서를 바꾸면 kind를 찾지 못하는 오류가 납니다.</li>
+                  <li>문제가 생기면 <code>deny</code>로 밀어붙이지 말고 <code>dryrun</code> 또는 <code>warn</code>으로 되돌린 뒤, 테스트 네임스페이스에서 먼저 재확인합니다.</li>
                 </ul>
                 <div class="terminal-window" aria-label="Policy apply terminal example">
                   <div class="terminal-bar"><span></span><span></span><span></span><strong class="terminal-title">policy-apply-demo</strong></div>
-                  <pre class="terminal-body"><code><span class="prompt">$</span> select cluster school-cloud-prod
-<span class="ok">connected</span> cluster token verified
+                  <pre class="terminal-body"><code><span class="prompt">$</span> # 1. 현재 context가 적용 대상 클러스터인지 먼저 확인
+kubectl config current-context
+3345_test
 
-<span class="prompt">$</span> generate policy disallow-latest-tag --action dryrun
-ConstraintTemplate/k8sdisallowlatesttag created
-K8sDisallowLatestTag/pods-must-use-version-tags created
+<span class="prompt">$</span> # 2. Gatekeeper mutation 리소스 권한 확인
+kubectl auth can-i create assign.mutations.gatekeeper.sh
+kubectl auth can-i patch assign.mutations.gatekeeper.sh
+<span class="ok">yes</span>
+<span class="ok">yes</span>
 
-<span class="prompt">$</span> kubectl apply --dry-run=server -f generated.yaml
-<span class="ok">server validation passed</span>
+<span class="prompt">$</span> # 3. UI에 보이는 예정 리소스는 아직 적용 전 상태
+Assign/assign-run-as-non-root                  kubectl 단계에서 실행 예정
+Assign/assign-read-only-root-filesystem        kubectl 단계에서 실행 예정
+Assign/assign-run-as-non-root-init             kubectl 단계에서 실행 예정
+Assign/assign-read-only-root-filesystem-init   kubectl 단계에서 실행 예정
 
-<span class="prompt">$</span> kubectl apply -f generated.yaml
-<span class="warn">watch Grafana: Policy Violations by Policy</span></code></pre>
+<span class="prompt">$</span> # 4. 서버 dry-run으로 API group, schema, 권한을 먼저 검증
+kubectl apply --dry-run=server -f mutation-generated.yaml
+<span class="ok">assign.mutations.gatekeeper.sh/assign-run-as-non-root configured (server dry run)</span>
+<span class="ok">assign.mutations.gatekeeper.sh/assign-read-only-root-filesystem configured (server dry run)</span>
+
+<span class="prompt">$</span> # 5. 실제 적용 후 Gatekeeper가 리소스를 받았는지 확인
+kubectl apply -f mutation-generated.yaml
+kubectl get assign.mutations.gatekeeper.sh
+
+<span class="prompt">$</span> # 6. 흔한 오류별 확인 지점
+error: the server doesn't have a resource type "assign"
+<span class="warn">Gatekeeper mutation CRD가 설치되지 않았거나 버전이 맞지 않습니다.</span>
+
+Error from server (Forbidden): assignments is forbidden
+<span class="warn">현재 kubeconfig 계정에 Gatekeeper mutation 리소스 생성 권한이 없습니다.</span>
+
+error: no context exists with the name "3345_test"
+<span class="warn">KubeOwl의 클러스터 이름과 로컬 kubeconfig context 이름은 다를 수 있습니다.</span></code></pre>
                 </div>
               </article>
               <article class="topic-detail" data-docs-panel="feature-sidekick">
@@ -882,6 +888,11 @@ falco-sidekick-7f6c9d9b6c-jh2qx   <span class="ok">Running</span>
                 <span class="topic-main"><strong>User API Key</strong><span>session-only byok</span></span>
                 <span class="topic-arrow">›</span>
               </button>
+              <button class="topic-button" type="button" data-docs-topic="sec-auth-abuse">
+                <span class="topic-number">5</span>
+                <span class="topic-main"><strong>Auth Abuse Guard</strong><span>account suspension</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
             </div>
             <div class="topic-detail-wrap">
               <article class="topic-detail is-active" data-docs-panel="sec-auth">
@@ -937,6 +948,17 @@ scope=current browser session
 <span class="prompt">$</span> refresh page
 <span class="warn">key input is empty again</span></code></pre>
                 </div>
+              </article>
+              <article class="topic-detail" data-docs-panel="sec-auth-abuse">
+                <span class="kicker">Login Abuse / Account Governance</span>
+                <h3>다중 계정 악용은 IP hash 기반 감지와 관리자 계정 정지로 제어합니다.</h3>
+                <ul>
+                  <li>같은 네트워크에서 24시간 내 서로 다른 계정 5개를 초과해 로그인하려 하면 추가 로그인을 차단합니다.</li>
+                  <li>IP 원문은 저장하지 않고 salt 기반 hash로 기록해 abuse 감지와 개인정보 노출 위험을 분리합니다.</li>
+                  <li>관리자는 사용자 상세에서 계정을 정지하거나 정지 해제할 수 있으며, 정지 시 기존 세션이 무효화되고 신규 로그인과 클러스터 생성이 막힙니다.</li>
+                  <li>상용 환경에서는 이 단계에 CAPTCHA, 휴대폰 인증, IdP risk signal을 붙여 추가 검증으로 확장할 수 있습니다.</li>
+                </ul>
+                <div class="topic-chips"><span>IP hash</span><span>5 accounts / 24h</span><span>account suspension</span><span>admin review</span></div>
               </article>
             </div>
           </div>

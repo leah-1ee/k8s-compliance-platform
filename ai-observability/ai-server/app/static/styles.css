@@ -1008,10 +1008,10 @@ body:has(#landingIntro:not([hidden])) .landing-login-actions > button:hover {
 }
 
 .landing-scroll-cue {
-  position: absolute;
+  position: fixed;
   left: 50%;
-  bottom: clamp(5.75rem, 11vh, 7.75rem);
-  z-index: 4;
+  bottom: clamp(7.5rem, 12vh, 9rem);
+  z-index: 24;
   display: inline-grid;
   place-items: center;
   width: 44px;
