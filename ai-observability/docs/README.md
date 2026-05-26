@@ -4,6 +4,7 @@
 
 ## 하위 폴더 역할
 
+- `demo-scenario.md` - 최종 발표/테스트용 엔드투엔드 시나리오
 - `ai-server-test/` - AI 서버 API/기능 테스트 문서와 실행 증빙
 - `gatekeeper/` - Gatekeeper 관련 문서 이미지
 - `grafana-dashboard/` - Grafana 대시보드 문서와 캡처
