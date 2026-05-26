@@ -19,6 +19,7 @@ const SESSION_KEY = "complianceAiLlmApiKey";
 const THEME_KEY = "complianceOpsTheme";
 const LAST_AUTH_EMAIL_KEY = "kubeowlLastAuthEmail";
 const DEFAULT_RUNTIME_LIMIT = "50";
+const SEOUL_TIME_ZONE = "Asia/Seoul";
 const INFRA_NAMESPACES = new Set([
   "kube-system",
   "monitoring",
@@ -259,8 +260,7 @@ function eventTimestamp(event) {
   return event?.timestamp || event?.time || event?.created_at || "";
 }
 
-function formatEventTime(event) {
-  const value = eventTimestamp(event);
+function formatSeoulDateTime(value, options = {}) {
   if (!value) {
     return "time unknown";
   }
@@ -268,13 +268,23 @@ function formatEventTime(event) {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  return date.toLocaleString(undefined, {
+  const dateOptions = {
+    timeZone: SEOUL_TIME_ZONE,
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-  });
+    hour12: false,
+  };
+  if (options.includeYear !== false) {
+    dateOptions.year = "numeric";
+  }
+  return `${date.toLocaleString("ko-KR", dateOptions)} KST`;
+}
+
+function formatEventTime(event) {
+  return formatSeoulDateTime(eventTimestamp(event), { includeYear: false });
 }
 
 function formatRelativeTime(value) {
@@ -1852,7 +1862,7 @@ async function generateReport() {
     $("#reportResult").innerHTML = `
       <span class="badge ${report.llm_used ? "ready" : "loading"}">${report.llm_used ? "LLM report" : "rule report"}</span>
       <h2>AI 컴플라이언스 리포트</h2>
-      <p>generated_at: ${escapeHtml(report.generated_at || "")}</p>
+      <p>생성 날짜: ${escapeHtml(formatSeoulDateTime(report.generated_at))}</p>
       <h3>LLM 요약</h3>
       ${llmSummary}
       <h3>상위 위반 Rule</h3>
@@ -1881,7 +1891,7 @@ function buildReadableReportText(report) {
     .join("\n") || "- 권장 조치 없음";
   return [
     "AI 컴플라이언스 리포트",
-    `generated_at: ${report.generated_at || ""}`,
+    `생성 날짜: ${formatSeoulDateTime(report.generated_at)}`,
     "",
     "LLM 요약",
     report.llm_summary || report.llm_error || "LLM 요약 없음",
