@@ -1360,31 +1360,35 @@ function setupLandingScrollAnimation() {
 
 function setupShowcaseDemo() {
   const showcaseImageExtensions = ["png", "webp", "jpg", "jpeg"];
+  const showcaseImageSlots = ["-1", "-2", ""];
+  const showcaseSlideIntervalMs = 4200;
+  let showcaseSlideTimer = null;
+  let showcaseActivationId = 0;
   const demos = {
     policy: {
       kicker: "Policy",
       title: "정책 생성",
-      description: "KubeOwl은 자연어 요청을 Kubernetes 보안 정책으로 정리하고, 검토 가능한 YAML과 적용 가이드를 함께 제공합니다.",
+      description: "자연어 요청을 검토 가능한 Kubernetes 정책 YAML로 정리합니다.",
       bullets: ["자연어 정책 요청", "Gatekeeper YAML 생성", "클러스터 적용 가이드"],
       alt: "Policy generator showcase preview",
     },
     runtime: {
       kicker: "Runtime",
       title: "런타임 위반 분석",
-      description: "Falco와 Gatekeeper 이벤트를 모아 영향 범위를 보여주고, 선택한 위반을 원인 분석과 조치 흐름으로 연결합니다.",
+      description: "Falco와 Gatekeeper 이벤트를 영향 범위와 조치 흐름으로 연결합니다.",
       bullets: ["이벤트 수집", "위반 상세 확인", "조치 맥락 연결"],
       alt: "Runtime violation showcase preview",
     },
     report: {
       kicker: "AI Report",
       title: "AI 리포트",
-      description: "수집된 위반을 요약해 위험도와 우선순위를 정리하고, 운영자가 다음 행동을 빠르게 선택할 수 있게 돕습니다.",
+      description: "수집된 위반을 요약해 위험도와 다음 행동을 빠르게 정리합니다.",
       bullets: ["컴플라이언스 요약", "위험도 우선순위", "Next Action 제안"],
       alt: "AI report showcase preview",
     },
   };
   const tabs = Array.from(document.querySelectorAll("[data-showcase-demo]"));
-  const image = $("#showcaseDemoImage");
+  const images = Array.from(document.querySelectorAll("[data-showcase-image]"));
   const placeholder = $("#showcaseDemoPlaceholder");
   const placeholderPath = placeholder?.querySelector("strong");
   const kicker = $("#showcaseDemoKicker");
@@ -1393,7 +1397,7 @@ function setupShowcaseDemo() {
   const bullets = $("#showcaseDemoBullets");
   const copy = document.querySelector(".showcase-demo-copy");
   const media = document.querySelector(".showcase-demo-media");
-  if (!tabs.length || !image || !kicker || !title || !description || !bullets) {
+  if (!tabs.length || images.length < 2 || !kicker || !title || !description || !bullets) {
     return;
   }
 
@@ -1411,11 +1415,30 @@ function setupShowcaseDemo() {
       return [explicitPath];
     }
     const basePath = tab.dataset.demoImageBase || "";
-    return basePath ? showcaseImageExtensions.map((extension) => `${basePath}.${extension}`) : [];
+    if (!basePath) {
+      return [];
+    }
+    return showcaseImageSlots.flatMap((slot) => showcaseImageExtensions.map((extension) => `${basePath}${slot}.${extension}`));
+  };
+
+  const loadImagePath = (path) =>
+    new Promise((resolve) => {
+      const probe = new Image();
+      probe.onload = () => resolve(path);
+      probe.onerror = () => resolve("");
+      probe.src = path;
+    });
+
+  const resolveImagePaths = async (paths) => {
+    const loadedPaths = await Promise.all(paths.map((path) => loadImagePath(path)));
+    return loadedPaths.filter(Boolean).slice(0, 2);
   };
 
   const showPlaceholder = (path) => {
-    image.classList.remove("is-ready");
+    images.forEach((image) => {
+      image.classList.remove("is-ready", "is-current");
+      image.removeAttribute("src");
+    });
     if (placeholder) {
       placeholder.hidden = false;
     }
@@ -1424,11 +1447,46 @@ function setupShowcaseDemo() {
     }
   };
 
-  const activateDemo = (tab) => {
+  const stopShowcaseSlides = () => {
+    if (showcaseSlideTimer) {
+      window.clearInterval(showcaseSlideTimer);
+      showcaseSlideTimer = null;
+    }
+  };
+
+  const showSlide = (index) => {
+    images.forEach((image, imageIndex) => {
+      image.classList.toggle("is-current", imageIndex === index);
+    });
+  };
+
+  const renderImages = (paths, demo) => {
+    stopShowcaseSlides();
+    images.forEach((image, index) => {
+      const path = paths[index] || paths[0] || "";
+      image.src = path;
+      image.alt = index === 0 ? demo.alt : "";
+      image.setAttribute("aria-hidden", String(index !== 0));
+      image.classList.add("is-ready");
+      image.classList.toggle("is-current", index === 0);
+    });
+    if (placeholder) {
+      placeholder.hidden = true;
+    }
+    if (paths.length > 1) {
+      let currentIndex = 0;
+      showcaseSlideTimer = window.setInterval(() => {
+        currentIndex = (currentIndex + 1) % paths.length;
+        showSlide(currentIndex);
+      }, showcaseSlideIntervalMs);
+    }
+  };
+
+  const activateDemo = async (tab) => {
+    const activationId = ++showcaseActivationId;
     const key = tab.dataset.showcaseDemo;
     const demo = demos[key] || demos.policy;
     const imagePaths = imageCandidatesFor(tab);
-    let imageIndex = 0;
     const imagePath = imagePaths[0] || "";
     tabs.forEach((candidate) => {
       const active = candidate === tab;
@@ -1439,24 +1497,17 @@ function setupShowcaseDemo() {
     title.textContent = demo.title;
     description.textContent = demo.description;
     bullets.innerHTML = demo.bullets.map((item) => `<span>${escapeHtml(item)}</span>`).join("");
-    image.alt = demo.alt;
-    image.onload = () => {
-      if (placeholder) {
-        placeholder.hidden = true;
-      }
-      image.classList.add("is-ready");
-    };
-    image.onerror = () => {
-      imageIndex += 1;
-      if (imageIndex < imagePaths.length) {
-        image.src = imagePaths[imageIndex];
-        return;
-      }
-      showPlaceholder(imagePaths[0] || "");
-    };
     showPlaceholder(imagePath);
-    image.src = imagePath;
     restartTransition();
+    const loadedImagePaths = await resolveImagePaths(imagePaths);
+    if (activationId !== showcaseActivationId) {
+      return;
+    }
+    if (loadedImagePaths.length) {
+      renderImages(loadedImagePaths, demo);
+    } else {
+      showPlaceholder(imagePath);
+    }
   };
 
   tabs.forEach((tab) => {

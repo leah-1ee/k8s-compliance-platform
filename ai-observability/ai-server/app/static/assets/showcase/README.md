@@ -4,8 +4,10 @@
 
 사용할 파일명:
 
-- `policy.png`, `policy.webp`, `policy.jpg`, `policy.jpeg`
-- `runtime.png`, `runtime.webp`, `runtime.jpg`, `runtime.jpeg`
-- `ai-report.png`, `ai-report.webp`, `ai-report.jpg`, `ai-report.jpeg`
+- 정책: `policy-1.png`, `policy-2.png`
+- 런타임: `runtime-1.png`, `runtime-2.png`
+- AI 리포트: `ai-report-1.png`, `ai-report-2.png`
 
-같은 이름으로 이미지를 추가하면 랜딩 쇼케이스의 정책, 런타임, AI 리포트 탭에 바로 표시됩니다.
+`webp`, `jpg`, `jpeg` 확장자도 사용할 수 있습니다. 기존 단일 이미지 이름인
+`policy.png`, `runtime.png`, `ai-report.png`도 fallback으로 지원하지만, 2장 전환을
+사용하려면 `-1`, `-2` 파일명을 권장합니다.
