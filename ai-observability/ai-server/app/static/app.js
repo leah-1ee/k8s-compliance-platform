@@ -1359,27 +1359,28 @@ function setupLandingScrollAnimation() {
 }
 
 function setupShowcaseDemo() {
+  const showcaseImageExtensions = ["png", "webp", "jpg", "jpeg"];
   const demos = {
     policy: {
-      kicker: "Gatekeeper",
-      title: "Policy Guardrails",
-      description: "Code 탭에서는 정책 생성 흐름과 YAML 산출물을 보여줍니다. 이미지를 교체하면 같은 영역에서 부드럽게 전환됩니다.",
-      bullets: ["deny latest image", "require non-root", "allow trusted registry"],
-      alt: "Policy generator demo preview",
+      kicker: "Policy",
+      title: "정책 생성",
+      description: "KubeOwl은 자연어 요청을 Kubernetes 보안 정책으로 정리하고, 검토 가능한 YAML과 적용 가이드를 함께 제공합니다.",
+      bullets: ["자연어 정책 요청", "Gatekeeper YAML 생성", "클러스터 적용 가이드"],
+      alt: "Policy generator showcase preview",
     },
     runtime: {
       kicker: "Runtime",
-      title: "Live Violation Signals",
-      description: "Runtime 탭은 Falco/Gatekeeper 이벤트를 확인하고, 선택한 위반을 분석 화면으로 이어주는 장면에 맞춰 두었습니다.",
-      bullets: ["collect cluster event", "select violation", "open remediation context"],
-      alt: "Runtime detection demo preview",
+      title: "런타임 위반 분석",
+      description: "Falco와 Gatekeeper 이벤트를 모아 영향 범위를 보여주고, 선택한 위반을 원인 분석과 조치 흐름으로 연결합니다.",
+      bullets: ["이벤트 수집", "위반 상세 확인", "조치 맥락 연결"],
+      alt: "Runtime violation showcase preview",
     },
     report: {
       kicker: "AI Report",
-      title: "Compliance Review",
-      description: "Report 탭은 AI 리포트와 Slack 공유 흐름을 시각적으로 설명하는 패널로 사용할 수 있습니다.",
-      bullets: ["summarize posture", "draft action items", "share to Slack"],
-      alt: "AI report demo preview",
+      title: "AI 리포트",
+      description: "수집된 위반을 요약해 위험도와 우선순위를 정리하고, 운영자가 다음 행동을 빠르게 선택할 수 있게 돕습니다.",
+      bullets: ["컴플라이언스 요약", "위험도 우선순위", "Next Action 제안"],
+      alt: "AI report showcase preview",
     },
   };
   const tabs = Array.from(document.querySelectorAll("[data-showcase-demo]"));
@@ -1404,6 +1405,15 @@ function setupShowcaseDemo() {
     });
   };
 
+  const imageCandidatesFor = (tab) => {
+    const explicitPath = tab.dataset.demoImage || "";
+    if (explicitPath) {
+      return [explicitPath];
+    }
+    const basePath = tab.dataset.demoImageBase || "";
+    return basePath ? showcaseImageExtensions.map((extension) => `${basePath}.${extension}`) : [];
+  };
+
   const showPlaceholder = (path) => {
     image.classList.remove("is-ready");
     if (placeholder) {
@@ -1417,7 +1427,9 @@ function setupShowcaseDemo() {
   const activateDemo = (tab) => {
     const key = tab.dataset.showcaseDemo;
     const demo = demos[key] || demos.policy;
-    const imagePath = tab.dataset.demoImage || "";
+    const imagePaths = imageCandidatesFor(tab);
+    let imageIndex = 0;
+    const imagePath = imagePaths[0] || "";
     tabs.forEach((candidate) => {
       const active = candidate === tab;
       candidate.classList.toggle("is-active", active);
@@ -1435,7 +1447,12 @@ function setupShowcaseDemo() {
       image.classList.add("is-ready");
     };
     image.onerror = () => {
-      showPlaceholder(imagePath);
+      imageIndex += 1;
+      if (imageIndex < imagePaths.length) {
+        image.src = imagePaths[imageIndex];
+        return;
+      }
+      showPlaceholder(imagePaths[0] || "");
     };
     showPlaceholder(imagePath);
     image.src = imagePath;

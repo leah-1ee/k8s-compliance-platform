@@ -118,9 +118,9 @@
                     role="tab"
                     aria-selected="true"
                     data-showcase-demo="policy"
-                    data-demo-image="/static/assets/demo-policy.png"
+                    data-demo-image-base="/static/assets/showcase/policy"
                   >
-                    Code
+                    정책
                   </button>
                   <button
                     class="showcase-tab"
@@ -128,9 +128,9 @@
                     role="tab"
                     aria-selected="false"
                     data-showcase-demo="runtime"
-                    data-demo-image="/static/assets/demo-runtime.png"
+                    data-demo-image-base="/static/assets/showcase/runtime"
                   >
-                    Runtime
+                    런타임
                   </button>
                   <button
                     class="showcase-tab"
@@ -138,28 +138,28 @@
                     role="tab"
                     aria-selected="false"
                     data-showcase-demo="report"
-                    data-demo-image="/static/assets/demo-report.png"
+                    data-demo-image-base="/static/assets/showcase/ai-report"
                   >
-                    Report
+                    AI 리포트
                   </button>
                 </div>
                 <div class="showcase-demo-stage">
                   <div class="showcase-demo-copy">
-                    <span class="showcase-kicker" id="showcaseDemoKicker">Gatekeeper</span>
-                    <h3 id="showcaseDemoTitle">Policy Guardrails</h3>
-                    <p id="showcaseDemoDescription">이미지 태그, 루트 권한, 레지스트리 기준을 정책으로 고정합니다.</p>
+                    <span class="showcase-kicker" id="showcaseDemoKicker">Policy</span>
+                    <h3 id="showcaseDemoTitle">정책 생성</h3>
+                    <p id="showcaseDemoDescription">운영 기준을 자연어로 입력하면 검토 가능한 Kubernetes 정책 YAML로 정리합니다.</p>
                     <div class="showcase-code" id="showcaseDemoBullets" aria-label="demo highlights">
-                      <span>deny latest image</span>
-                      <span>require non-root</span>
-                      <span>allow trusted registry</span>
+                      <span>자연어 정책 요청</span>
+                      <span>Gatekeeper YAML 생성</span>
+                      <span>클러스터 적용 가이드</span>
                     </div>
                   </div>
                   <div class="showcase-demo-media" aria-live="polite">
-                    <img id="showcaseDemoImage" src="/static/assets/demo-policy.png" alt="Policy generator demo preview" />
+                    <img id="showcaseDemoImage" src="/static/assets/showcase/policy.png" alt="Policy generator showcase preview" />
                     <div class="showcase-demo-placeholder" id="showcaseDemoPlaceholder">
-                      <span>이미지 준비 영역</span>
-                      <strong>/static/assets/demo-policy.png</strong>
-                      <p>이미지를 추가하면 탭 전환 시 이 영역에 fade-in 됩니다.</p>
+                      <span>쇼케이스 이미지 준비 영역</span>
+                      <strong>/static/assets/showcase/policy.png</strong>
+                      <p>폴더에 이미지를 추가하면 이 영역에 바로 표시됩니다.</p>
                     </div>
                   </div>
                 </div>
