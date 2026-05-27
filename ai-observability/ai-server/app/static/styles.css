@@ -4695,6 +4695,21 @@ body.is-modal-open {
   font-weight: 900;
 }
 
+[data-theme="dark"] .scope-node {
+  border-color: rgba(125, 211, 252, 0.28);
+  background: rgba(13, 23, 40, 0.92);
+  box-shadow: none;
+}
+
+[data-theme="dark"] .scope-icon {
+  background: rgba(125, 211, 252, 0.16);
+  color: #7dd3fc;
+}
+
+[data-theme="dark"] .scope-arrow {
+  color: #8fa4c0;
+}
+
 .scope-node.is-alert {
   border-color: rgba(220, 38, 38, 0.45);
   background: rgba(254, 242, 242, 0.96);
@@ -4704,6 +4719,16 @@ body.is-modal-open {
   background: #fee2e2;
   color: #991b1b;
   animation: alertPulse 1.25s ease-in-out infinite;
+}
+
+[data-theme="dark"] .scope-node.is-alert {
+  border-color: rgba(248, 113, 113, 0.56);
+  background: rgba(69, 10, 10, 0.58);
+}
+
+[data-theme="dark"] .scope-node.is-alert .scope-icon {
+  background: rgba(248, 113, 113, 0.18);
+  color: #fecaca;
 }
 
 @keyframes alertPulse {

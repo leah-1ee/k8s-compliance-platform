@@ -961,7 +961,7 @@ def _build_report_prompt(report: dict[str, Any]) -> str:
         "  ],\n"
         '  "recommendations": ["<actionable Korean sentence>"],\n'
         '  "next_actions": [\n'
-        '    {"label": "<Korean button label>", "target": "<violation_detail|policy_generator|grafana>"}\n'
+        '    {"label": "<button label; use Policy Generator for policy_generator>", "target": "<violation_detail|policy_generator|grafana>"}\n'
         "  ]\n"
         "}\n\n"
         "Rules:\n"
@@ -1060,6 +1060,11 @@ def _normalize_next_action(item: dict[str, Any]) -> dict[str, Any]:
     target = str(item.get("target") or "").strip()
     if target not in {"violation_detail", "policy_generator", "grafana"}:
         target = "violation_detail"
+    if target == "policy_generator":
+        return {
+            "label": "Policy Generator",
+            "target": target,
+        }
     return {
         "label": _nullable_text(item.get("label")) or "위반 상세에서 확인",
         "target": target,
@@ -1134,7 +1139,7 @@ def _report_next_actions(total_violations: int) -> list[dict[str, str]]:
         actions.append({"label": "Violation Detail에서 확인", "target": "violation_detail"})
     actions.extend(
         [
-            {"label": "재발 방지 정책 만들기", "target": "policy_generator"},
+            {"label": "Policy Generator", "target": "policy_generator"},
             {"label": "Grafana에서 추이 보기", "target": "grafana"},
         ]
     )
