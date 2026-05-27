@@ -70,6 +70,15 @@ def init_db() -> None:
                     FOREIGN KEY(user_id) REFERENCES users(id)
                 );
 
+                CREATE TABLE IF NOT EXISTS slack_notification_state (
+                    fingerprint TEXT PRIMARY KEY,
+                    first_seen_at TEXT NOT NULL,
+                    last_seen_at TEXT NOT NULL,
+                    last_notified_at TEXT NOT NULL,
+                    count INTEGER NOT NULL DEFAULT 1,
+                    last_event_id TEXT NOT NULL DEFAULT ''
+                );
+
                 CREATE TABLE IF NOT EXISTS events (
                     id TEXT PRIMARY KEY,
                     source TEXT NOT NULL,
@@ -171,6 +180,10 @@ def init_db() -> None:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_policy_apply_history_user ON policy_apply_history(user_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_policy_apply_history_cluster ON policy_apply_history(cluster_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_grafana_provisioning_user ON grafana_provisioning(user_id)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_slack_notification_state_last_seen "
+                "ON slack_notification_state(last_seen_at)"
+            )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_login_events_ip_time ON auth_login_events(ip_hash, created_at)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events(created_at DESC)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_action ON audit_events(action)")

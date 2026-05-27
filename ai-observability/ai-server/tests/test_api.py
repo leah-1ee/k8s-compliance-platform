@@ -578,6 +578,22 @@ def test_slack_settings_require_login():
     assert client.post("/api/slack-settings/test").status_code == 401
 
 
+def test_slack_notification_state_table_is_initialized():
+    storage.init_db()
+    with storage._connect() as conn:
+        table = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'slack_notification_state'"
+        ).fetchone()
+        index = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'index' "
+            "AND name = 'idx_slack_notification_state_last_seen'"
+        ).fetchone()
+
+    assert table is not None
+    assert "fingerprint TEXT PRIMARY KEY" in table["sql"]
+    assert index is not None
+
+
 def test_slack_settings_and_cluster_toggle(monkeypatch):
     calls = []
 
