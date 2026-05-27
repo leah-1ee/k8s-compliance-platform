@@ -344,18 +344,13 @@
                     <span class="badge loading">Generator</span>
                     <h2>Policy Generator</h2>
                   </div>
-                  <p>Natural language 또는 사전 정의된 정책 유형으로 Gatekeeper 정책을 생성합니다.</p>
+                  <p>사전 정의된 정책 유형으로 Gatekeeper 정책을 생성하고, 필요하면 생성 결과를 LLM으로 검토합니다.</p>
                 </div>
                 <div class="form-grid">
-                  <label id="policyPromptField" hidden>
-                    Policy Generation Request (정책 생성 요청)
-                    <textarea id="policyPrompt" rows="6">latest 태그를 사용하는 컨테이너 이미지를 금지하는 Gatekeeper 정책을 만들어줘</textarea>
-                  </label>
                   <label>
                     Policy Type (정책 유형)
                     <select id="policyKind">
-                      <option value="">자동 판별</option>
-                      <option value="latest-tag">latest 태그 금지</option>
+                      <option value="latest-tag" selected>latest 태그 금지</option>
                       <option value="non-root">non-root 강제</option>
                       <option value="allowed-registries">레지스트리 제한</option>
                       <option value="host-namespace">host namespace 금지</option>
@@ -637,6 +632,12 @@ spec:
               <p>리포트는 로그인한 사용자에게 귀속된 클러스터 이벤트만 집계합니다.</p>
             </div>
             <div id="reportContent">
+              <div class="runtime-filters" aria-label="report scope filters">
+                <label>
+                  리포트 범위
+                  <select id="reportCluster"><option value="">전체 클러스터</option></select>
+                </label>
+              </div>
               <div class="actions report-actions">
                 <button class="primary" id="generateReport">리포트 생성</button>
                 <button class="secondary" id="copyReport">리포트 복사</button>

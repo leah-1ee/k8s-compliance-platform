@@ -437,6 +437,44 @@
         font-weight: 900;
       }
 
+      .policy-mapping-wrap {
+        overflow-x: auto;
+        border: 1px solid rgba(56, 132, 216, 0.18);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.54);
+      }
+
+      .policy-mapping-table {
+        width: 100%;
+        min-width: 760px;
+        border-collapse: collapse;
+      }
+
+      .policy-mapping-table th,
+      .policy-mapping-table td {
+        padding: 14px 16px;
+        border-bottom: 1px solid rgba(56, 132, 216, 0.16);
+        color: var(--muted);
+        line-height: 1.55;
+        text-align: left;
+        vertical-align: middle;
+      }
+
+      .policy-mapping-table th {
+        color: var(--text);
+        font-size: 13px;
+        font-weight: 950;
+      }
+
+      .policy-mapping-table td:first-child {
+        color: var(--text);
+        font-weight: 900;
+      }
+
+      .policy-mapping-table tr:last-child td {
+        border-bottom: 0;
+      }
+
       .info-box {
         border: 1px solid rgba(56, 132, 216, 0.16);
         border-radius: 13px;
@@ -757,11 +795,67 @@
               </article>
               <article class="topic-detail" data-docs-panel="arch-isms-p">
                 <span class="kicker">ISMS-P Mapping</span>
-                <h3>정책과 런타임 증적을 ISMS-P 기준으로 분리해 검증합니다.</h3>
-                <p>Policy Generator 화면의 사전 정의 정책은 Gatekeeper 정책 6종만 노출합니다. 이 6개 정책은 ISMS-P <code>2.9.1 시스템 및 서비스 운영관리</code>에 매핑합니다.</p>
-                <p>Kubernetes <code>NetworkPolicy</code>는 Gatekeeper 정책 엔진 소스에 포함하지 않고, 필요한 경우 별도 네트워크 격리 산출물 또는 런타임 자동 격리 증적으로 다룹니다. 네트워크 접근 통제 증적은 ISMS-P <code>2.6.7 인터넷 접속 통제</code>에 매핑합니다.</p>
-                <p><code>NetworkPolicy</code>는 Kubernetes 표준 기준 TCP, UDP, SCTP 중심의 트래픽 제어 리소스입니다. ping 같은 네트워크 확인은 CNI 플러그인별 처리 차이가 있으므로 표준 <code>NetworkPolicy</code>만으로 차단 또는 허용을 보장하지 않습니다. 관련 증적은 Falco Rule 3 네트워크 탐지 로그와 사용 중인 CNI의 별도 정책/검증 결과를 함께 남깁니다.</p>
-                <div class="topic-chips"><span>ISMS-P 2.9.1</span><span>ISMS-P 2.6.7</span><span>CNI verification</span><span>Falco Rule 3</span></div>
+                <h3>Policy Generator에서 생성하는 6개 정책은 ISMS-P 2.9.1에 매핑합니다.</h3>
+                <p>현재 Policy Generator의 사전 정의 정책은 Gatekeeper Validate 4종과 Mutation 2종입니다. 이 정책들은 컨테이너 실행 조건, 이미지 출처, host namespace 사용, 기본 securityContext와 resource limit을 통제하므로 ISMS-P <code>2.9.1 시스템 및 서비스 운영관리</code> 증적으로 분류합니다.</p>
+                <div class="policy-mapping-wrap" aria-label="Policy Generator ISMS-P mapping">
+                  <table class="policy-mapping-table">
+                    <thead>
+                      <tr>
+                        <th>정책명</th>
+                        <th>종류</th>
+                        <th>적용 대상</th>
+                        <th>enforcement</th>
+                        <th>ISMS-P 매핑</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>require-non-root</td>
+                        <td>Validate</td>
+                        <td>Pod containers / initContainers</td>
+                        <td>deny</td>
+                        <td>2.9.1 시스템 및 서비스 운영관리</td>
+                      </tr>
+                      <tr>
+                        <td>allow-registries</td>
+                        <td>Validate</td>
+                        <td>Pod containers</td>
+                        <td>deny</td>
+                        <td>2.9.1 시스템 및 서비스 운영관리</td>
+                      </tr>
+                      <tr>
+                        <td>block-host-namespaces</td>
+                        <td>Validate</td>
+                        <td>Pod</td>
+                        <td>deny</td>
+                        <td>2.9.1 시스템 및 서비스 운영관리</td>
+                      </tr>
+                      <tr>
+                        <td>block-latest-tag</td>
+                        <td>Validate</td>
+                        <td>Pod containers / initContainers / ephemeralContainers</td>
+                        <td>deny</td>
+                        <td>2.9.1 시스템 및 서비스 운영관리</td>
+                      </tr>
+                      <tr>
+                        <td>assign-security-context</td>
+                        <td>Mutation</td>
+                        <td>Pod containers / initContainers</td>
+                        <td>-</td>
+                        <td>2.9.1 시스템 및 서비스 운영관리</td>
+                      </tr>
+                      <tr>
+                        <td>assign-resource-limits</td>
+                        <td>Mutation</td>
+                        <td>Pod containers / initContainers</td>
+                        <td>-</td>
+                        <td>2.9.1 시스템 및 서비스 운영관리</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p>런타임 Falco 이벤트와 자동 격리 같은 네트워크 접근 통제 증적은 별도 운영 증적으로 다루며, 필요한 경우 ISMS-P <code>2.6.7 인터넷 접속 통제</code>에 분리 매핑합니다.</p>
+                <div class="topic-chips"><span>Validate 4</span><span>Mutation 2</span><span>ISMS-P 2.9.1</span><span>policy evidence</span></div>
               </article>
               <article class="topic-detail" data-docs-panel="arch-slack">
                 <span class="kicker">Slack Notification Flow</span>
@@ -818,9 +912,9 @@
                   <li><strong>disallow-latest-tag</strong>: <code>:latest</code> 또는 태그가 없는 이미지를 제한해 재현 가능한 배포를 강제합니다.</li>
                   <li><strong>Allowed Registries</strong>: <code>ghcr.io/org/</code>, <code>registry.example.com/team/</code>처럼 prefix 기준을 좁게 적습니다.</li>
                   <li><strong>Excluded Namespaces</strong>: 시스템 네임스페이스는 제외하되, 앱 네임스페이스를 제외해 정책 사각지대를 만들지 않습니다.</li>
-                  <li><strong>ISMS-P 매핑</strong>: 기본 정책 6종은 ISMS-P 2.9.1 시스템 및 서비스 운영관리에 매핑합니다. 네트워크 접근 통제는 CNI 정책과 ping 테스트 결과를 ISMS-P 2.6.7 보조 증적으로 기록합니다.</li>
+                  <li><strong>ISMS-P 매핑</strong>: Policy Generator 화면에서 선택하는 기본 정책 6종은 ISMS-P 2.9.1 시스템 및 서비스 운영관리에 매핑합니다.</li>
                 </ul>
-                <div class="topic-chips"><span>Validate</span><span>Mutation</span><span>ISMS-P 2.9.1</span><span>ISMS-P 2.6.7</span><span>dryrun</span></div>
+                <div class="topic-chips"><span>Validate</span><span>Mutation</span><span>ISMS-P 2.9.1</span><span>dryrun</span></div>
               </article>
               <article class="topic-detail" data-docs-panel="feature-apply">
                 <span class="kicker">Safe Rollout</span>
@@ -1099,7 +1193,7 @@ scope=current browser session
                 <h3>Q. AI가 잘못된 Gatekeeper 정책을 만들면 어떻게 막습니까?</h3>
                 <ul>
                   <li><strong>A.</strong> LLM 출력은 최종 권한자가 아니라 초안 생성기로 취급합니다.</li>
-                  <li>Policy Generator는 자연어를 바로 클러스터에 적용하지 않고, ConstraintTemplate과 Constraint YAML을 먼저 노출합니다.</li>
+                  <li>Policy Generator는 선택된 정책 유형을 바로 클러스터에 적용하지 않고, ConstraintTemplate과 Constraint YAML을 먼저 노출합니다.</li>
                   <li>생성 결과는 지원 정책 유형, 필수 필드, enforcementAction, namespace exclusion, Rego 구조를 서버에서 정규화합니다.</li>
                   <li>적용 단계는 <code>dryrun</code> 또는 server-side validation을 먼저 거치도록 안내하며, 운영 반영 전 사람이 YAML을 확인합니다.</li>
                   <li>LLM이 불가능하거나 애매한 정책을 만들면 deterministic fallback과 오류 메시지로 전환하고, 검증되지 않은 답변을 성공으로 표시하지 않습니다.</li>
@@ -1192,14 +1286,12 @@ scope=current browser session
               </article>
               <article class="topic-detail" data-docs-panel="ops-compliance">
                 <span class="kicker">Compliance Mapping</span>
-                <h3>Q. 자연어 to Rego 번역기라면 왜 컴플라이언스 플랫폼이라고 부릅니까?</h3>
+                <h3>Q. 정책 생성기라면 왜 컴플라이언스 플랫폼이라고 부릅니까?</h3>
                 <ul>
                   <li><strong>A.</strong> 현재 구현은 정책 생성기만이 아니라 사용자별 클러스터 등록, Gatekeeper 정책 적용 가이드, Falco 런타임 이벤트 수집, 위반 상세 분석, 리포트, Grafana 관측을 한 흐름으로 묶습니다.</li>
                   <li>현재 사전 정의 정책 6종은 모두 Gatekeeper 정책이며 ISMS-P 2.9.1 시스템 및 서비스 운영관리에 매핑합니다.</li>
                   <li><code>latest 태그 금지</code>, <code>non-root 강제</code>, <code>레지스트리 제한</code>, <code>host namespace 금지</code>, <code>securityContext 자동 주입</code>, <code>resource limits 자동 주입</code>이 화면에 노출되는 기본 정책 목록입니다.</li>
-                  <li><code>NetworkPolicy</code>는 Gatekeeper Constraint가 아니라 Kubernetes 네트워크 격리 리소스라 기본 정책 선택지에서는 제외합니다. 별도 네트워크 격리 산출물 또는 런타임 자동 격리 증적으로만 다룹니다.</li>
-                  <li>네트워크 접근 통제는 ISMS-P 2.6.7에 매핑하되, TCP/UDP/SCTP 중심의 NetworkPolicy와 CNI 동작 검증을 분리해서 기록합니다.</li>
-                  <li>ping 같은 네트워크 확인은 CNI별 동작 차이가 커서 NetworkPolicy 산출물만으로 통제 증적을 확정하지 않습니다. 런타임 네트워크 이벤트, CNI 정책, ping 테스트 결과를 ISMS-P 2.6.7 보조 증적으로 함께 확인합니다.</li>
+                  <li>런타임 네트워크 탐지와 격리 증적은 Policy Generator의 6개 정책 표와 분리해 ISMS-P 2.6.7 인터넷 접속 통제 보조 증적으로 관리합니다.</li>
                   <li>현 단계에서 “컴플라이언스”라는 이름의 근거는 정책-as-code와 런타임 증적을 모아 감사 가능한 운영 흐름을 만드는 데 있습니다.</li>
                   <li>확장 방향은 control catalog를 만들고, 각 정책에 표준 control id, evidence source, severity, remediation guide를 연결해 위반 리포트에서 “어느 조항을 위반했는지”까지 보여주는 것입니다.</li>
                 </ul>

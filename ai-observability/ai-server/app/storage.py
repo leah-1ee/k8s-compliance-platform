@@ -1440,19 +1440,27 @@ def get_event(event_id: str, user_id: str = "") -> dict[str, Any] | None:
     return _row_to_event(row)
 
 
-def event_summary(user_id: str = "") -> dict[str, Any]:
+def event_summary(user_id: str = "", cluster: str = "") -> dict[str, Any]:
     init_db()
+    normalized_cluster = str(cluster or "").strip()
     filters: list[str] = []
     params: list[Any] = []
     if user_id:
         filters.append("cluster_id IN (SELECT id FROM clusters WHERE user_id = ?)")
         params.append(user_id)
+    if normalized_cluster:
+        filters.append("cluster = ?")
+        params.append(normalized_cluster)
     where = f"WHERE {' AND '.join(filters)}" if filters else ""
-    high_where = "WHERE severity = 'high'"
+    high_filters = ["severity = 'high'"]
     high_params: list[Any] = []
     if user_id:
-        high_where += " AND cluster_id IN (SELECT id FROM clusters WHERE user_id = ?)"
+        high_filters.append("cluster_id IN (SELECT id FROM clusters WHERE user_id = ?)")
         high_params.append(user_id)
+    if normalized_cluster:
+        high_filters.append("cluster = ?")
+        high_params.append(normalized_cluster)
+    high_where = f"WHERE {' AND '.join(high_filters)}"
     with _connect() as conn:
         total = conn.execute(f"SELECT COUNT(*) AS count FROM events {where}", params).fetchone()["count"]
         recent_24h = conn.execute(
@@ -1474,10 +1482,10 @@ def event_summary(user_id: str = "") -> dict[str, Any]:
             f"SELECT MAX(last_seen_at) AS value FROM clusters {cluster_where}",
             cluster_params,
         ).fetchone()["value"]
-        by_severity = _count_by(conn, "severity", user_id=user_id)
-        by_rule = _count_by(conn, "rule", user_id=user_id)
-        by_namespace = _count_by(conn, "namespace", user_id=user_id)
-        by_action = _count_by(conn, "action_taken", user_id=user_id)
+        by_severity = _count_by(conn, "severity", user_id=user_id, cluster=normalized_cluster)
+        by_rule = _count_by(conn, "rule", user_id=user_id, cluster=normalized_cluster)
+        by_namespace = _count_by(conn, "namespace", user_id=user_id, cluster=normalized_cluster)
+        by_action = _count_by(conn, "action_taken", user_id=user_id, cluster=normalized_cluster)
         recent_high = conn.execute(
             f"""
             SELECT * FROM events
@@ -1564,12 +1572,16 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
-def _count_by(conn: sqlite3.Connection, column: str, user_id: str = "") -> dict[str, int]:
+def _count_by(conn: sqlite3.Connection, column: str, user_id: str = "", cluster: str = "") -> dict[str, int]:
     filters = [f"{column} IS NOT NULL", f"{column} != ''"]
     params: list[Any] = []
     if user_id:
         filters.append("cluster_id IN (SELECT id FROM clusters WHERE user_id = ?)")
         params.append(user_id)
+    normalized_cluster = str(cluster or "").strip()
+    if normalized_cluster:
+        filters.append("cluster = ?")
+        params.append(normalized_cluster)
     rows = conn.execute(
         f"""
         SELECT {column} AS key, COUNT(*) AS count

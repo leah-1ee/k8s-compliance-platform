@@ -565,8 +565,8 @@ def get_runtime_event(event_id: str, user_id: str = "") -> dict[str, Any] | None
         raise
 
 
-def get_runtime_summary(user_id: str = "") -> dict[str, Any]:
-    summary = storage.event_summary(user_id=user_id)
+def get_runtime_summary(user_id: str = "", cluster: str = "") -> dict[str, Any]:
+    summary = storage.event_summary(user_id=user_id, cluster=cluster)
     if user_id:
         return summary
     try:
@@ -844,25 +844,33 @@ def _kube_get(path: str, timeout: float = 5) -> dict[str, Any]:
 
 
 def build_report(
+    cluster: str = "",
     cluster_kind: str = "",
     include_legacy: bool = False,
     user_id: str = "",
     llm_provider: str | None = None,
     llm_api_key: str | None = None,
 ) -> dict[str, Any]:
-    summary = get_runtime_summary(user_id=user_id)
+    normalized_cluster = str(cluster or "").strip()
+    summary = get_runtime_summary(user_id=user_id, cluster=normalized_cluster)
     events = list_runtime_events(
         limit=100,
+        cluster=normalized_cluster,
         cluster_kind=cluster_kind,
         include_legacy=include_legacy,
         user_id=user_id,
     )["events"]
-    report = _build_structured_report(summary, events)
+    report = _build_structured_report(summary, events, cluster=normalized_cluster)
     llm_report = _safe_llm_structured_report(report, llm_provider, llm_api_key)
     return llm_report or report
 
 
-def _build_structured_report(summary: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
+def _build_structured_report(
+    summary: dict[str, Any],
+    events: list[dict[str, Any]],
+    cluster: str = "",
+) -> dict[str, Any]:
+    normalized_cluster = str(cluster or "").strip()
     total_violations = int(summary.get("total_events", 0) or len(events))
     affected_clusters = {event.get("cluster") for event in events if event.get("cluster")}
     affected_namespaces = {event.get("namespace") for event in events if event.get("namespace")}
@@ -871,6 +879,11 @@ def _build_structured_report(summary: dict[str, Any], events: list[dict[str, Any
     overall_severity = _report_overall_severity(summary, events)
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "scope": {
+            "type": "cluster" if normalized_cluster else "all_clusters",
+            "label": normalized_cluster or "전체 클러스터",
+            "cluster": normalized_cluster,
+        },
         "summary": {
             "total_violations": total_violations,
             "severity": overall_severity,
@@ -979,8 +992,14 @@ def _parse_llm_report_json(text: str) -> dict[str, Any]:
 def _normalize_report_payload(payload: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]:
     summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
     fallback_summary = fallback["summary"]
+    fallback_scope = fallback.get("scope") if isinstance(fallback.get("scope"), dict) else {}
     normalized = {
         "generated_at": str(payload.get("generated_at") or fallback.get("generated_at") or datetime.now(timezone.utc).isoformat()),
+        "scope": {
+            "type": str(fallback_scope.get("type") or "all_clusters"),
+            "label": str(fallback_scope.get("label") or "전체 클러스터"),
+            "cluster": str(fallback_scope.get("cluster") or ""),
+        },
         "summary": {
             "total_violations": _int_or_default(summary.get("total_violations"), fallback_summary["total_violations"]),
             "severity": _report_severity_label(summary.get("severity") or fallback_summary["severity"]),

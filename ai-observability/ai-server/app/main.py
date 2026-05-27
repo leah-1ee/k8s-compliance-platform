@@ -1727,6 +1727,7 @@ def gatekeeper_events(payload: dict) -> dict:
 
 @app.get("/compliance-report")
 def compliance_report(
+    cluster: str = "",
     cluster_kind: str = "",
     include_legacy: bool = False,
     x_llm_provider: str | None = Header(default=None),
@@ -1739,6 +1740,7 @@ def compliance_report(
         return auth_error
     assert user is not None
     return build_report(
+        cluster=cluster,
         cluster_kind=cluster_kind,
         include_legacy=include_legacy,
         user_id=user["id"],

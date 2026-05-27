@@ -77,9 +77,12 @@ def test_ui_is_served():
     assert "로그인 후 AI 리포트를 생성할 수 있습니다." in response.text
     assert "Falco Sidekick 설치 명령" in response.text
     assert "내 클러스터" in response.text
-    assert "Policy Generation Request" in response.text
-    assert '<label id="policyPromptField" hidden>' in response.text
+    assert "Policy Generation Request" not in response.text
+    assert 'id="policyPromptField"' not in response.text
+    assert "자동 판별" not in response.text
     assert "생성 결과 LLM 검토" in response.text
+    assert "reportCluster" in response.text
+    assert "리포트 범위" in response.text
     assert "policyLoadingText" in response.text
     assert "analysisLoadingText" in response.text
     assert "정책을 생성하면 여기에 결과가 표시됩니다" in response.text
@@ -1665,6 +1668,63 @@ def test_runtime_features_require_login():
     assert public_apply_audit.json()["audit_summary"]["total"] == 0
 
 
+def test_compliance_report_can_scope_to_one_cluster():
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="report-scope-owner@example.test",
+        email="report-scope-owner@example.test",
+    )
+    session = storage.create_session(owner["id"])
+    cluster_a = storage.create_cluster("report-scope-a", user_id=owner["id"])
+    cluster_b = storage.create_cluster("report-scope-b", user_id=owner["id"])
+    client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster_a['token']}"},
+        json={
+            "event": {
+                "time": datetime.now(timezone.utc).isoformat(),
+                "rule": "Report Scope A",
+                "priority": "Warning",
+                "output_fields": {"k8s.ns.name": "team-a", "k8s.pod.name": "pod-a"},
+            },
+        },
+    )
+    client.post(
+        "/ingest/falco-events",
+        headers={"Authorization": f"Bearer {cluster_b['token']}"},
+        json={
+            "event": {
+                "time": datetime.now(timezone.utc).isoformat(),
+                "rule": "Report Scope B",
+                "priority": "Critical",
+                "output_fields": {"k8s.ns.name": "team-b", "k8s.pod.name": "pod-b"},
+            },
+        },
+    )
+
+    all_response = client.get("/compliance-report", cookies={"compliance_ai_session": session})
+    scoped_response = client.get(
+        "/compliance-report?cluster=report-scope-a",
+        cookies={"compliance_ai_session": session},
+    )
+    all_body = all_response.json()
+    scoped_body = scoped_response.json()
+
+    assert all_response.status_code == 200
+    assert scoped_response.status_code == 200
+    assert all_body["scope"] == {"type": "all_clusters", "label": "전체 클러스터", "cluster": ""}
+    assert all_body["summary"]["affected_clusters"] >= 2
+    assert scoped_body["scope"] == {
+        "type": "cluster",
+        "label": "report-scope-a",
+        "cluster": "report-scope-a",
+    }
+    assert scoped_body["summary"]["total_violations"] == 1
+    assert scoped_body["summary"]["affected_clusters"] == 1
+    assert scoped_body["top_rules"][0]["rule"] == "Report Scope A"
+    assert all(item["cluster"] == "report-scope-a" for item in scoped_body["blast_radius"])
+
+
 def test_dashboard_summary_uses_user_scoped_policy_and_event_counts():
     owner = storage.upsert_user(
         provider="dev",
@@ -2054,6 +2114,7 @@ def test_compliance_report_uses_llm_when_configured(monkeypatch):
     assert response.status_code == 200
     assert set(body) == {
         "generated_at",
+        "scope",
         "summary",
         "top_rules",
         "blast_radius",
@@ -2061,6 +2122,7 @@ def test_compliance_report_uses_llm_when_configured(monkeypatch):
         "recommendations",
         "next_actions",
     }
+    assert body["scope"] == {"type": "all_clusters", "label": "전체 클러스터", "cluster": ""}
     assert "High 이벤트" in body["summary"]["description"]
     assert body["next_actions"][0]["target"] == "grafana"
     assert calls[0]["provider"] == "google"

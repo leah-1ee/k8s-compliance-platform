@@ -1022,15 +1022,15 @@ async function generatePolicy() {
   clearInlineAlert();
   const useLlm = $("#useLlm").checked;
   const selectedPolicyKind = $("#policyKind").value;
-  if (!useLlm && !selectedPolicyKind) {
-    showInlineAlert("LLM 검토를 사용하지 않을 때는 정책 유형을 선택해 주세요.");
+  if (!selectedPolicyKind) {
+    showInlineAlert("정책 유형을 선택해 주세요.");
     showToast("정책 유형 선택 필요");
     return;
   }
   setPolicyLoading(true);
   const payload = {
-    prompt: selectedPolicyKind ? POLICY_PROMPTS[selectedPolicyKind] : $("#policyPrompt").value,
-    policy_kind: selectedPolicyKind || null,
+    prompt: POLICY_PROMPTS[selectedPolicyKind],
+    policy_kind: selectedPolicyKind,
     constraint_name: $("#constraintName").value,
     enforcement_action: $("#enforcementAction").value,
     allowed_registries: splitList($("#allowedRegistries").value),
@@ -1075,17 +1075,9 @@ async function generatePolicy() {
 }
 
 function syncPolicyPromptMode() {
-  const useLlm = $("#useLlm").checked;
   const selectedPolicyKind = $("#policyKind").value;
-  $("#policyPromptField").hidden = !useLlm;
-  $("#policyPrompt").disabled = !useLlm;
-  $("#policyKind").querySelector('option[value=""]').disabled = !useLlm;
-  if (!useLlm && !selectedPolicyKind) {
+  if (!selectedPolicyKind) {
     $("#policyKind").value = "latest-tag";
-  }
-  const effectivePolicyKind = $("#policyKind").value;
-  if (!useLlm && effectivePolicyKind) {
-    $("#policyPrompt").value = POLICY_PROMPTS[effectivePolicyKind];
   }
   syncEnforcementBadges();
 }
@@ -1471,6 +1463,24 @@ function renderRuntimeClusterFilter() {
   }
 }
 
+function renderReportClusterFilter() {
+  const select = $("#reportCluster");
+  if (!select) {
+    return;
+  }
+  const selected = select.value;
+  select.innerHTML = [
+    '<option value="">전체 클러스터</option>',
+    ...userClusters.map(
+      (cluster) =>
+        `<option value="${escapeHtml(cluster.name || "")}">${escapeHtml(cluster.name || "unknown-cluster")}</option>`,
+    ),
+  ].join("");
+  if (userClusters.some((cluster) => cluster.name === selected)) {
+    select.value = selected;
+  }
+}
+
 function renderUserClusters() {
   const container = $("#userClusters");
   if (!authState.authenticated) {
@@ -1549,6 +1559,7 @@ async function loadUserClusters() {
   if (!authState.authenticated) {
     userClusters = [];
     renderRuntimeClusterFilter();
+    renderReportClusterFilter();
     renderUserClusters();
     renderSlackClusterToggles();
     renderPolicyApplyPanel();
@@ -1561,6 +1572,7 @@ async function loadUserClusters() {
     ? clusters.filter((cluster) => cluster.status === "deleted")
     : clusters.filter((cluster) => cluster.status !== "deleted");
   renderRuntimeClusterFilter();
+  renderReportClusterFilter();
   renderUserClusters();
   renderPolicyApplyPanel();
 }
@@ -2011,7 +2023,10 @@ async function generateReport() {
     <p>최근 Falco/Gatekeeper 이벤트를 집계하고 LLM 요약을 생성하고 있습니다.</p>
   `;
   try {
-    const response = await fetch("/compliance-report", {
+    const query = new URLSearchParams({
+      cluster: $("#reportCluster")?.value || "",
+    });
+    const response = await fetch(`/compliance-report?${query.toString()}`, {
       headers: llmHeaders(),
     });
     const report = await response.json();
@@ -2024,6 +2039,7 @@ async function generateReport() {
     $("#reportResult").innerHTML = `
       <span class="badge ready">JSON report</span>
       <h2>AI 컴플라이언스 리포트</h2>
+      ${renderReportScope(report.scope || {})}
       <p>생성 날짜: ${escapeHtml(formatSeoulDateTime(report.generated_at))}</p>
       ${renderReportSummary(report.summary || {})}
       ${renderReportTopRules(report.top_rules || [])}
@@ -2040,6 +2056,11 @@ async function generateReport() {
   } finally {
     setReportLoading(false);
   }
+}
+
+function renderReportScope(scope) {
+  const label = scope.label || (scope.cluster ? scope.cluster : "전체 클러스터");
+  return `<p class="report-scope">Scope: ${escapeHtml(label)}</p>`;
 }
 
 function renderReportSummary(summary) {
