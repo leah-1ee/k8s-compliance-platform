@@ -814,7 +814,6 @@ function ensurePolicyApplyPanel() {
         <h2>클러스터 적용 가이드</h2>
         <p>생성된 정책을 사용자 클러스터 context에서 안전하게 적용할 kubectl 단계를 준비합니다.</p>
       </div>
-      <span id="policyApplyStatusBadge" class="badge compact">대기</span>
     </div>
     <div class="policy-apply-notice">
       <strong>사용자 클러스터 적용 안내</strong>
@@ -954,13 +953,10 @@ function renderPolicyFallbackSteps(fallback = {}) {
 
 function renderPolicyApplyResult(result) {
   const container = $("#policyApplyResult");
-  const badge = $("#policyApplyStatusBadge");
-  if (!container || !badge) {
+  if (!container) {
     return;
   }
   const status = result?.status || "unknown";
-  badge.textContent = status;
-  badge.className = `badge compact ${status === "applied" ? "ready" : status === "not_configured" ? "medium" : "error"}`;
   const isKubectlGuide = status === "not_configured";
   const rows = (result.resources || [])
     .map(
@@ -1535,8 +1531,21 @@ function renderUserClusters() {
   renderSlackClusterToggles();
 }
 
+function syncDeletedClusterToggleState() {
+  const toggle = $(".cluster-trash-toggle");
+  const checkbox = $("#showDeletedClusters");
+  if (!toggle || !checkbox) {
+    return;
+  }
+  const trashMode = Boolean(checkbox.checked);
+  toggle.classList.toggle("is-trash-mode", trashMode);
+  toggle.setAttribute("title", trashMode ? "활성 클러스터 보기" : "휴지통 보기");
+  toggle.setAttribute("aria-label", trashMode ? "활성 클러스터 보기" : "휴지통 보기");
+}
+
 async function loadUserClusters() {
   renderClusterSetupGate();
+  syncDeletedClusterToggleState();
   if (!authState.authenticated) {
     userClusters = [];
     renderRuntimeClusterFilter();
@@ -2010,29 +2019,18 @@ async function generateReport() {
       throw new Error(formatErrorMessage(report.error || report.detail || `HTTP ${response.status}`));
     }
     latestReportText = JSON.stringify(report, null, 2);
-    const recommendations = (report.recommendations || [])
-      .map((item) => `<li>${escapeHtml(item)}</li>`)
-      .join("");
-    const topRules = (report.top_rules || [])
-      .map((item) => `<li>${escapeHtml(item.rule)}: ${escapeHtml(item.count)}</li>`)
-      .join("");
-    const llmSummary = report.llm_summary
-      ? `<div class="analysis-code-block report-summary-block"><p>${escapeHtml(report.llm_summary)}</p></div>`
-      : `<p>${escapeHtml(report.llm_error || "LLM 요약을 생성하지 못해 규칙 기반 리포트만 표시합니다.")}</p>`;
     latestReportReadableText = buildReadableReportText(report);
     latestReportRawVisible = false;
     $("#reportResult").innerHTML = `
-      <span class="badge ${report.llm_used ? "ready" : "loading"}">${report.llm_used ? "LLM report" : "rule report"}</span>
+      <span class="badge ready">JSON report</span>
       <h2>AI 컴플라이언스 리포트</h2>
       <p>생성 날짜: ${escapeHtml(formatSeoulDateTime(report.generated_at))}</p>
-      <h3>LLM 요약</h3>
-      ${llmSummary}
-      <h3>상위 위반 Rule</h3>
-      <ul>${topRules || "<li>수집된 rule 없음</li>"}</ul>
-      <h3>권장 조치</h3>
-      <div class="analysis-code-block report-terminal-window">
-        <ul>${recommendations}</ul>
-      </div>
+      ${renderReportSummary(report.summary || {})}
+      ${renderReportTopRules(report.top_rules || [])}
+      ${renderReportBlastRadius(report.blast_radius || [])}
+      ${renderReportTimeline(report.timeline || [])}
+      ${renderReportRecommendations(report.recommendations || [])}
+      ${renderReportNextActions(report.next_actions || [])}
       <div class="analysis-code-block report-terminal-window report-json-block" id="reportRawJsonBlock" hidden>
         <pre><code>${escapeHtml(latestReportText)}</code></pre>
       </div>
@@ -2044,25 +2042,190 @@ async function generateReport() {
   }
 }
 
+function renderReportSummary(summary) {
+  const stats = [
+    ["총 위반", formatNumber(summary.total_violations), "건"],
+    ["심각도", summary.severity || "Low", ""],
+    ["영향 클러스터", formatNumber(summary.affected_clusters), "개"],
+    ["영향 네임스페이스", formatNumber(summary.affected_namespaces), "개"],
+    ["영향 Pod", formatNumber(summary.affected_pods), "개"],
+  ];
+  return `
+    <section class="report-section">
+      <div class="report-stat-grid">
+        ${stats
+          .map(
+            ([label, value, suffix]) => `
+              <div class="report-stat">
+                <span>${escapeHtml(label)}</span>
+                <strong>${escapeHtml(value)}${suffix ? `<small>${escapeHtml(suffix)}</small>` : ""}</strong>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+      <p class="report-summary-text">${escapeHtml(summary.description || "요약 정보가 없습니다.")}</p>
+    </section>
+  `;
+}
+
+function renderReportTopRules(topRules) {
+  const maxCount = Math.max(1, ...topRules.map((item) => Number(item.count || 0)));
+  const rows = topRules
+    .map((item) => {
+      const count = Number(item.count || 0);
+      const width = Math.max(8, Math.round((count / maxCount) * 100));
+      return `
+        <li class="report-rule-row">
+          <span class="report-rule-name">${escapeHtml(item.rule || "알 수 없는 rule")}</span>
+          <span class="report-rule-count">${escapeHtml(formatNumber(count))}건</span>
+          <span class="report-rule-bar" aria-hidden="true"><span style="width: ${width}%"></span></span>
+          <span class="report-severity ${reportSeverityClass(item.severity)}">${escapeHtml(item.severity || "Low")}</span>
+        </li>
+      `;
+    })
+    .join("");
+  return `
+    <section class="report-section">
+      <h3>상위 위반 Rule</h3>
+      <ul class="report-rule-list">${rows || "<li>수집된 rule 없음</li>"}</ul>
+    </section>
+  `;
+}
+
+function renderReportBlastRadius(items) {
+  const rows = items
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHtml(item.cluster || "-")}</td>
+          <td>${escapeHtml(item.namespace || "-")}</td>
+          <td>${escapeHtml(item.pod || "-")}</td>
+          <td>${escapeHtml(item.rule || "-")}</td>
+          <td>${escapeHtml(formatSeoulDateTime(item.time))}</td>
+        </tr>
+      `,
+    )
+    .join("");
+  return `
+    <section class="report-section">
+      <h3>영향 범위</h3>
+      <div class="report-table-wrap">
+        <table class="report-table">
+          <thead>
+            <tr><th>Cluster</th><th>Namespace</th><th>Pod</th><th>Rule</th><th>Time</th></tr>
+          </thead>
+          <tbody>${rows || '<tr><td colspan="5">영향 범위 데이터 없음</td></tr>'}</tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function renderReportTimeline(timeline) {
+  const maxCount = Math.max(1, ...timeline.map((item) => Number(item.count || 0)));
+  const bars = timeline
+    .map((item) => {
+      const count = Number(item.count || 0);
+      const height = Math.max(10, Math.round((count / maxCount) * 88));
+      return `
+        <li class="report-timeline-item">
+          <span class="report-timeline-count">${escapeHtml(formatNumber(count))}</span>
+          <span class="report-timeline-bar" style="height: ${height}px" aria-hidden="true"></span>
+          <span class="report-timeline-hour">${escapeHtml(item.hour || "-")}</span>
+        </li>
+      `;
+    })
+    .join("");
+  return `
+    <section class="report-section">
+      <h3>24시간 타임라인</h3>
+      <ul class="report-timeline">${bars || "<li>타임라인 데이터 없음</li>"}</ul>
+    </section>
+  `;
+}
+
+function renderReportRecommendations(recommendations) {
+  const items = recommendations.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  return `
+    <section class="report-section">
+      <h3>권장 조치</h3>
+      <div class="analysis-code-block report-terminal-window">
+        <ul>${items || "<li>권장 조치 없음</li>"}</ul>
+      </div>
+    </section>
+  `;
+}
+
+function renderReportNextActions(actions) {
+  const buttons = actions
+    .map(
+      (item) => `
+        <button class="secondary report-next-action" type="button" data-report-action="${escapeHtml(item.target || "")}">
+          ${escapeHtml(item.label || "확인하기")} →
+        </button>
+      `,
+    )
+    .join("");
+  return `
+    <section class="report-section report-next-actions">
+      <h3>Next Action</h3>
+      <div>${buttons || "<p>연결할 작업 없음</p>"}</div>
+    </section>
+  `;
+}
+
+function reportSeverityClass(value) {
+  return `is-${String(value || "low").toLowerCase()}`;
+}
+
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString("ko-KR");
+}
+
 function buildReadableReportText(report) {
+  const summary = report.summary || {};
   const topRules = (report.top_rules || [])
-    .map((item) => `- ${item.rule}: ${item.count}`)
+    .map((item) => `- ${item.rule}: ${item.count}건 (${item.severity})`)
     .join("\n") || "- 수집된 rule 없음";
+  const blastRadius = (report.blast_radius || [])
+    .map((item) => `- ${item.cluster || "-"} / ${item.namespace || "-"} / ${item.pod || "-"} / ${item.rule || "-"} / ${formatSeoulDateTime(item.time)}`)
+    .join("\n") || "- 영향 범위 데이터 없음";
+  const timeline = (report.timeline || [])
+    .map((item) => `- ${item.hour}: ${item.count}건`)
+    .join("\n") || "- 타임라인 데이터 없음";
   const recommendations = (report.recommendations || [])
     .map((item) => `- ${item}`)
     .join("\n") || "- 권장 조치 없음";
+  const nextActions = (report.next_actions || [])
+    .map((item) => `- ${item.label} (${item.target})`)
+    .join("\n") || "- 연결할 작업 없음";
   return [
     "AI 컴플라이언스 리포트",
     `생성 날짜: ${formatSeoulDateTime(report.generated_at)}`,
     "",
-    "LLM 요약",
-    report.llm_summary || report.llm_error || "LLM 요약 없음",
+    "요약",
+    `총 위반: ${formatNumber(summary.total_violations)}건`,
+    `심각도: ${summary.severity || "Low"}`,
+    `영향 클러스터: ${formatNumber(summary.affected_clusters)}개`,
+    `영향 네임스페이스: ${formatNumber(summary.affected_namespaces)}개`,
+    `영향 Pod: ${formatNumber(summary.affected_pods)}개`,
+    summary.description || "요약 정보 없음",
     "",
     "상위 위반 Rule",
     topRules,
     "",
+    "영향 범위",
+    blastRadius,
+    "",
+    "타임라인",
+    timeline,
+    "",
     "권장 조치",
     recommendations,
+    "",
+    "Next Action",
+    nextActions,
   ].join("\n");
 }
 
@@ -2198,6 +2361,32 @@ $("#generatePolicy").addEventListener("click", () => {
 });
 
 document.addEventListener("click", (event) => {
+  const reportAction = event.target.closest("[data-report-action]");
+  if (!reportAction) {
+    return;
+  }
+  handleReportNextAction(reportAction.dataset.reportAction);
+});
+
+function handleReportNextAction(target) {
+  if (target === "violation_detail") {
+    activateTab("analysis");
+    showToast("Violation Detail로 이동했습니다");
+    return;
+  }
+  if (target === "policy_generator") {
+    activateTab("policy");
+    showToast("Policy Generator로 이동했습니다");
+    return;
+  }
+  if (target === "grafana") {
+    activateTab("dashboard");
+    $(".grafana-dashboard-heading")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    showToast("Grafana 대시보드 영역으로 이동했습니다");
+  }
+}
+
+document.addEventListener("click", (event) => {
   const applyButton = event.target.closest("#applyGeneratedPolicy");
   if (!applyButton) {
     return;
@@ -2275,6 +2464,7 @@ $("#refreshUserClusters").addEventListener("click", () => {
 });
 
 $("#showDeletedClusters").addEventListener("change", () => {
+  syncDeletedClusterToggleState();
   loadUserClusters().catch((error) => {
     showInlineAlert(error.message);
     showToast("클러스터 목록 로드 실패");

@@ -10,7 +10,6 @@ import yaml
 from app import storage
 from app.analyzer import _redact_for_llm
 from app.llm_client import LLMClient
-from app.policy_generator import _format_llm_http_error
 
 
 RESPONSE_SERVER_URL = os.getenv("RESPONSE_SERVER_URL", "http://response-server:8080").rstrip("/")
@@ -858,71 +857,314 @@ def build_report(
         include_legacy=include_legacy,
         user_id=user_id,
     )["events"]
+    report = _build_structured_report(summary, events)
+    llm_report = _safe_llm_structured_report(report, llm_provider, llm_api_key)
+    return llm_report or report
+
+
+def _build_structured_report(summary: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
+    total_violations = int(summary.get("total_events", 0) or len(events))
+    affected_clusters = {event.get("cluster") for event in events if event.get("cluster")}
+    affected_namespaces = {event.get("namespace") for event in events if event.get("namespace")}
+    affected_pods = {event.get("pod_name") for event in events if event.get("pod_name")}
     top_rules = sorted(summary.get("by_rule", {}).items(), key=lambda item: item[1], reverse=True)[:5]
+    overall_severity = _report_overall_severity(summary, events)
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "summary": summary,
-        "top_rules": [{"rule": rule, "count": count} for rule, count in top_rules],
+        "summary": {
+            "total_violations": total_violations,
+            "severity": overall_severity,
+            "affected_clusters": len(affected_clusters),
+            "affected_namespaces": len(affected_namespaces),
+            "affected_pods": len(affected_pods),
+            "description": _report_description(total_violations, overall_severity, top_rules, affected_namespaces),
+        },
+        "top_rules": [
+            {
+                "rule": rule,
+                "count": int(count or 0),
+                "severity": _rule_report_severity(rule, events),
+            }
+            for rule, count in top_rules
+        ],
+        "blast_radius": _report_blast_radius(events),
+        "timeline": _report_timeline(events),
         "recommendations": _report_recommendations(summary, events),
-        "events": events[:20],
-        "llm_used": False,
-        "llm_summary": "",
-        "llm_error": "",
+        "next_actions": _report_next_actions(total_violations),
     }
-    llm_summary, llm_error = _safe_llm_report_summary(report, llm_provider, llm_api_key)
-    report["llm_summary"] = llm_summary
-    report["llm_error"] = llm_error
-    report["llm_used"] = bool(llm_summary)
     return report
 
 
-def _safe_llm_report_summary(
+def _safe_llm_structured_report(
     report: dict[str, Any],
     llm_provider: str | None,
     llm_api_key: str | None,
-) -> tuple[str, str]:
+) -> dict[str, Any] | None:
     client = LLMClient(provider=llm_provider, api_key=llm_api_key)
     if not client.configured:
-        return "", "LLM API key가 설정되어 있지 않아 규칙 기반 리포트만 표시합니다."
+        return None
     try:
-        return (
-            client.complete_text(
-                _build_report_prompt(report),
-                (
-                    "You are a Kubernetes compliance analyst. "
-                    "Write a concise Korean executive summary for operators. "
-                    "Mention risk level, top causes, and the next actions. "
-                    "Do not invent events that are not in the JSON. "
-                    "End with a complete sentence."
-                ),
-                max_tokens=1400,
-            ).strip(),
-            "",
+        raw_text = client.complete_text(
+            _build_report_prompt(report),
+            (
+                "You are a Kubernetes compliance analyst. "
+                "Return only a valid JSON object matching the requested schema. "
+                "Do not invent clusters, namespaces, pods, rules, times, or counts."
+            ),
+            max_tokens=1800,
         )
-    except httpx.HTTPStatusError as error:
-        return "", f"{_format_llm_http_error(error)} 규칙 기반 리포트만 표시합니다."
-    except httpx.TimeoutException:
-        return "", "LLM 연결 시간 초과로 규칙 기반 리포트만 표시합니다."
-    except httpx.RequestError:
-        return "", "LLM 연결 실패로 규칙 기반 리포트만 표시합니다."
+        parsed = _parse_llm_report_json(raw_text)
+        return _normalize_report_payload(parsed, fallback=report)
+    except (httpx.HTTPStatusError, httpx.TimeoutException, httpx.RequestError):
+        return None
     except Exception:
-        return "", "LLM 처리 실패로 규칙 기반 리포트만 표시합니다."
+        return None
 
 
 def _build_report_prompt(report: dict[str, Any]) -> str:
-    compact_report = {
-        "summary": report.get("summary", {}),
-        "top_rules": report.get("top_rules", []),
-        "recommendations": report.get("recommendations", []),
-        "events": report.get("events", [])[:10],
-    }
-    redacted_report = _redact_for_llm(compact_report)
+    redacted_report = _redact_for_llm(report)
     return (
-        "다음 Kubernetes 컴플라이언스 리포트 JSON을 운영자용으로 요약하세요.\n"
-        "출력은 한국어 4~6문장으로 작성하고, 조치 우선순위를 포함하세요.\n"
-        "마지막 문장은 반드시 완결된 문장으로 끝내세요.\n\n"
+        "Given Falco/Gatekeeper events and metrics, return ONLY a JSON object. "
+        "No markdown, no explanation, no preamble.\n\n"
+        "The JSON must follow this exact structure:\n\n"
+        "{\n"
+        '  "generated_at": "<ISO8601 timestamp>",\n'
+        '  "summary": {\n'
+        '    "total_violations": <number>,\n'
+        '    "severity": "<Critical|High|Medium|Low>",\n'
+        '    "affected_clusters": <number>,\n'
+        '    "affected_namespaces": <number>,\n'
+        '    "affected_pods": <number>,\n'
+        '    "description": "<2-3 sentence plain Korean summary of what happened and why it matters>"\n'
+        "  },\n"
+        '  "top_rules": [\n'
+        '    {"rule": "<rule name>", "count": <number>, "severity": "<Critical|High|Medium|Low>"}\n'
+        "  ],\n"
+        '  "blast_radius": [\n'
+        '    {"cluster": "<cluster name>", "namespace": "<namespace>", "pod": "<pod name>", "rule": "<rule name>", "time": "<ISO8601 timestamp>"}\n'
+        "  ],\n"
+        '  "timeline": [\n'
+        '    {"hour": "<HH:00>", "count": <number>}\n'
+        "  ],\n"
+        '  "recommendations": ["<actionable Korean sentence>"],\n'
+        '  "next_actions": [\n'
+        '    {"label": "<Korean button label>", "target": "<violation_detail|policy_generator|grafana>"}\n'
+        "  ]\n"
+        "}\n\n"
+        "Rules:\n"
+        "- All Korean text must be natural, concise, and operator-friendly.\n"
+        "- Do not include any field outside this schema.\n"
+        "- Do not wrap the output in markdown code blocks.\n"
+        "- If a field has no data, use null or empty array, never omit the key.\n\n"
+        "Use the following already-computed report values. Preserve counts, times, rule names, and targets exactly unless you are only improving Korean wording:\n\n"
         f"{json.dumps(redacted_report, ensure_ascii=False)}"
     )
+
+
+def _parse_llm_report_json(text: str) -> dict[str, Any]:
+    cleaned = str(text or "").strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+    parsed = json.loads(cleaned)
+    if not isinstance(parsed, dict):
+        raise ValueError("LLM report must be a JSON object")
+    return parsed
+
+
+def _normalize_report_payload(payload: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]:
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    fallback_summary = fallback["summary"]
+    normalized = {
+        "generated_at": str(payload.get("generated_at") or fallback.get("generated_at") or datetime.now(timezone.utc).isoformat()),
+        "summary": {
+            "total_violations": _int_or_default(summary.get("total_violations"), fallback_summary["total_violations"]),
+            "severity": _report_severity_label(summary.get("severity") or fallback_summary["severity"]),
+            "affected_clusters": _int_or_default(summary.get("affected_clusters"), fallback_summary["affected_clusters"]),
+            "affected_namespaces": _int_or_default(summary.get("affected_namespaces"), fallback_summary["affected_namespaces"]),
+            "affected_pods": _int_or_default(summary.get("affected_pods"), fallback_summary["affected_pods"]),
+            "description": str(summary.get("description") or fallback_summary["description"]),
+        },
+        "top_rules": _normalize_report_list(payload.get("top_rules"), fallback["top_rules"], _normalize_top_rule),
+        "blast_radius": _normalize_report_list(payload.get("blast_radius"), fallback["blast_radius"], _normalize_blast_radius_item),
+        "timeline": _normalize_report_list(payload.get("timeline"), fallback["timeline"], _normalize_timeline_item),
+        "recommendations": _normalize_string_list(payload.get("recommendations"), fallback["recommendations"]),
+        "next_actions": _normalize_report_list(payload.get("next_actions"), fallback["next_actions"], _normalize_next_action),
+    }
+    return normalized
+
+
+def _normalize_report_list(value: Any, fallback: list[dict[str, Any]], normalizer) -> list[dict[str, Any]]:
+    items = value if isinstance(value, list) else fallback
+    normalized = []
+    for item in items:
+        if isinstance(item, dict):
+            normalized.append(normalizer(item))
+    return normalized
+
+
+def _normalize_string_list(value: Any, fallback: list[str]) -> list[str]:
+    items = value if isinstance(value, list) else fallback
+    return [str(item) for item in items if str(item or "").strip()]
+
+
+def _normalize_top_rule(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "rule": _nullable_text(item.get("rule")),
+        "count": _int_or_default(item.get("count"), 0),
+        "severity": _report_severity_label(item.get("severity")),
+    }
+
+
+def _normalize_blast_radius_item(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "cluster": _nullable_text(item.get("cluster")),
+        "namespace": _nullable_text(item.get("namespace")),
+        "pod": _nullable_text(item.get("pod")),
+        "rule": _nullable_text(item.get("rule")),
+        "time": _nullable_text(item.get("time")),
+    }
+
+
+def _normalize_timeline_item(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "hour": _nullable_text(item.get("hour")),
+        "count": _int_or_default(item.get("count"), 0),
+    }
+
+
+def _normalize_next_action(item: dict[str, Any]) -> dict[str, Any]:
+    target = str(item.get("target") or "").strip()
+    if target not in {"violation_detail", "policy_generator", "grafana"}:
+        target = "violation_detail"
+    return {
+        "label": _nullable_text(item.get("label")) or "위반 상세에서 확인",
+        "target": target,
+    }
+
+
+def _report_overall_severity(summary: dict[str, Any], events: list[dict[str, Any]]) -> str:
+    by_severity = {str(key).lower(): int(value or 0) for key, value in summary.get("by_severity", {}).items()}
+    if by_severity.get("critical", 0):
+        return "Critical"
+    if by_severity.get("high", 0):
+        return "High"
+    if by_severity.get("medium", 0):
+        return "Medium"
+    if by_severity.get("low", 0) or events:
+        return "Low"
+    return "Low"
+
+
+def _report_description(
+    total_violations: int,
+    severity: str,
+    top_rules: list[tuple[str, Any]],
+    affected_namespaces: set[str],
+) -> str:
+    if total_violations <= 0:
+        return "최근 수집된 Falco/Gatekeeper 위반은 없습니다. 수집 파이프라인과 Grafana 지표가 정상인지 주기적으로 확인하세요."
+    top_rule = top_rules[0][0] if top_rules else "알 수 없는 rule"
+    namespace_text = f"{len(affected_namespaces)}개 네임스페이스" if affected_namespaces else "확인 가능한 네임스페이스 없음"
+    return (
+        f"최근 수집된 위반은 총 {total_violations}건이며 최고 심각도는 {severity}입니다. "
+        f"가장 많이 발생한 rule은 {top_rule}이고, 영향 범위는 {namespace_text}로 집계되었습니다."
+    )
+
+
+def _rule_report_severity(rule: str, events: list[dict[str, Any]]) -> str:
+    severities = [
+        _report_severity_label(event.get("severity"))
+        for event in events
+        if event.get("rule") == rule
+    ]
+    return _highest_report_severity(severities)
+
+
+def _report_blast_radius(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "cluster": _nullable_text(event.get("cluster")),
+            "namespace": _nullable_text(event.get("namespace")),
+            "pod": _nullable_text(event.get("pod_name")),
+            "rule": _nullable_text(event.get("rule")),
+            "time": _nullable_text(event.get("timestamp") or event.get("created_at")),
+        }
+        for event in events[:25]
+    ]
+
+
+def _report_timeline(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    buckets: dict[str, int] = {}
+    for event in events:
+        timestamp = _parse_event_time(event.get("timestamp") or event.get("created_at"))
+        if timestamp is None:
+            continue
+        hour = f"{timestamp.hour:02d}:00"
+        buckets[hour] = buckets.get(hour, 0) + 1
+    return [{"hour": hour, "count": buckets[hour]} for hour in sorted(buckets)]
+
+
+def _report_next_actions(total_violations: int) -> list[dict[str, str]]:
+    actions = []
+    if total_violations > 0:
+        actions.append({"label": "Violation Detail에서 확인", "target": "violation_detail"})
+    actions.extend(
+        [
+            {"label": "재발 방지 정책 만들기", "target": "policy_generator"},
+            {"label": "Grafana에서 추이 보기", "target": "grafana"},
+        ]
+    )
+    return actions
+
+
+def _parse_event_time(value: Any) -> datetime | None:
+    if not value:
+        return None
+    raw = str(value).strip()
+    if raw.endswith("Z"):
+        raw = f"{raw[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _highest_report_severity(values: list[str]) -> str:
+    order = {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}
+    if not values:
+        return "Low"
+    return max(values, key=lambda item: order.get(item, 0))
+
+
+def _report_severity_label(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in {"critical", "crit"}:
+        return "Critical"
+    if normalized in {"high", "error", "alert", "emergency"}:
+        return "High"
+    if normalized in {"medium", "warning", "notice"}:
+        return "Medium"
+    return "Low"
+
+
+def _int_or_default(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return int(default)
+
+
+def _nullable_text(value: Any) -> str | None:
+    text = str(value or "").strip()
+    return text or None
 
 
 def _report_recommendations(summary: dict[str, Any], events: list[dict[str, Any]]) -> list[str]:
@@ -930,29 +1172,23 @@ def _report_recommendations(summary: dict[str, Any], events: list[dict[str, Any]
     by_severity = summary.get("by_severity", {})
     if by_severity.get("high", 0):
         recommendations.append(
-            "High 이벤트는 먼저 affected cluster, namespace, pod를 확인하고 동일 rule 반복 여부를 점검하세요. "
-            "Pod 정보가 있는 이벤트는 Violation Detail에서 매니페스트를 조회한 뒤 네트워크 격리, 서비스 계정 권한 축소, "
-            "securityContext 강화 순서로 대응하는 것이 좋습니다."
+            "High 이벤트는 Violation Detail에서 영향 cluster, namespace, pod를 먼저 확인하세요."
         )
     if by_severity.get("medium", 0):
         recommendations.append(
-            "Medium 이벤트는 즉시 차단보다 반복 패턴 확인이 우선입니다. 같은 rule이 같은 namespace에서 반복되면 정책 예외가 필요한지, "
-            "배포 템플릿에 기본 보안 컨텍스트와 resource limits가 빠져 있는지 함께 검토하세요."
+            "Medium 이벤트는 같은 rule과 namespace에서 반복되는지 확인한 뒤 정책 예외 여부를 검토하세요."
         )
     if any(event.get("source") == "gatekeeper" for event in events):
         recommendations.append(
-            "Gatekeeper deny 이벤트는 실패한 리소스 매니페스트를 수정한 뒤 dry-run으로 검증하세요. "
-            "latest tag, root 실행, 허용되지 않은 registry, host namespace 사용 같은 원인은 배포 파이프라인 단계에서 먼저 잡는 편이 안전합니다."
+            "Gatekeeper deny 이벤트는 실패한 매니페스트를 수정하고 server-side dry-run으로 재검증하세요."
         )
     if any(event.get("source") == "sidekick" for event in events):
         recommendations.append(
-            "Falco Sidekick 이벤트는 런타임 행위 기반이므로 배포 시점 정책만으로 끝내지 말고, 실행 중 프로세스, 사용자, 컨테이너 이미지, "
-            "서비스 계정 권한을 함께 확인하세요. Pod 맥락이 없는 host 성격 이벤트는 노드/에이전트 이벤트로 분리해 해석하세요."
+            "Falco Sidekick 이벤트는 실행 중 프로세스, 사용자, 이미지, 서비스 계정 권한을 함께 확인하세요."
         )
     if not recommendations:
         recommendations.append(
-            "최근 수집된 위반 이벤트가 없거나 모두 낮은 위험으로 분류되었습니다. 현재 기준선을 유지하되, 새 클러스터 등록 후 "
-            "Sidekick ingest, Gatekeeper audit, Grafana scrape가 모두 정상인지 주기적으로 확인하세요."
+            "최근 수집된 위반이 없거나 낮은 위험입니다. Sidekick ingest, Gatekeeper audit, Grafana scrape 상태를 주기적으로 확인하세요."
         )
     return recommendations
 

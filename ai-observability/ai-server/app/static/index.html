@@ -608,13 +608,13 @@ spec:
       command: ["sh"]</textarea>
                   <span class="field-help" id="resourceManifestHelp">선택한 이벤트에 저장된 매니페스트가 없으면 사용자가 직접 붙여넣는 입력칸입니다. 예: <code>kubectl get pod test-pod -n default -o yaml</code></span>
                 </label>
-                <label class="toggle-row">
+              </div>
+              <div class="actions analysis-submit-actions">
+                <label class="toggle-row analysis-llm-toggle">
                   <input id="useViolationLlm" type="checkbox" />
                   <span class="toggle-control" aria-hidden="true"></span>
                   <span>LLM으로 원인/수정 YAML 생성</span>
                 </label>
-              </div>
-              <div class="actions analysis-submit-actions">
                 <button class="primary" id="analyzeViolation">상세 분석</button>
                 <button class="secondary" id="copyAnalysis">분석 복사</button>
               </div>

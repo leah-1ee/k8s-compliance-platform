@@ -2003,7 +2003,27 @@ def test_compliance_report_uses_llm_when_configured(monkeypatch):
                 "max_tokens": max_tokens,
             }
         )
-        return "High 이벤트를 우선 확인하고 namespace별 반복 위반을 줄이세요."
+        return json.dumps(
+            {
+                "generated_at": "2026-05-12T02:05:00+00:00",
+                "summary": {
+                    "total_violations": 0,
+                    "severity": "Low",
+                    "affected_clusters": 0,
+                    "affected_namespaces": 0,
+                    "affected_pods": 0,
+                    "description": "High 이벤트는 현재 없습니다. 수집 상태를 유지하면서 새 이벤트 발생 여부를 확인하세요.",
+                },
+                "top_rules": [],
+                "blast_radius": [],
+                "timeline": [],
+                "recommendations": ["Grafana와 Violation Detail에서 새 이벤트 발생 여부를 확인하세요."],
+                "next_actions": [
+                    {"label": "Grafana에서 추이 보기", "target": "grafana"},
+                ],
+            },
+            ensure_ascii=False,
+        )
 
     monkeypatch.setattr(LLMClient, "complete_text", fake_complete_text)
     session = _session_for("report-llm@example.test")
@@ -2016,12 +2036,20 @@ def test_compliance_report_uses_llm_when_configured(monkeypatch):
     body = response.json()
 
     assert response.status_code == 200
-    assert body["llm_used"] is True
-    assert "High 이벤트" in body["llm_summary"]
-    assert body["llm_error"] == ""
+    assert set(body) == {
+        "generated_at",
+        "summary",
+        "top_rules",
+        "blast_radius",
+        "timeline",
+        "recommendations",
+        "next_actions",
+    }
+    assert "High 이벤트" in body["summary"]["description"]
+    assert body["next_actions"][0]["target"] == "grafana"
     assert calls[0]["provider"] == "google"
-    assert "컴플라이언스 리포트" in calls[0]["prompt"]
-    assert calls[0]["max_tokens"] == 1400
+    assert "ONLY a JSON object" in calls[0]["prompt"]
+    assert calls[0]["max_tokens"] == 1800
 
 
 def test_compliance_report_redacts_sensitive_values_before_llm(monkeypatch):
@@ -2029,7 +2057,25 @@ def test_compliance_report_redacts_sensitive_values_before_llm(monkeypatch):
 
     def fake_complete_text(self, prompt, system_prompt, max_tokens=1200):
         calls.append(prompt)
-        return "민감정보 없이 요약했습니다."
+        return json.dumps(
+            {
+                "generated_at": "2026-05-12T02:05:00+00:00",
+                "summary": {
+                    "total_violations": 1,
+                    "severity": "High",
+                    "affected_clusters": 1,
+                    "affected_namespaces": 1,
+                    "affected_pods": 1,
+                    "description": "민감정보 없이 요약했습니다.",
+                },
+                "top_rules": [{"rule": "Sensitive Report Event", "count": 1, "severity": "High"}],
+                "blast_radius": [],
+                "timeline": [],
+                "recommendations": ["영향 Pod를 Violation Detail에서 확인하세요."],
+                "next_actions": [{"label": "Violation Detail에서 확인", "target": "violation_detail"}],
+            },
+            ensure_ascii=False,
+        )
 
     monkeypatch.setattr(LLMClient, "complete_text", fake_complete_text)
     user = storage.upsert_user(
@@ -2072,9 +2118,6 @@ def test_compliance_report_redacts_sensitive_values_before_llm(monkeypatch):
     assert "secret-report-token" not in prompt
     assert "sensitive-api-key" not in prompt
     assert "[REDACTED_NAMESPACE]" in prompt
-    assert "[REDACTED_PRIVATE_IP]" in prompt
-    assert "[REDACTED_REGISTRY]" in prompt
-    assert "[REDACTED_SECRET]" in prompt
 
 
 def test_ingest_rejects_missing_cluster_token():
