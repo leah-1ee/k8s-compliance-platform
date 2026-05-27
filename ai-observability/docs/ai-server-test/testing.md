@@ -33,7 +33,7 @@ curl http://127.0.0.1:8000/healthz
 
 ```bash
 docker buildx build --platform linux/amd64 \
-  -t [DOCKER_ID]/compliance-ai-server:0.2.13 \
+  -t [DOCKER_ID]/compliance-ai-server:0.2.14 \
   ai-observability/ai-server \
   --push
 ```

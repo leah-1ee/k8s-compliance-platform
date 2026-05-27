@@ -88,7 +88,7 @@ kubectl apply --dry-run=server -f policies/mutations/
 
 ```bash
 kubectl run allowed-leeon-image \
-  --image=docker.io/leeon3345/compliance-ai-server:0.1.13 \
+  --image=docker.io/leeon3345/compliance-ai-server:0.2.14 \
   --restart=Never \
   --dry-run=server
 ```
