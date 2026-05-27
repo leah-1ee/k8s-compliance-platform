@@ -703,6 +703,11 @@
                 <span class="topic-main"><strong>ISMS-P 검증</strong><span>policy evidence</span></span>
                 <span class="topic-arrow">›</span>
               </button>
+              <button class="topic-button" type="button" data-docs-topic="arch-slack">
+                <span class="topic-number">8</span>
+                <span class="topic-main"><strong>Slack Alert Flow</strong><span>dedupe / cooldown</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
             </div>
             <div class="topic-detail-wrap">
               <article class="topic-detail is-active" data-docs-panel="arch-cluster">
@@ -757,6 +762,14 @@
                 <p>Kubernetes <code>NetworkPolicy</code>는 Gatekeeper 정책 엔진 소스에 포함하지 않고, 필요한 경우 별도 네트워크 격리 산출물 또는 런타임 자동 격리 증적으로 다룹니다. 네트워크 접근 통제 증적은 ISMS-P <code>2.6.7 인터넷 접속 통제</code>에 매핑합니다.</p>
                 <p><code>NetworkPolicy</code>는 Kubernetes 표준 기준 TCP, UDP, SCTP 중심의 트래픽 제어 리소스입니다. ping 같은 네트워크 확인은 CNI 플러그인별 처리 차이가 있으므로 표준 <code>NetworkPolicy</code>만으로 차단 또는 허용을 보장하지 않습니다. 관련 증적은 Falco Rule 3 네트워크 탐지 로그와 사용 중인 CNI의 별도 정책/검증 결과를 함께 남깁니다.</p>
                 <div class="topic-chips"><span>ISMS-P 2.9.1</span><span>ISMS-P 2.6.7</span><span>CNI verification</span><span>Falco Rule 3</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="arch-slack">
+                <span class="kicker">Slack Notification Flow</span>
+                <h3>High/Critical 런타임 이벤트는 즉시 알리되, 같은 원인은 묶어서 알림 폭주를 막습니다.</h3>
+                <p>현재 자동 Slack 알림은 Falco Sidekick으로 들어온 런타임 이벤트를 기준으로 동작합니다. 이벤트가 저장되면 클러스터별 Slack 설정, webhook 등록 여부, severity/priority 조건을 확인하고 High 또는 Critical만 발송 후보로 올립니다.</p>
+                <p>실무 운영에서는 이벤트마다 무제한으로 알림을 보내지 않습니다. <code>cluster</code>, <code>rule</code>, <code>namespace</code>, <code>pod</code>, <code>container</code>를 fingerprint로 묶고, 첫 발생은 즉시 발송한 뒤 같은 fingerprint는 cooldown 동안 count만 증가시킵니다. cooldown 이후에도 반복되면 "반복 발생 N건" 형태로 한 번 더 알리고, 운영자는 Violation Detail과 Grafana에서 원본 이벤트 흐름을 확인합니다.</p>
+                <p>중복 제어 상태는 <code>slack_notification_state</code> 테이블에 저장합니다. 이 테이블은 원문 이벤트를 복제하지 않고 <code>first_seen_at</code>, <code>last_seen_at</code>, <code>last_notified_at</code>, <code>count</code>, <code>last_event_id</code>만 보관해 재배포 후에도 최근 알림 상태를 유지합니다.</p>
+                <div class="topic-chips"><span>High/Critical only</span><span>fingerprint</span><span>cooldown</span><span>slack_notification_state</span></div>
               </article>
             </div>
           </div>
