@@ -15,11 +15,12 @@ let userClusters = [];
 let slackSettings = { webhook_url: "", configured: false };
 let landingTypewriterStarted = false;
 let apiBackoffUntil = 0;
+let runtimeEventsCollapsed = false;
 const AUTH_REQUIRED_TABS = new Set(["setup", "analysis", "report"]);
 const SESSION_KEY = "complianceAiLlmApiKey";
 const THEME_KEY = "complianceOpsTheme";
 const LAST_AUTH_EMAIL_KEY = "kubeowlLastAuthEmail";
-const DEFAULT_RUNTIME_LIMIT = "50";
+const DEFAULT_RUNTIME_LIMIT = "10";
 const SEOUL_TIME_ZONE = "Asia/Seoul";
 const INFRA_NAMESPACES = new Set([
   "kube-system",
@@ -40,7 +41,6 @@ const POLICY_PROMPTS = {
   "host-namespace": "host namespace 사용을 금지하는 Gatekeeper 정책을 만들어줘",
   "security-context-mutation": "securityContext를 자동 주입하는 mutation 정책을 만들어줘",
   "resource-limits-mutation": "resource limits를 자동 주입하는 mutation 정책을 만들어줘",
-  "network-policy": "ingress 네트워크 정책 만들어줘",
 };
 
 function splitList(value) {
@@ -479,6 +479,23 @@ function setOutput(selector, value) {
   const element = $(selector);
   element.textContent = value;
   element.removeAttribute("data-empty");
+}
+
+function resourceManifestCommand(event = selectedRuntimeEvent) {
+  const namespace = event?.namespace || event?.output_fields?.["k8s.ns.name"] || "default";
+  const pod = event?.pod_name || event?.output_fields?.["k8s.pod.name"] || "<pod-name>";
+  return `kubectl get pod ${pod} -n ${namespace} -o yaml`;
+}
+
+function renderResourceManifestHelp(event = selectedRuntimeEvent, missingManifest = false) {
+  const helper = $("#resourceManifestHelp");
+  if (!helper) {
+    return;
+  }
+  const command = resourceManifestCommand(event);
+  helper.innerHTML = missingManifest
+    ? `저장된 매니페스트가 없으면 사용자가 직접 붙여넣어야 합니다. 예: <code>${escapeHtml(command)}</code>`
+    : `선택한 이벤트에 저장된 매니페스트가 없으면 사용자가 직접 붙여넣는 입력칸입니다. 예: <code>${escapeHtml(command)}</code>`;
 }
 
 function setReportLoading(isLoading) {
@@ -988,6 +1005,23 @@ function setAnalysisLoading(isLoading) {
   $("#analyzeViolation").textContent = isLoading ? "분석 중..." : "상세 분석";
 }
 
+function setRuntimeEventsCollapsed(collapsed) {
+  runtimeEventsCollapsed = collapsed;
+  const container = $("#runtimeEvents");
+  const hint = $(".analysis-selection-hint");
+  const button = $("#toggleRuntimeEvents");
+  if (container) {
+    container.hidden = collapsed;
+  }
+  if (hint) {
+    hint.hidden = collapsed;
+  }
+  if (button) {
+    button.textContent = collapsed ? "위반 이벤트 펼치기" : "위반 이벤트 접기";
+    button.setAttribute("aria-expanded", String(!collapsed));
+  }
+}
+
 async function generatePolicy() {
   clearInlineAlert();
   const useLlm = $("#useLlm").checked;
@@ -1127,6 +1161,8 @@ async function analyzeViolation() {
 
 async function refreshRuntimeEvents() {
   const container = $("#runtimeEvents");
+  ensureRuntimeUsabilityControls();
+  setRuntimeEventsCollapsed(runtimeEventsCollapsed);
   if (!authState.authenticated) {
     container.innerHTML = "";
     return;
@@ -1134,7 +1170,9 @@ async function refreshRuntimeEvents() {
   if (Date.now() < apiBackoffUntil) {
     return;
   }
-  ensureRuntimeUsabilityControls();
+  if (runtimeEventsCollapsed) {
+    return;
+  }
   const limit = $("#runtimeEventLimit")?.value || DEFAULT_RUNTIME_LIMIT;
   const query = new URLSearchParams({
     limit,
@@ -1202,8 +1240,11 @@ function ensureRuntimeUsabilityControls() {
       <label class="runtime-limit-field">
         표시 개수
         <select id="runtimeEventLimit">
+          <option value="3">3</option>
+          <option value="5">5</option>
+          <option value="10" selected>10</option>
           <option value="20">20</option>
-          <option value="50" selected>50</option>
+          <option value="50">50</option>
           <option value="100">100</option>
         </select>
       </label>
@@ -1909,7 +1950,9 @@ async function loadRuntimeEvent(eventId) {
     }
     selectedRuntimeEvent = await response.json();
     $("#eventPayload").value = JSON.stringify(eventToAnalysisPayload(selectedRuntimeEvent), null, 2);
-    $("#resourceManifest").value = selectedRuntimeEvent.resource_manifest || "";
+    const savedManifest = selectedRuntimeEvent.resource_manifest || "";
+    $("#resourceManifest").value = savedManifest;
+    renderResourceManifestHelp(selectedRuntimeEvent, !savedManifest);
     renderManifestGuidance(null);
     renderSelectedRuntimeEventState("ready", selectedRuntimeEvent);
     showToast(`이벤트 #${shortEventId(selectedRuntimeEvent)} 상세를 불러왔습니다`);
@@ -1937,8 +1980,10 @@ async function loadSelectedManifest() {
   renderManifestGuidance(body);
   if (body.manifest) {
     $("#resourceManifest").value = body.manifest;
+    renderResourceManifestHelp(selectedRuntimeEvent, false);
     showToast("저장된 매니페스트를 불러왔습니다");
   } else if (body.kubectl_command) {
+    renderResourceManifestHelp(selectedRuntimeEvent, true);
     showToast("kubectl 명령을 준비했습니다");
   } else {
     showInlineAlert(body.error || "매니페스트를 조회하지 못했습니다.");
@@ -2200,6 +2245,17 @@ $("#refreshRuntimeEvents").addEventListener("click", () => {
     showInlineAlert(error.message);
     showToast("위반 목록 로드 실패");
   });
+});
+
+$("#toggleRuntimeEvents").addEventListener("click", () => {
+  const nextCollapsed = !runtimeEventsCollapsed;
+  setRuntimeEventsCollapsed(nextCollapsed);
+  if (!nextCollapsed) {
+    refreshRuntimeEvents().catch((error) => {
+      showInlineAlert(error.message);
+      showToast("위반 목록 로드 실패");
+    });
+  }
 });
 
 $("#registerUserCluster").addEventListener("click", () => {
@@ -2608,6 +2664,8 @@ function initLlmKeyPanel() {
 applyTheme(localStorage.getItem(THEME_KEY) || "light");
 initLlmKeyPanel();
 syncPolicyPromptMode();
+renderResourceManifestHelp();
+setRuntimeEventsCollapsed(false);
 window.setInterval(() => {
   if (authState.authenticated) {
     refreshRuntimeEvents().catch(() => {});

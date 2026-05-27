@@ -117,12 +117,21 @@ Policy-as-code-Complience/
 |---|------|----------|-----------------|----------|----------|
 | 1 | Read Sensitive File | WARNING | ISMS-P 2.6.1, PCI-DSS 7.1 | /etc/shadow, SSH 키, kubeconfig | `evt.dir = <` |
 | 2 | Shell Spawned | WARNING | ISMS-P 2.6.1 | 컨테이너 내 interactive shell exec | `evt.dir = <`, `proc.tty != 0` |
-| 3 | Unexpected Outbound | NOTICE | ISMS-P 2.6.7, PCI-DSS 1.3 | 외부 IP 연결 (C2 통신) | `evt.dir = <`, CIDR 사설대역 제외, `falcoctl` 제외 |
+| 3 | Unexpected Outbound | NOTICE | ISMS-P 2.6.7, PCI-DSS 1.3 | 컨테이너 outbound 연결, 네트워크 접근 통제 보조 증적 | `evt.dir = <`, IPv4 socket, known system process 제외 |
 | 4 | Container Reconnaissance | NOTICE | ISMS-P 2.11.4 | whoami, nmap, /proc 스캔 | `evt.dir = <` |
 | 5 | Privilege Escalation | CRITICAL | ISMS-P 2.6.1, PCI-DSS 7.1 | setuid/setgid to root | `evt.dir = <`, `evt.arg.uid = 0 or evt.arg.euid = 0` |
 | 6 | Write Monitored Directory | ERROR | ISMS-P 2.11.1 | /bin, /usr/bin 등 변조 | `evt.dir = <`, `O_WRONLY or O_RDWR` 플래그 검사 |
 
-**Rule 3 사설 IP 필터**: K8s 클러스터 내부 통신(10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8)을 제외해 오탐 방지.
+**Rule 3 운영 기준**: 현재 룰은 사설 CIDR을 Falco 조건에서 직접 제외하지 않는다.
+운영/데모 클러스터의 내부 통신도 네트워크 접근 통제 증적으로 남기되, `coredns`,
+`kubelet`, `kube-proxy`, `falco`, `falcoctl`, `node-exporter` 같은 known system process를
+조건에서 제외한다. 사설 대역 노이즈가 커지면 Falco 룰을 즉시 좁히기보다
+Response Server의 false-positive filter 또는 namespace/process allowlist에서 먼저 조정한다.
+
+**ISMS-P 2.6.7 보조 증적**: Kubernetes `NetworkPolicy` 표준은 TCP, UDP, SCTP 중심이며
+ping 같은 네트워크 확인은 CNI 플러그인 구현에 따라 다를 수 있다. 따라서 NetworkPolicy 적용
+결과만으로 통제 증적을 확정하지 않고, 런타임 네트워크 이벤트, CNI별 정책 동작,
+ping 테스트 결과를 ISMS-P 2.6.7 보조 증적으로 함께 기록한다.
 
 **Rule 5 강화**: `user.uid != 0` 만으로는 부족 — `evt.arg.uid = 0 or evt.arg.euid = 0` 조건으로 실제 root 권한 획득 시도만 탐지.
 

@@ -300,7 +300,7 @@ def _default_review_lines(
         "host-namespace": "hostPID, hostIPC, hostNetwork 사용을 차단합니다.",
         "security-context-mutation": "누락된 securityContext 기본값을 Pod 컨테이너에 자동 주입합니다.",
         "resource-limits-mutation": "누락된 CPU와 메모리 limit 값을 Pod 컨테이너에 자동 주입합니다.",
-        "network-policy": "선택한 방향의 기본 네트워크 트래픽을 NetworkPolicy로 제한합니다.",
+        "network-policy": "선택한 방향의 기본 네트워크 트래픽을 NetworkPolicy로 제한합니다. ISMS-P 2.6.7 네트워크 접근 통제 증적으로 분류합니다.",
     }
     scope = (
         "적용 범위: 생성된 NetworkPolicy의 namespace와 podSelector 대상 Pod에 적용됩니다."
@@ -313,7 +313,7 @@ def _default_review_lines(
         else "주의할 점: 기존 워크로드가 정책 조건을 만족하지 않으면 배포가 거부될 수 있습니다."
     )
     recommendation = (
-        "운영 권장사항: 테스트 네임스페이스에서 통신 영향도를 먼저 확인하세요."
+        "운영 권장사항: 테스트 네임스페이스에서 통신 영향도를 먼저 확인하고, ICMP는 CNI별 동작 차이를 별도로 검증하세요."
         if policy_kind == "network-policy"
         else f"운영 권장사항: {enforcement_action} 적용 전 테스트 네임스페이스에서 검증하세요."
     )
@@ -545,6 +545,9 @@ def _network_policy(name: str, prompt: str) -> tuple[str, str, str]:
             "  namespace: default",
             "  annotations:",
             f'    description: "{description}"',
+            '    compliance.kubeowl.io/isms-p: "2.6.7"',
+            '    compliance.kubeowl.io/control: "network-access-control"',
+            '    compliance.kubeowl.io/icmp-note: "Kubernetes NetworkPolicy ICMP enforcement is CNI-dependent; verify separately."',
             "spec:",
             "  podSelector: {}",
             policy_types,

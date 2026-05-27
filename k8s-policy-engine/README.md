@@ -23,6 +23,16 @@ ConstraintTemplate(Rego 정책 정의), Constraint(정책 적용), Assign(자동
 
 > 모든 정책은 `kube-system`, `gatekeeper-system`, `kube-flannel`, `monitoring`, `local-path-storage`, `falco` 네임스페이스에 적용되지 않습니다.
 
+Policy Generator 화면의 사전 정의 정책은 위 Gatekeeper 정책 6종만 노출한다.
+Kubernetes `NetworkPolicy`는 Gatekeeper 정책 엔진 소스에 포함하지 않고, 필요한 경우
+별도 네트워크 격리 산출물 또는 런타임 자동 격리 증적으로 다룬다.
+네트워크 접근 통제 증적은 ISMS-P `2.6.7 인터넷 접속 통제`에 매핑한다.
+
+`NetworkPolicy`는 Kubernetes 표준 기준 TCP, UDP, SCTP 중심의 트래픽 제어 리소스다.
+ping 같은 네트워크 확인은 CNI 플러그인별 처리 차이가 있으므로 표준 `NetworkPolicy`만으로
+차단 또는 허용을 보장하지 않는다. 관련 증적은 Falco Rule 3 네트워크 탐지 로그와
+사용 중인 CNI의 별도 정책/검증 결과를 ISMS-P 2.6.7 보조 증적으로 함께 남긴다.
+
 ## 운영 소스 오브 트루스
 
 `k8s-policy-engine/`은 Gatekeeper 정책의 개발/검증 기준 트리입니다. Rego 테스트,

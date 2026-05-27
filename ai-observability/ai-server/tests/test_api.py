@@ -811,6 +811,8 @@ def test_generate_network_policy_from_ingress_prompt():
     assert body["constraint_template"] == ""
     assert body["rego"] == ""
     assert "kind: NetworkPolicy" in body["constraint"]
+    assert 'compliance.kubeowl.io/isms-p: "2.6.7"' in body["constraint"]
+    assert "NetworkPolicy ICMP enforcement is CNI-dependent" in body["constraint"]
     assert "policyTypes:\n    - Ingress" in body["constraint"]
     assert "ingress: []" in body["constraint"]
     assert "latest" not in body["constraint"]
@@ -927,7 +929,7 @@ def test_llm_partial_review_is_completed(monkeypatch):
         "정책 의도: 기본 ingress 트래픽을 제한합니다.",
         "적용 범위: 생성된 NetworkPolicy의 namespace와 podSelector 대상 Pod에 적용됩니다.",
         "주의할 점: podSelector가 비어 있으면 namespace 내 모든 Pod에 적용될 수 있습니다.",
-        "운영 권장사항: 테스트 네임스페이스에서 통신 영향도를 먼저 확인하세요.",
+        "운영 권장사항: 테스트 네임스페이스에서 통신 영향도를 먼저 확인하고, ICMP는 CNI별 동작 차이를 별도로 검증하세요.",
     ]
 
 

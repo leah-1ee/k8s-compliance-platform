@@ -698,6 +698,11 @@
                 <span class="topic-main"><strong>Frontend / Backend / DB</strong><span>static ui / fastapi / sqlite pvc</span></span>
                 <span class="topic-arrow">›</span>
               </button>
+              <button class="topic-button" type="button" data-docs-topic="arch-isms-p">
+                <span class="topic-number">7</span>
+                <span class="topic-main"><strong>ISMS-P 검증</strong><span>policy evidence</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
             </div>
             <div class="topic-detail-wrap">
               <article class="topic-detail is-active" data-docs-panel="arch-cluster">
@@ -744,6 +749,14 @@
                 <p>SQLite는 WAL 모드로 열고, 동시 쓰기 충돌을 줄이기 위해 배포는 <code>replicas: 1</code>과 <code>strategy.type: Recreate</code>를 유지합니다. 즉, PVC는 앱 DB 파일을 보존하기 위한 저장소이고, Grafana/Prometheus는 관측용 서비스일 뿐 KubeOwl의 주 DB가 아닙니다.</p>
                 <p>Google Auth는 비밀번호와 계정 신원 확인을 Google에 위임합니다. KubeOwl DB에는 Google provider subject와 내부 <code>user_id</code>, 이메일, 표시 이름, 세션 토큰 해시, 사용자별 클러스터/설정처럼 서비스 운영에 필요한 최소 정보만 저장합니다.</p>
                 <div class="topic-chips"><span>static frontend</span><span>FastAPI BFF</span><span>SQLite WAL</span><span>PVC persisted</span><span>Google OAuth delegated</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="arch-isms-p">
+                <span class="kicker">ISMS-P Mapping</span>
+                <h3>정책과 런타임 증적을 ISMS-P 기준으로 분리해 검증합니다.</h3>
+                <p>Policy Generator 화면의 사전 정의 정책은 Gatekeeper 정책 6종만 노출합니다. 이 6개 정책은 ISMS-P <code>2.9.1 시스템 및 서비스 운영관리</code>에 매핑합니다.</p>
+                <p>Kubernetes <code>NetworkPolicy</code>는 Gatekeeper 정책 엔진 소스에 포함하지 않고, 필요한 경우 별도 네트워크 격리 산출물 또는 런타임 자동 격리 증적으로 다룹니다. 네트워크 접근 통제 증적은 ISMS-P <code>2.6.7 인터넷 접속 통제</code>에 매핑합니다.</p>
+                <p><code>NetworkPolicy</code>는 Kubernetes 표준 기준 TCP, UDP, SCTP 중심의 트래픽 제어 리소스입니다. ping 같은 네트워크 확인은 CNI 플러그인별 처리 차이가 있으므로 표준 <code>NetworkPolicy</code>만으로 차단 또는 허용을 보장하지 않습니다. 관련 증적은 Falco Rule 3 네트워크 탐지 로그와 사용 중인 CNI의 별도 정책/검증 결과를 함께 남깁니다.</p>
+                <div class="topic-chips"><span>ISMS-P 2.9.1</span><span>ISMS-P 2.6.7</span><span>CNI verification</span><span>Falco Rule 3</span></div>
               </article>
             </div>
           </div>
@@ -792,8 +805,9 @@
                   <li><strong>disallow-latest-tag</strong>: <code>:latest</code> 또는 태그가 없는 이미지를 제한해 재현 가능한 배포를 강제합니다.</li>
                   <li><strong>Allowed Registries</strong>: <code>ghcr.io/org/</code>, <code>registry.example.com/team/</code>처럼 prefix 기준을 좁게 적습니다.</li>
                   <li><strong>Excluded Namespaces</strong>: 시스템 네임스페이스는 제외하되, 앱 네임스페이스를 제외해 정책 사각지대를 만들지 않습니다.</li>
+                  <li><strong>ISMS-P 매핑</strong>: 기본 정책 6종은 ISMS-P 2.9.1 시스템 및 서비스 운영관리에 매핑합니다. 네트워크 접근 통제는 CNI 정책과 ping 테스트 결과를 ISMS-P 2.6.7 보조 증적으로 기록합니다.</li>
                 </ul>
-                <div class="topic-chips"><span>Validate</span><span>Mutation</span><span>dryrun</span><span>warn</span><span>deny</span></div>
+                <div class="topic-chips"><span>Validate</span><span>Mutation</span><span>ISMS-P 2.9.1</span><span>ISMS-P 2.6.7</span><span>dryrun</span></div>
               </article>
               <article class="topic-detail" data-docs-panel="feature-apply">
                 <span class="kicker">Safe Rollout</span>
@@ -852,7 +866,7 @@ error: no context exists with the name "3345_test"
                   <li><strong>Grafana No data</strong>: ingest 성공 후 Prometheus scrape 또는 metrics export 지연을 확인합니다.</li>
                 </ul>
                 <div class="terminal-window" aria-label="Falco Sidekick install terminal example">
-                  <div class="terminal-bar"><span></span><span></span><span></span><strong class="terminal-title">falco-sidekick-install</strong></div>
+                  <div class="terminal-bar"><span></span><span></span><span></span><strong class="terminal-title">FALCO SIDEKICK 설치 명령</strong></div>
                   <pre class="terminal-body"><code><span class="prompt">$</span> copy FALCO SIDEKICK 설치 명령
 helm repo add falcosecurity https://falcosecurity.github.io/charts
 
@@ -1168,11 +1182,15 @@ scope=current browser session
                 <h3>Q. 자연어 to Rego 번역기라면 왜 컴플라이언스 플랫폼이라고 부릅니까?</h3>
                 <ul>
                   <li><strong>A.</strong> 현재 구현은 정책 생성기만이 아니라 사용자별 클러스터 등록, Gatekeeper 정책 적용 가이드, Falco 런타임 이벤트 수집, 위반 상세 분석, 리포트, Grafana 관측을 한 흐름으로 묶습니다.</li>
-                  <li>다만 CIS Kubernetes Benchmark, ISMS-P, NIST 같은 표준 조항과 정책/이벤트를 정식 매핑하는 기능은 아직 제품 완성도를 높일 핵심 과제로 남아 있습니다.</li>
+                  <li>현재 사전 정의 정책 6종은 모두 Gatekeeper 정책이며 ISMS-P 2.9.1 시스템 및 서비스 운영관리에 매핑합니다.</li>
+                  <li><code>latest 태그 금지</code>, <code>non-root 강제</code>, <code>레지스트리 제한</code>, <code>host namespace 금지</code>, <code>securityContext 자동 주입</code>, <code>resource limits 자동 주입</code>이 화면에 노출되는 기본 정책 목록입니다.</li>
+                  <li><code>NetworkPolicy</code>는 Gatekeeper Constraint가 아니라 Kubernetes 네트워크 격리 리소스라 기본 정책 선택지에서는 제외합니다. 별도 네트워크 격리 산출물 또는 런타임 자동 격리 증적으로만 다룹니다.</li>
+                  <li>네트워크 접근 통제는 ISMS-P 2.6.7에 매핑하되, TCP/UDP/SCTP 중심의 NetworkPolicy와 CNI 동작 검증을 분리해서 기록합니다.</li>
+                  <li>ping 같은 네트워크 확인은 CNI별 동작 차이가 커서 NetworkPolicy 산출물만으로 통제 증적을 확정하지 않습니다. 런타임 네트워크 이벤트, CNI 정책, ping 테스트 결과를 ISMS-P 2.6.7 보조 증적으로 함께 확인합니다.</li>
                   <li>현 단계에서 “컴플라이언스”라는 이름의 근거는 정책-as-code와 런타임 증적을 모아 감사 가능한 운영 흐름을 만드는 데 있습니다.</li>
                   <li>확장 방향은 control catalog를 만들고, 각 정책에 표준 control id, evidence source, severity, remediation guide를 연결해 위반 리포트에서 “어느 조항을 위반했는지”까지 보여주는 것입니다.</li>
                 </ul>
-                <div class="topic-chips"><span>CIS Kubernetes</span><span>ISMS-P</span><span>control catalog</span><span>evidence</span></div>
+                <div class="topic-chips"><span>ISMS-P 2.9.1</span><span>ISMS-P 2.6.7</span><span>policy evidence</span><span>control catalog</span></div>
               </article>
               <article class="topic-detail" data-docs-panel="ops-prompt-injection">
                 <span class="kicker">Prompt Injection / Jailbreak</span>

@@ -86,10 +86,9 @@
               <p
                 class="typewriter-subtitle"
                 id="landingSubtitle"
-                data-typewriter-text="Kubernetes 보안 정책 생성부터 런타임 위반 확인까지,&#10;운영 흐름을 한 화면에서 빠르게 한 번에."
+                data-typewriter-text="Kubernetes 보안 정책 생성, ISMS-P 검증, 런타임 위반 분석을 한 흐름으로."
               >
-                Kubernetes 보안 정책 생성부터 런타임 위반 확인까지,<br />
-                운영 흐름을 한 화면에서 빠르게 한 번에.
+                Kubernetes 보안 정책 생성, ISMS-P 검증, 런타임 위반 분석을 한 흐름으로.
               </p>
               <div class="landing-login-actions" id="landingLoginActions" aria-label="login actions">
                 <a class="button-like primary google-login-button" href="/auth/google/login" id="landingLoginLink" hidden>
@@ -173,12 +172,14 @@
               <span>Policy Generator</span>
               <span>Gatekeeper</span>
               <span>Falco Runtime</span>
+              <span>ISMS-P 검증</span>
               <span>AI Triage</span>
               <span>Grafana</span>
               <span>Slack Alerts</span>
               <span aria-hidden="true">Policy Generator</span>
               <span aria-hidden="true">Gatekeeper</span>
               <span aria-hidden="true">Falco Runtime</span>
+              <span aria-hidden="true">ISMS-P 검증</span>
               <span aria-hidden="true">AI Triage</span>
               <span aria-hidden="true">Grafana</span>
               <span aria-hidden="true">Slack Alerts</span>
@@ -360,7 +361,6 @@
                       <option value="host-namespace">host namespace 금지</option>
                       <option value="security-context-mutation">securityContext 자동 주입</option>
                       <option value="resource-limits-mutation">resource limits 자동 주입</option>
-                      <option value="network-policy">NetworkPolicy</option>
                     </select>
                   </label>
                   <label>
@@ -508,22 +508,19 @@
               </section>
               <div class="setup-grid">
                 <article class="result-card setup-terminal-card">
-                  <div class="card-heading setup-terminal-heading">
-                    <h2>Falco Sidekick 설치 명령</h2>
-                    <button class="copy-section" data-copy-target="setupInstallCommand" aria-label="Falco Sidekick 설치 명령 복사" title="복사">
-                      <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <rect x="9" y="9" width="11" height="11" rx="2"></rect>
-                        <path d="M5 15V6a2 2 0 0 1 2-2h9"></path>
-                      </svg>
-                      <svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
-                    </button>
-                  </div>
                   <div class="terminal-window setup-terminal-window">
                     <div class="terminal-bar">
                       <span></span>
                       <span></span>
                       <span></span>
-                      <strong class="terminal-title">falco-sidekick-install</strong>
+                      <strong class="terminal-title">FALCO SIDEKICK 설치 명령</strong>
+                      <button class="copy-section" data-copy-target="setupInstallCommand" aria-label="Falco Sidekick 설치 명령 복사" title="복사">
+                        <svg class="copy-icon" viewBox="0 0 24 24" aria-hidden="true">
+                          <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+                          <path d="M5 15V6a2 2 0 0 1 2-2h9"></path>
+                        </svg>
+                        <svg class="check-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+                      </button>
                     </div>
                     <pre id="setupInstallCommand" class="terminal-body" data-empty="true">클러스터를 등록하거나 토큰을 재발급하면 여기에 설치 명령이 표시됩니다.</pre>
                   </div>
@@ -552,6 +549,7 @@
                 <button class="secondary icon-only-button" id="loadSelectedManifest" aria-label="선택 이벤트 매니페스트 조회" title="선택 이벤트 매니페스트 조회">
                   <span class="healthicons--magnifying-glass" aria-hidden="true"></span>
                 </button>
+                <button class="secondary runtime-toggle-button" id="toggleRuntimeEvents" type="button" aria-expanded="true" aria-controls="runtimeEvents">위반 이벤트 접기</button>
               </div>
               <div class="runtime-filters" aria-label="runtime event filters">
                 <label>
@@ -595,8 +593,8 @@
 }</textarea>
                 </label>
                 <label>
-                  Resource Manifest (관련 리소스 매니페스트)
-                  <textarea id="resourceManifest" class="terminal-textarea" rows="12">apiVersion: v1
+                  Resource Manifest (관련 리소스 매니페스트, 직접 입력 가능)
+                  <textarea id="resourceManifest" class="terminal-textarea" rows="12" placeholder="선택 이벤트에 매니페스트가 저장되어 있지 않으면 kubectl get pod <pod-name> -n <namespace> -o yaml 결과를 붙여넣으세요.">apiVersion: v1
 kind: Pod
 metadata:
   name: test-pod
@@ -608,6 +606,7 @@ spec:
     - name: app
       image: nginx:latest
       command: ["sh"]</textarea>
+                  <span class="field-help" id="resourceManifestHelp">선택한 이벤트에 저장된 매니페스트가 없으면 사용자가 직접 붙여넣는 입력칸입니다. 예: <code>kubectl get pod test-pod -n default -o yaml</code></span>
                 </label>
                 <label class="toggle-row">
                   <input id="useViolationLlm" type="checkbox" />
