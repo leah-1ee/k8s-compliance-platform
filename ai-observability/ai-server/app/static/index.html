@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>KubeOwl</title>
-    <link rel="stylesheet" href="/static/styles.css?v=task18-account-docs" />
+    <link rel="stylesheet" href="/static/styles.css?v=task26-policy-size-grafana-center" />
   </head>
   <body class="logged-out">
     <div class="app-shell">
@@ -28,11 +28,20 @@
           </button>
         </div>
         <nav class="sidebar-nav" aria-label="Primary navigation">
-          <button class="tab nav-item is-active" data-tab="dashboard">Dashboard</button>
-          <button class="tab nav-item" data-tab="policy">Policy Generator</button>
-          <button class="tab nav-item" data-tab="setup">Cluster Setup</button>
-          <button class="tab nav-item" data-tab="analysis">Violation Detail</button>
-          <button class="tab nav-item" data-tab="report">AI Report</button>
+          <button class="tab nav-item is-active" data-tab="dashboard"><span class="nav-label">Dashboard</span></button>
+          <button class="tab nav-item" data-tab="policy"><span class="nav-label">Policy Generator</span></button>
+          <button class="tab nav-item" data-tab="setup" data-auth-required="true">
+            <span class="nav-label">Cluster Setup</span>
+            <span class="nav-auth-badge" aria-hidden="true">login</span>
+          </button>
+          <button class="tab nav-item" data-tab="analysis" data-auth-required="true">
+            <span class="nav-label">Violation Detail</span>
+            <span class="nav-auth-badge" aria-hidden="true">login</span>
+          </button>
+          <button class="tab nav-item" data-tab="report" data-auth-required="true">
+            <span class="nav-label">AI Report</span>
+            <span class="nav-auth-badge" aria-hidden="true">login</span>
+          </button>
         </nav>
         <div class="sidebar-footer">
           <span class="badge ready compact">Connected</span>
@@ -102,37 +111,59 @@
                 <span></span>
                 <span></span>
               </div>
-              <div class="showcase-grid">
-                <article class="showcase-card">
-                  <span class="showcase-kicker">Gatekeeper</span>
-                  <h3>Policy Guardrails</h3>
-                  <p>이미지 태그, 루트 권한, 레지스트리 기준을 정책으로 고정합니다.</p>
-                  <div class="showcase-code" aria-hidden="true">
-                    <span>deny latest image</span>
-                    <span>require non-root</span>
-                    <span>allow trusted registry</span>
+              <div class="showcase-demo">
+                <div class="showcase-tabs" role="tablist" aria-label="Interactive product demo">
+                  <button
+                    class="showcase-tab is-active"
+                    type="button"
+                    role="tab"
+                    aria-selected="true"
+                    data-showcase-demo="policy"
+                    data-demo-image="/static/assets/demo-policy.png"
+                  >
+                    Code
+                  </button>
+                  <button
+                    class="showcase-tab"
+                    type="button"
+                    role="tab"
+                    aria-selected="false"
+                    data-showcase-demo="runtime"
+                    data-demo-image="/static/assets/demo-runtime.png"
+                  >
+                    Runtime
+                  </button>
+                  <button
+                    class="showcase-tab"
+                    type="button"
+                    role="tab"
+                    aria-selected="false"
+                    data-showcase-demo="report"
+                    data-demo-image="/static/assets/demo-report.png"
+                  >
+                    Report
+                  </button>
+                </div>
+                <div class="showcase-demo-stage">
+                  <div class="showcase-demo-copy">
+                    <span class="showcase-kicker" id="showcaseDemoKicker">Gatekeeper</span>
+                    <h3 id="showcaseDemoTitle">Policy Guardrails</h3>
+                    <p id="showcaseDemoDescription">이미지 태그, 루트 권한, 레지스트리 기준을 정책으로 고정합니다.</p>
+                    <div class="showcase-code" id="showcaseDemoBullets" aria-label="demo highlights">
+                      <span>deny latest image</span>
+                      <span>require non-root</span>
+                      <span>allow trusted registry</span>
+                    </div>
                   </div>
-                </article>
-                <article class="showcase-card">
-                  <span class="showcase-kicker">Falco</span>
-                  <h3>Runtime Signals</h3>
-                  <p>클러스터에서 발생한 쉘 실행, 권한 상승, 이상 행위를 추적합니다.</p>
-                  <div class="showcase-code" aria-hidden="true">
-                    <span>shell spawned</span>
-                    <span>root process</span>
-                    <span>namespace context</span>
+                  <div class="showcase-demo-media" aria-live="polite">
+                    <img id="showcaseDemoImage" src="/static/assets/demo-policy.png" alt="Policy generator demo preview" />
+                    <div class="showcase-demo-placeholder" id="showcaseDemoPlaceholder">
+                      <span>이미지 준비 영역</span>
+                      <strong>/static/assets/demo-policy.png</strong>
+                      <p>이미지를 추가하면 탭 전환 시 이 영역에 fade-in 됩니다.</p>
+                    </div>
                   </div>
-                </article>
-                <article class="showcase-card">
-                  <span class="showcase-kicker">AI Report</span>
-                  <h3>Action Summary</h3>
-                  <p>위반 원인과 조치 방향을 운영자가 바로 읽을 수 있게 정리합니다.</p>
-                  <div class="showcase-code" aria-hidden="true">
-                    <span>severity explain</span>
-                    <span>recommended fix</span>
-                    <span>report export</span>
-                  </div>
-                </article>
+                </div>
               </div>
             </div>
           </section>
@@ -222,7 +253,7 @@
               <span class="devicon--grafana grafana-heading-logo" aria-hidden="true"></span>
               <div>
                 <h2>Grafana</h2>
-                <p>운영자는 아래 3개의 대시보드에서 정책 상태, 런타임 탐지, AI 분류 흐름을 확인합니다.</p>
+                <p>정책 상태, 런타임 탐지, AI 분류 흐름을 세 가지 대시보드에서 한눈에 확인합니다.</p>
               </div>
             </div>
             <div class="dashboard-grid grafana-dashboard-grid">
@@ -374,9 +405,6 @@
               </article>
 
               <article class="code-editor">
-                <div class="editor-topbar">
-                  <span>Generated Policy Artifacts</span>
-                </div>
                 <div class="result-grid">
                   <section class="result-card">
                     <div class="terminal-window artifact-terminal">
@@ -631,6 +659,6 @@ spec:
       </main>
     </div>
     <div class="toast" id="toast" role="status"></div>
-    <script src="/static/app.js?v=task20-visual-analysis-report"></script>
+    <script src="/static/app.js?v=task26-policy-size-grafana-center"></script>
   </body>
 </html>

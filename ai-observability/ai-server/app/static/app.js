@@ -15,6 +15,7 @@ let userClusters = [];
 let slackSettings = { webhook_url: "", configured: false };
 let landingTypewriterStarted = false;
 let apiBackoffUntil = 0;
+const AUTH_REQUIRED_TABS = new Set(["setup", "analysis", "report"]);
 const SESSION_KEY = "complianceAiLlmApiKey";
 const THEME_KEY = "complianceOpsTheme";
 const LAST_AUTH_EMAIL_KEY = "kubeowlLastAuthEmail";
@@ -214,7 +215,29 @@ function activateTab(tabName) {
   const activeTab = document.querySelector(`.tab[data-tab="${tabName}"]`);
   const pageTitle = $("#pageTitle");
   if (activeTab && pageTitle) {
-    pageTitle.textContent = activeTab.textContent.trim();
+    pageTitle.textContent = activeTab.querySelector(".nav-label")?.textContent.trim() || activeTab.textContent.trim();
+  }
+}
+
+function isAuthRequiredTab(tabName) {
+  return AUTH_REQUIRED_TABS.has(tabName);
+}
+
+function updateNavigationAuthState() {
+  const shouldLock = !authState.authenticated;
+  document.querySelectorAll(".tab[data-auth-required='true']").forEach((tab) => {
+    tab.classList.toggle("is-locked", shouldLock);
+    tab.setAttribute("aria-disabled", String(shouldLock));
+    tab.title = shouldLock ? "로그인 후 이용할 수 있습니다." : "";
+  });
+}
+
+function updateLandingActions() {
+  const isAuthenticated = Boolean(authState.authenticated);
+  const landingPolicyButton = $("#landingPolicyButton");
+  $("#landingLoginLink").hidden = isAuthenticated;
+  if (landingPolicyButton) {
+    landingPolicyButton.textContent = isAuthenticated ? "Go to Dashboard" : "Policy Generator";
   }
 }
 
@@ -223,6 +246,7 @@ function showLandingHome() {
   if (!landingIntro) {
     return;
   }
+  updateLandingActions();
   landingIntro.hidden = false;
   document.querySelectorAll(".panel").forEach((panel) => {
     panel.classList.remove("is-active");
@@ -1209,6 +1233,7 @@ function renderClusterSetupGate() {
 
 function renderAuthGates() {
   const isAuthenticated = Boolean(authState.authenticated);
+  updateNavigationAuthState();
   $("#clusterSetupAuthMessage").hidden = isAuthenticated;
   $("#clusterSetupContent").hidden = !isAuthenticated;
   $("#analysisAuthMessage").hidden = isAuthenticated;
@@ -1226,8 +1251,8 @@ function renderLandingIntro() {
     return;
   }
   const isAuthenticated = Boolean(authState.authenticated);
+  updateLandingActions();
   landingIntro.hidden = isAuthenticated;
-  $("#landingLoginLink").hidden = isAuthenticated;
   if (!isAuthenticated) {
     startLandingTypewriter();
   }
@@ -1261,7 +1286,9 @@ function startLandingTypewriter() {
 }
 
 function setupLandingScrollAnimation() {
-  const items = document.querySelectorAll(".landing-showcase .showcase-card, .landing-showcase .showcase-code span");
+  const items = document.querySelectorAll(
+    ".landing-showcase .showcase-demo-copy, .landing-showcase .showcase-demo-media, .landing-showcase .showcase-code span",
+  );
   const topCue = document.querySelector(".landing-top-cue");
   const downCue = document.querySelector(".landing-scroll-cue");
   const showcase = document.querySelector("#landingShowcase");
@@ -1300,6 +1327,96 @@ function setupLandingScrollAnimation() {
     item.style.setProperty("--reveal-delay", `${Math.min(index * 70, 560)}ms`);
     observer.observe(item);
   });
+}
+
+function setupShowcaseDemo() {
+  const demos = {
+    policy: {
+      kicker: "Gatekeeper",
+      title: "Policy Guardrails",
+      description: "Code 탭에서는 정책 생성 흐름과 YAML 산출물을 보여줍니다. 이미지를 교체하면 같은 영역에서 부드럽게 전환됩니다.",
+      bullets: ["deny latest image", "require non-root", "allow trusted registry"],
+      alt: "Policy generator demo preview",
+    },
+    runtime: {
+      kicker: "Runtime",
+      title: "Live Violation Signals",
+      description: "Runtime 탭은 Falco/Gatekeeper 이벤트를 확인하고, 선택한 위반을 분석 화면으로 이어주는 장면에 맞춰 두었습니다.",
+      bullets: ["collect cluster event", "select violation", "open remediation context"],
+      alt: "Runtime detection demo preview",
+    },
+    report: {
+      kicker: "AI Report",
+      title: "Compliance Review",
+      description: "Report 탭은 AI 리포트와 Slack 공유 흐름을 시각적으로 설명하는 패널로 사용할 수 있습니다.",
+      bullets: ["summarize posture", "draft action items", "share to Slack"],
+      alt: "AI report demo preview",
+    },
+  };
+  const tabs = Array.from(document.querySelectorAll("[data-showcase-demo]"));
+  const image = $("#showcaseDemoImage");
+  const placeholder = $("#showcaseDemoPlaceholder");
+  const placeholderPath = placeholder?.querySelector("strong");
+  const kicker = $("#showcaseDemoKicker");
+  const title = $("#showcaseDemoTitle");
+  const description = $("#showcaseDemoDescription");
+  const bullets = $("#showcaseDemoBullets");
+  const copy = document.querySelector(".showcase-demo-copy");
+  const media = document.querySelector(".showcase-demo-media");
+  if (!tabs.length || !image || !kicker || !title || !description || !bullets) {
+    return;
+  }
+
+  const restartTransition = () => {
+    [copy, media].forEach((element) => {
+      element?.classList.remove("is-visible");
+      void element?.offsetWidth;
+      element?.classList.add("is-visible");
+    });
+  };
+
+  const showPlaceholder = (path) => {
+    image.classList.remove("is-ready");
+    if (placeholder) {
+      placeholder.hidden = false;
+    }
+    if (placeholderPath) {
+      placeholderPath.textContent = path;
+    }
+  };
+
+  const activateDemo = (tab) => {
+    const key = tab.dataset.showcaseDemo;
+    const demo = demos[key] || demos.policy;
+    const imagePath = tab.dataset.demoImage || "";
+    tabs.forEach((candidate) => {
+      const active = candidate === tab;
+      candidate.classList.toggle("is-active", active);
+      candidate.setAttribute("aria-selected", String(active));
+    });
+    kicker.textContent = demo.kicker;
+    title.textContent = demo.title;
+    description.textContent = demo.description;
+    bullets.innerHTML = demo.bullets.map((item) => `<span>${escapeHtml(item)}</span>`).join("");
+    image.alt = demo.alt;
+    image.onload = () => {
+      if (placeholder) {
+        placeholder.hidden = true;
+      }
+      image.classList.add("is-ready");
+    };
+    image.onerror = () => {
+      showPlaceholder(imagePath);
+    };
+    showPlaceholder(imagePath);
+    image.src = imagePath;
+    restartTransition();
+  };
+
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => activateDemo(tab));
+  });
+  activateDemo(tabs.find((tab) => tab.classList.contains("is-active")) || tabs[0]);
 }
 
 function renderRuntimeClusterFilter() {
@@ -2012,7 +2129,13 @@ function markCopied(button) {
 
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
-    activateTab(tab.dataset.tab);
+    const tabName = tab.dataset.tab;
+    if (!authState.authenticated && isAuthRequiredTab(tabName)) {
+      showToast("로그인 후 이용할 수 있습니다");
+      $("#loginLink")?.focus({ preventScroll: true });
+      return;
+    }
+    activateTab(tabName);
     $(".sidebar")?.classList.remove("is-open");
     $("#navMenuToggle")?.setAttribute("aria-expanded", "false");
   });
@@ -2376,6 +2499,11 @@ function openPublicPolicyGenerator() {
   if (landingIntro) {
     landingIntro.hidden = true;
   }
+  if (authState.authenticated) {
+    activateTab("dashboard");
+    $("#dashboardPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
   activateTab("policy");
   $("#policyPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -2384,6 +2512,7 @@ $("#landingPolicyButton").addEventListener("click", () => {
   openPublicPolicyGenerator();
 });
 
+setupShowcaseDemo();
 setupLandingScrollAnimation();
 
 async function loadConfig() {

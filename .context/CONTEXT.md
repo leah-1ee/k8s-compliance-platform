@@ -5,9 +5,9 @@ Policy-as-Code based Kubernetes compliance automation platform.
 Natural language → Rego policy via LLM, Falco event AI classification, real-time dashboard.
 
 ## Current Image Version
-Current VM image observed by user during TASK-17/18/19 UI-docs stabilization: `docker.io/leeon3345/compliance-ai-server:0.2.8`
-Next build/deploy tag for TASK-20 demo polish: use a fresh tag after `docker.io/leeon3345/compliance-ai-server:0.2.8`; do not overwrite or reuse older tags.
-`0.1.10` was the older deployed image. `0.1.11` was prepared by TASK-04, `0.1.12` by TASK-05, `0.1.13` by TASK-06, `0.1.15` by TASK-10 branding/deploy prep, `0.1.16`/`0.1.17` were used during TASK-10 policy apply/UI iteration, `0.1.18` is the TASK-10 completed/Grafana-title image observed in use, `0.1.20` is the TASK-11 UI/trash cleanup follow-up target, `0.1.43` started the TASK-15/16 Grafana proxy and dashboard recovery image line, `0.1.47` included TASK-16 Grafana Live, splash storage, favicon, and transient Grafana retry hardening, and `0.2.8` is the current UI/docs polish and demo-prep image line.
+Current VM image observed by user during TASK-17/18/19 UI-docs stabilization: `docker.io/leeon3345/compliance-ai-server:0.2.10`
+Next build/deploy tag for TASK-20 demo polish: use a fresh tag after `docker.io/leeon3345/compliance-ai-server:0.2.10`; do not overwrite or reuse older tags.
+`0.1.10` was the older deployed image. `0.1.11` was prepared by TASK-04, `0.1.12` by TASK-05, `0.1.13` by TASK-06, `0.1.15` by TASK-10 branding/deploy prep, `0.1.16`/`0.1.17` were used during TASK-10 policy apply/UI iteration, `0.1.18` is the TASK-10 completed/Grafana-title image observed in use, `0.1.20` is the TASK-11 UI/trash cleanup follow-up target, `0.1.43` started the TASK-15/16 Grafana proxy and dashboard recovery image line, `0.1.47` included TASK-16 Grafana Live, splash storage, favicon, and transient Grafana retry hardening, and `0.2.10` is the current UI/docs polish and demo-prep image line.
 
 ## Tech Stack
 - Backend: Python (FastAPI), SQLite (WAL mode, PVC persistent)
@@ -104,7 +104,7 @@ Next build/deploy tag for TASK-20 demo polish: use a fresh tag after `docker.io/
 
 ## Deployment Notes
 
-- Current deployed image target: `docker.io/leeon3345/compliance-ai-server:0.2.8`
+- Current deployed image target: `docker.io/leeon3345/compliance-ai-server:0.2.10`
 - Active deployment in cluster: `deploy/ai-classifier -n compliance-system`
 - Current live deployment env expectations:
   - `CLUSTER_NAME=school-cloud`
@@ -146,7 +146,7 @@ Next build/deploy tag for TASK-20 demo polish: use a fresh tag after `docker.io/
   - `kubectl set image deploy/ai-classifier -n compliance-system ai-classifier=docker.io/leeon3345/compliance-ai-server:0.1.20`
   - `kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s`
 - TASK-17/TASK-18/TASK-19 rollout target image:
-  - `docker.io/leeon3345/compliance-ai-server:0.2.8`
+  - `docker.io/leeon3345/compliance-ai-server:0.2.10`
   - `kubectl apply -f cloud-deploy/ai-server.yaml`
   - `kubectl rollout status deploy/ai-classifier -n compliance-system --timeout=180s`
 - TASK-11 Grafana ConfigMap apply:
@@ -181,7 +181,7 @@ Next build/deploy tag for TASK-20 demo polish: use a fresh tag after `docker.io/
 
 ## Remaining Tasks (priority order)
 
-1. **TASK-20 Demo Scenario and Repository Cleanup (P0)** — finalize the demo walk-through, keep the public docs and landing experience aligned, finish folder/file organization and stale reference cleanup, and keep `README.md`, `ai-observability/docs/ai-server-test/testing.md`, `ai-observability/docs/ai-server-test/ai-api.md`, and `ai-observability/docs/web-ui/README.md` in sync with the public `/docs` entry and current `0.2.8` rollout notes; see `.context/Task20.md`.
+1. **TASK-20 Demo Scenario and Repository Cleanup (P0)** — finalize the demo walk-through, keep the public docs and landing experience aligned, finish folder/file organization and stale reference cleanup, and keep `README.md`, `ai-observability/docs/ai-server-test/testing.md`, `ai-observability/docs/ai-server-test/ai-api.md`, and `ai-observability/docs/web-ui/README.md` in sync with the public `/docs` entry and current `0.2.10` rollout notes; see `.context/Task20.md`.
 
 ## Do Not Change (fixed decisions)
 

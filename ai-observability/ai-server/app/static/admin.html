@@ -7,37 +7,45 @@
     <style>
       :root {
         color-scheme: light;
-        --bg: #ecfbff;
-        --panel: rgba(255, 255, 255, 0.88);
+        --bg: #f0f4f8;
+        --panel: rgba(255, 255, 255, 0.68);
         --panel-strong: #ffffff;
-        --line: rgba(8, 119, 242, 0.18);
-        --line-strong: rgba(8, 119, 242, 0.32);
+        --line: rgba(174, 190, 209, 0.58);
+        --line-strong: rgba(96, 165, 250, 0.34);
         --text: #1f2937;
         --muted: #5f6b7a;
-        --accent: #0877f2;
-        --accent-2: #56ccf2;
+        --accent: #0ea5ff;
+        --accent-2: #38bdf8;
         --danger: #cf222e;
-        --soft: #f4fbff;
+        --soft: rgba(240, 249, 255, 0.72);
         --code: #08111f;
-        --shadow: 0 22px 60px rgba(8, 119, 242, 0.11);
-        --shadow-soft: 0 12px 28px rgba(15, 23, 42, 0.07);
+        --shadow: 0 28px 70px rgba(31, 44, 64, 0.14);
+        --shadow-soft:
+          inset 0 1px 0 rgba(255, 255, 255, 0.78),
+          0 20px 48px rgba(31, 44, 64, 0.1);
+        --control-bg: linear-gradient(135deg, rgba(218, 238, 255, 0.74), rgba(174, 209, 246, 0.48) 52%, rgba(210, 233, 255, 0.62));
+        --control-bg-hover: linear-gradient(135deg, rgba(224, 242, 254, 0.9), rgba(186, 230, 253, 0.66));
       }
       body[data-theme="dark"] {
         color-scheme: dark;
-        --bg: #08111f;
-        --panel: rgba(15, 23, 42, 0.9);
-        --panel-strong: #111827;
-        --line: rgba(125, 211, 252, 0.2);
-        --line-strong: rgba(125, 211, 252, 0.34);
-        --text: #e5edf6;
-        --muted: #a8b3c4;
+        --bg: #07111f;
+        --panel: rgba(18, 23, 29, 0.72);
+        --panel-strong: rgba(17, 27, 45, 0.94);
+        --line: rgba(255, 255, 255, 0.1);
+        --line-strong: rgba(96, 165, 250, 0.34);
+        --text: #eef5ff;
+        --muted: #b9c8dd;
         --accent: #60a5fa;
         --accent-2: #38bdf8;
         --danger: #f87171;
-        --soft: #111827;
+        --soft: rgba(15, 23, 42, 0.62);
         --code: #050b16;
         --shadow: 0 22px 60px rgba(0, 0, 0, 0.24);
-        --shadow-soft: 0 12px 28px rgba(0, 0, 0, 0.22);
+        --shadow-soft:
+          inset 0 1px 0 rgba(255, 255, 255, 0.06),
+          0 20px 48px rgba(0, 0, 0, 0.24);
+        --control-bg: linear-gradient(135deg, rgba(48, 76, 132, 0.42), rgba(17, 28, 58, 0.46));
+        --control-bg-hover: linear-gradient(135deg, rgba(58, 93, 158, 0.5), rgba(22, 38, 76, 0.56));
       }
       * {
         box-sizing: border-box;
@@ -46,27 +54,39 @@
         margin: 0;
         font-family: SUIT, Pretendard, "Noto Sans KR", ui-sans-serif, system-ui, sans-serif;
         background:
-          radial-gradient(circle at 18% -10%, rgba(86, 204, 242, 0.38), transparent 34%),
-          linear-gradient(135deg, #f8fdff 0%, #e7faff 48%, #d8f3ff 100%);
+          radial-gradient(ellipse at 78% 4%, rgba(56, 189, 248, 0.42), transparent 34%),
+          radial-gradient(ellipse at 14% 34%, rgba(191, 219, 254, 0.68), transparent 42%),
+          radial-gradient(ellipse at 84% 88%, rgba(37, 99, 235, 0.16), transparent 42%),
+          linear-gradient(145deg, #f8fcff 0%, #edf6ff 42%, #e7eef8 100%);
         color: var(--text);
+        min-height: 100vh;
       }
       body[data-theme="dark"] {
         background:
-          radial-gradient(circle at 18% -10%, rgba(56, 189, 248, 0.22), transparent 34%),
-          linear-gradient(135deg, #050b16 0%, #08111f 48%, #0d2744 100%);
+          radial-gradient(ellipse at 18% 0%, rgba(37, 99, 235, 0.16), transparent 36%),
+          radial-gradient(ellipse at 86% 12%, rgba(14, 165, 233, 0.12), transparent 38%),
+          linear-gradient(150deg, #07111f 0%, #0b1830 48%, #081225 100%);
       }
       header {
         position: relative;
         overflow: hidden;
         margin: 24px 32px 0;
         padding: 28px 32px;
-        border: 1px solid rgba(255, 255, 255, 0.36);
-        border-radius: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        border-radius: 24px;
         background:
-          radial-gradient(circle at 80% 10%, rgba(86, 204, 242, 0.45), transparent 30%),
-          linear-gradient(135deg, #07306f, #0877f2 58%, #08aeea);
-        color: #ffffff;
-        box-shadow: 0 26px 70px rgba(8, 119, 242, 0.24);
+          linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(224, 240, 255, 0.44)),
+          radial-gradient(circle at 82% 8%, rgba(56, 189, 248, 0.38), transparent 34%);
+        color: var(--text);
+        box-shadow: var(--shadow);
+        -webkit-backdrop-filter: blur(24px) saturate(150%);
+        backdrop-filter: blur(24px) saturate(150%);
+      }
+      body[data-theme="dark"] header {
+        border-color: rgba(255, 255, 255, 0.12);
+        background:
+          radial-gradient(circle at 80% 10%, rgba(37, 99, 235, 0.24), transparent 34%),
+          linear-gradient(135deg, rgba(15, 23, 42, 0.88), rgba(8, 18, 37, 0.78));
       }
       header::after {
         content: "";
@@ -75,7 +95,7 @@
         width: 260px;
         height: 260px;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.12);
+        background: rgba(14, 165, 255, 0.16);
       }
       .admin-topline {
         position: relative;
@@ -93,9 +113,12 @@
         align-items: center;
         gap: 10px;
         min-width: 122px;
-        border-color: rgba(255, 255, 255, 0.28);
-        background: rgba(255, 255, 255, 0.14);
-        color: #ffffff;
+        border-color: var(--line-strong);
+        background: var(--control-bg);
+        color: var(--text);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.58),
+          0 12px 24px rgba(30, 64, 175, 0.1);
         backdrop-filter: blur(16px);
       }
       .theme-switch {
@@ -103,7 +126,7 @@
         width: 42px;
         height: 24px;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.28);
+        background: rgba(15, 23, 42, 0.16);
       }
       .theme-switch::after {
         content: "";
@@ -115,6 +138,12 @@
         border-radius: 999px;
         background: #ffffff;
         transition: transform 0.18s ease;
+      }
+      body[data-theme="dark"] .theme-toggle {
+        color: #eef5ff;
+      }
+      body[data-theme="dark"] .theme-switch {
+        background: rgba(96, 165, 250, 0.36);
       }
       body[data-theme="dark"] .theme-switch::after {
         transform: translateX(18px);
@@ -132,11 +161,14 @@
       }
       section {
         border: 1px solid var(--line);
-        border-radius: 14px;
-        background: var(--panel);
+        border-radius: 22px;
+        background:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.66), rgba(228, 242, 255, 0.42)),
+          radial-gradient(circle at 94% 0%, rgba(125, 211, 252, 0.18), transparent 38%);
         padding: 22px;
         box-shadow: var(--shadow-soft);
-        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(22px) saturate(150%);
+        backdrop-filter: blur(22px) saturate(150%);
       }
       body[data-theme="dark"] section {
         background: var(--panel);
@@ -155,7 +187,7 @@
         z-index: 1;
         max-width: 620px;
         margin: 10px 0 0;
-        color: rgba(255, 255, 255, 0.78);
+        color: var(--muted);
         font-weight: 720;
       }
       h2 {
@@ -188,6 +220,15 @@
         align-items: center;
         gap: 14px;
       }
+      .admin-grafana-logo {
+        display: inline-block;
+        flex: 0 0 auto;
+        width: 38px;
+        height: 38px;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3ClinearGradient id='SVGDkkdxczn' x1='45.842' x2='45.842' y1='89.57' y2='8.802' gradientTransform='translate(-2.405 27.316)scale(1.4463)' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0' stop-color='%23fcee1f'/%3E%3Cstop offset='1' stop-color='%23f15b2a'/%3E%3C/linearGradient%3E%3Cpath fill='url(%23SVGDkkdxczn)' d='M69.162 0c-9.91 6.4-11.77 14.865-11.77 14.865s.002.206-.101.412c-.62.104-1.033.31-1.549.413c-.722.206-1.445.413-2.168.826l-2.168.93c-1.445.722-2.89 1.341-4.336 2.167c-1.342.826-2.683 1.548-4.025 2.477a1.3 1.3 0 0 1-.309-.205c-13.316-5.161-25.084 1.031-25.084 1.031c-1.032 14.245 5.367 23.02 6.606 24.672c-.31.929-.62 1.754-.93 2.58a53 53 0 0 0-2.166 9.91c-.103.413-.104 1.033-.207 1.445C8.671 67.613 5.06 80.103 5.06 80.103c10.219 11.768 22.193 12.49 22.193 12.49c1.445 2.685 3.302 5.369 5.264 7.743c.825 1.032 1.756 1.96 2.582 2.992c-3.716 10.632.619 19.613.619 19.613c11.458.413 18.992-4.955 20.54-6.297c1.136.31 2.272.724 3.407 1.034a47.3 47.3 0 0 0 10.633 1.549h4.644C80.31 126.969 89.807 128 89.807 128c6.71-7.123 7.123-14.038 7.123-15.69v-.62c1.342-1.033 2.683-2.064 4.129-3.2c2.684-2.374 4.955-5.264 7.02-8.154c.206-.207.309-.62.618-.826c7.639.413 12.903-4.748 12.903-4.748c-1.24-7.949-5.78-11.768-6.71-12.49l-.103-.104l-.103-.104l-.104-.103c0-.413.104-.93.104-1.445c.103-.93.103-1.755.103-2.58v-3.407c0-.206 0-.413-.103-.722l-.104-.723l-.103-.723c-.104-.929-.31-1.754-.413-2.58c-.825-3.406-2.166-6.71-3.818-9.498c-1.858-2.993-4.026-5.471-6.504-7.742c-2.477-2.168-5.264-4.025-8.154-5.264c-2.994-1.342-5.884-2.167-8.98-2.476c-1.446-.207-3.098-.207-4.544-.207H79.69c-.825.103-1.546.205-2.27.308c-3.096.62-5.883 1.756-8.36 3.201c-2.478 1.446-4.646 3.407-6.504 5.575c-1.858 2.167-3.2 4.438-4.13 6.916a23.3 23.3 0 0 0-1.548 7.431v2.684c0 .31 0 .62.104.93c.103 1.238.31 2.374.722 3.51c.723 2.27 1.756 4.334 3.098 6.09a20 20 0 0 0 4.54 4.335c1.756 1.136 3.408 1.96 5.266 2.477s3.509.826 5.16.722h2.376c.206 0 .412-.101.619-.101c.206 0 .31-.104.619-.104c.31-.103.825-.207 1.135-.31c.722-.207 1.342-.62 2.064-.826c.723-.31 1.24-.722 1.756-1.032c.103-.103.309-.207.412-.31c.62-.413.723-1.238.207-1.858c-.413-.413-1.136-.62-1.756-.31c-.103.103-.205.104-.412.207c-.413.206-1.032.413-1.445.619c-.62.103-1.135.31-1.754.414c-.31 0-.62.102-.93.102h-2.58c-.103 0-.31.001-.414-.102c-1.239-.206-2.58-.62-3.818-1.137c-1.239-.619-2.478-1.34-3.51-2.373a15.9 15.9 0 0 1-2.89-3.51c-.826-1.341-1.24-2.89-1.446-4.335c-.103-.826-.207-1.55-.103-2.375v-1.239c0-.413.103-.825.207-1.238c.619-3.406 2.27-6.71 4.851-9.187c.723-.723 1.342-1.238 2.168-1.754c.826-.62 1.547-1.032 2.373-1.342s1.756-.723 2.582-.93c.93-.206 1.858-.414 2.684-.414c.413 0 .929-.101 1.342-.101h1.238c1.032.103 2.065.205 2.994.412c1.961.413 3.82 1.135 5.678 2.168c3.613 2.064 6.708 5.16 8.566 8.877c.93 1.858 1.548 3.82 1.961 5.988c.103.62.104 1.03.207 1.547v2.787c0 .62-.103 1.136-.103 1.756c-.104.62-.102 1.134-.205 1.754c-.104.619-.208 1.136-.311 1.755c-.206 1.136-.722 2.168-1.031 3.303c-.826 2.168-1.963 4.232-3.305 5.986c-2.684 3.717-6.502 6.815-10.63 8.776c-2.169.929-4.337 1.755-6.608 2.064a19 19 0 0 1-3.407.309h-1.755c-.62 0-1.238.002-1.858-.102c-2.477-.206-4.85-.724-7.224-1.343c-2.375-.723-4.647-1.548-6.815-2.684c-4.335-2.27-8.153-5.573-11.25-9.289c-1.445-1.961-2.892-4.027-4.027-6.092s-1.961-4.438-2.58-6.709c-.723-2.27-1.032-4.645-1.135-7.02v-3.613c0-1.135.102-2.372.309-3.61c.103-1.24.309-2.376.619-3.614c.206-1.239.62-2.375.93-3.614c.722-2.374 1.444-4.644 2.476-6.812c2.064-4.335 4.645-8.155 7.742-11.252a25 25 0 0 1 2.479-2.168c.31-.31 1.135-1.033 2.064-1.549s1.858-1.136 2.89-1.549c.414-.206.93-.413 1.446-.722c.206-.103.411-.206.824-.309c.207-.103.414-.207.826-.31c1.033-.413 2.066-.825 3.098-1.135c.207-.103.62-.104.826-.207c.207-.103.618-.102.824-.205c.62-.103 1.033-.208 1.55-.414c.206-.104.619-.104.825-.207c.207 0 .62-.102.827-.102s.62-.103.826-.103l.412-.104l.412-.103c.206 0 .62-.104.826-.104c.31 0 .62-.104.93-.104c.206 0 .721-.101.928-.101c.206 0 .311 0 .62-.104h.723c.31 0 .618 0 .928-.103h4.647c2.064.103 4.128.31 5.986.723c3.82.722 7.638 1.961 10.941 3.613c3.304 1.548 6.4 3.611 8.877 5.78c.104.102.311.207.414.413c.104.103.31.206.412.412c.31.207.62.62.93.826c.31.207.62.62.93.827c.206.31.618.618.824.927c1.136 1.136 2.169 2.375 3.098 3.51a41.4 41.4 0 0 1 4.44 7.02c.102.103.1.207.204.414c.103.103.104.205.207.412c.103.206.206.62.412.826c.104.206.208.62.31.826c.104.207.208.62.311.826c.413 1.033.826 2.064 1.135 3.096c.62 1.548.929 2.993 1.239 4.13c.103.412.62.825 1.033.825c.619 0 .927-.414.927-1.033c-.31-1.755-.308-3.198-.412-4.953q-.31-3.253-1.238-7.434c-.62-2.787-1.86-5.677-3.305-8.877c-1.548-3.096-3.509-6.4-6.09-9.394c-1.032-1.239-2.167-2.373-3.302-3.612c1.858-7.122-2.168-13.42-2.168-13.42c-6.916-.412-11.253 2.168-12.801 3.303c-.206-.103-.618-.205-.824-.308c-1.136-.413-2.375-.93-3.613-1.342c-1.24-.31-2.478-.827-3.717-1.033c-1.239-.31-2.58-.62-4.026-.827c-.206 0-.413-.103-.722-.103C77.833 4.128 69.162 0 69.162 0'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-size: 100% 100%;
+      }
       .admin-grafana-heading h2 {
         margin-bottom: 4px;
       }
@@ -218,21 +259,6 @@
         font-size: 12px;
         font-weight: 760;
       }
-      .admin-grafana-logo {
-        display: inline-grid;
-        place-items: center;
-        width: 52px;
-        height: 52px;
-        border-radius: 16px;
-        background:
-          radial-gradient(circle at 55% 58%, rgba(255, 255, 255, 0.9) 0 12%, transparent 13%),
-          linear-gradient(135deg, #ffb020, #f15b2a);
-        box-shadow: 0 16px 34px rgba(241, 91, 42, 0.24);
-      }
-      .admin-grafana-logo svg {
-        width: 34px;
-        height: 34px;
-      }
       .audit-log-card {
         display: grid;
         gap: 14px;
@@ -253,23 +279,19 @@
         display: grid;
         gap: 12px;
         padding: 16px;
-        border: 1px solid rgba(8, 119, 242, 0.14);
-        border-radius: 12px;
-        background: rgba(244, 251, 255, 0.7);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--soft);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64);
       }
       body[data-theme="dark"] .audit-filter-panel {
         background: rgba(15, 23, 42, 0.62);
       }
       .audit-log-filters {
         display: grid;
-        grid-template-columns: 180px minmax(220px, 1fr) minmax(160px, 0.8fr) minmax(200px, 1fr);
+        grid-template-columns: auto 2fr 1fr 1fr 1fr 1fr;
         gap: 12px;
         align-items: start;
-      }
-      .audit-date-range {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px;
       }
       .filter-label-row {
         display: inline-flex;
@@ -342,12 +364,13 @@
         min-width: 220px;
         max-width: 320px;
         scroll-snap-align: start;
-        border: 1px solid rgba(8, 119, 242, 0.16);
-        border-radius: 8px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
         background:
           radial-gradient(circle at 18% 0%, rgba(86, 204, 242, 0.18), transparent 34%),
-          rgba(255, 255, 255, 0.72);
+          rgba(255, 255, 255, 0.64);
         padding: 13px 14px;
+        box-shadow: 0 12px 28px rgba(31, 44, 64, 0.07);
       }
       body[data-theme="dark"] .audit-summary-card {
         background:
@@ -411,11 +434,11 @@
         display: grid;
         gap: 8px;
         padding: 14px 16px;
-        border: 1px solid rgba(8, 119, 242, 0.14);
-        border-radius: 12px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
         background:
           radial-gradient(circle at 0% 0%, rgba(86, 204, 242, 0.12), transparent 28%),
-          rgba(255, 255, 255, 0.72);
+          rgba(255, 255, 255, 0.64);
       }
       body[data-theme="dark"] .audit-log-item {
         background:
@@ -455,19 +478,23 @@
       input, select, textarea {
         width: 100%;
         border: 1px solid var(--line-strong);
-        border-radius: 10px;
-        background: rgba(255, 255, 255, 0.92);
+        border-radius: 16px;
+        background: var(--control-bg);
         color: var(--text);
-        padding: 13px 14px;
+        padding: 11px 14px;
         font: inherit;
         font-weight: 760;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.74),
+          0 12px 26px rgba(31, 44, 64, 0.08);
       }
       body[data-theme="dark"] input,
       body[data-theme="dark"] select {
-        background: #08111f;
+        background: var(--control-bg);
         color: var(--text);
-        box-shadow: none;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.08),
+          0 12px 24px rgba(0, 0, 0, 0.18);
       }
       input:focus, select:focus, textarea:focus {
         outline: 3px solid rgba(8, 119, 242, 0.16);
@@ -483,16 +510,19 @@
       }
       button {
         border: 1px solid var(--line-strong);
-        border-radius: 10px;
-        background: rgba(255, 255, 255, 0.78);
+        border-radius: 999px;
+        background: var(--control-bg);
         color: var(--text);
         padding: 11px 15px;
         font-weight: 880;
         cursor: pointer;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.58),
+          0 10px 22px rgba(30, 64, 175, 0.1);
         transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease, background 0.16s ease;
       }
       body[data-theme="dark"] button {
-        background: rgba(15, 23, 42, 0.86);
+        background: var(--control-bg);
         color: var(--text);
       }
       button:hover {
@@ -501,10 +531,13 @@
         box-shadow: 0 12px 24px rgba(8, 119, 242, 0.12);
       }
       button.primary {
-        border-color: transparent;
-        background: linear-gradient(135deg, var(--accent), #0ea5e9);
+        border-color: rgba(186, 230, 253, 0.72);
+        background:
+          linear-gradient(135deg, rgba(59, 130, 246, 0.92), rgba(14, 165, 255, 0.82) 52%, rgba(37, 99, 235, 0.9));
         color: #ffffff;
-        box-shadow: 0 14px 28px rgba(8, 119, 242, 0.22);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.42),
+          0 16px 34px rgba(14, 165, 255, 0.24);
       }
       button.danger {
         border-color: rgba(207, 34, 46, 0.34);
@@ -524,13 +557,13 @@
         display: grid;
         gap: 12px;
         margin-top: 12px;
-        border: 1px solid rgba(8, 119, 242, 0.16);
-        border-radius: 12px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
         background:
           radial-gradient(circle at 0% 0%, rgba(86, 204, 242, 0.12), transparent 28%),
-          rgba(255, 255, 255, 0.72);
+          rgba(255, 255, 255, 0.64);
         padding: 16px;
-        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+        box-shadow: 0 14px 32px rgba(31, 44, 64, 0.08);
       }
       body[data-theme="dark"] .cluster,
       body[data-theme="dark"] .user {
@@ -579,12 +612,13 @@
         gap: 12px;
       }
       .summary-card {
-        border: 1px solid rgba(8, 119, 242, 0.18);
-        border-radius: 13px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
         background:
           radial-gradient(circle at 18% 0%, rgba(86, 204, 242, 0.22), transparent 34%),
-          linear-gradient(180deg, #ffffff, #f5fcff);
+          linear-gradient(145deg, rgba(255, 255, 255, 0.72), rgba(224, 240, 255, 0.42));
         padding: 16px;
+        box-shadow: var(--shadow-soft);
       }
       body[data-theme="dark"] .summary-card {
         background:
@@ -606,9 +640,9 @@
         gap: 10px;
       }
       .user-cluster {
-        border: 1px solid rgba(8, 119, 242, 0.16);
-        border-radius: 11px;
-        background: #f8fdff;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--soft);
         padding: 12px 14px;
       }
       body[data-theme="dark"] .user-cluster {
@@ -649,9 +683,10 @@
         align-items: end;
         margin-bottom: 16px;
         padding: 14px;
-        border: 1px solid rgba(8, 119, 242, 0.14);
-        border-radius: 12px;
-        background: rgba(244, 251, 255, 0.7);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--soft);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64);
       }
       body[data-theme="dark"] .filters {
         background: rgba(15, 23, 42, 0.62);
@@ -663,9 +698,10 @@
         align-items: end;
         margin-bottom: 16px;
         padding: 14px;
-        border: 1px solid rgba(8, 119, 242, 0.14);
-        border-radius: 12px;
-        background: rgba(244, 251, 255, 0.7);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--soft);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64);
       }
       body[data-theme="dark"] .user-search {
         background: rgba(15, 23, 42, 0.62);
@@ -677,7 +713,7 @@
       }
       .actions button {
         padding: 9px 13px;
-        border-radius: 9px;
+        border-radius: 999px;
       }
       .danger-note {
         color: #b45309;
@@ -706,9 +742,9 @@
         .summary-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
-        .audit-log-filters {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
+      .audit-log-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
       }
       @media (max-width: 640px) {
         header {
@@ -722,8 +758,7 @@
         .audit-log-filters {
           grid-template-columns: 1fr;
         }
-        .audit-log-heading,
-        .audit-date-range {
+        .audit-log-heading {
           grid-template-columns: 1fr;
         }
         .audit-log-heading {
@@ -763,12 +798,7 @@
 
         <section class="admin-grafana-card">
           <div class="admin-grafana-heading">
-            <span class="admin-grafana-logo" aria-hidden="true">
-              <svg viewBox="0 0 48 48" role="img" aria-label="Grafana logo">
-                <path fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M31.5 28.5c0 4.1-3.4 7.5-7.5 7.5s-7.5-3.4-7.5-7.5S19.9 21 24 21c2 0 3.8.8 5.1 2.1" />
-                <path fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M34.5 21.5c-2.1-4.1-6.3-6.9-11.2-6.9c-7 0-12.7 5.7-12.7 12.7c0 2.8.9 5.3 2.5 7.4m21.4-13.2l-5.7 1.7l1.8-5.7" />
-              </svg>
-            </span>
+            <span class="devicon--grafana admin-grafana-logo" aria-hidden="true"></span>
             <div>
               <h2>Admin Grafana</h2>
               <p>관리자 클러스터와 연결된 마스터 Grafana에서 전체 수집 상태와 운영 지표를 확인합니다.</p>
@@ -817,8 +847,6 @@
               </span>
               <input id="auditTargetIdFilter" placeholder="cluster-..., user-..., latest-tag" />
             </label>
-          </div>
-          <div class="audit-date-range">
             <label>
               시작일
               <input id="auditDateFromFilter" type="date" />
