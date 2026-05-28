@@ -70,6 +70,8 @@ grafana:
 
   # ai-server /grafana-ui 프록시가 전달하는 사용자 헤더를 신뢰한다.
   grafana.ini:
+    auth.anonymous:
+      enabled: false
     auth.proxy:
       enabled: true
       header_name: X-WEBAUTH-USER
@@ -77,6 +79,9 @@ grafana:
       auto_sign_up: true
       sync_ttl: 60
       headers: "Email:X-WEBAUTH-EMAIL Name:X-WEBAUTH-NAME"
+    users:
+      auto_assign_org_role: Viewer
+      viewers_can_edit: false
 
   sidecar:
     # sidecar 공통 리소스
@@ -88,6 +93,7 @@ grafana:
         cpu: 100m
         memory: 128Mi
     dashboards:
+      folderAnnotation: grafana_folder
       # dashboard sidecar 리소스
       resources:
         requests:
