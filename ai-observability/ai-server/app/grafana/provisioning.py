@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import os
 import time
 from pathlib import Path
@@ -14,6 +15,7 @@ import httpx
 from app import storage
 
 
+logger = logging.getLogger("ai-server.grafana.provisioning")
 GRAFANA_URL = os.getenv("GRAFANA_URL_INTERNAL", "http://grafana.monitoring.svc.cluster.local:3000").rstrip("/")
 CLIENT_GRAFANA_URL = os.getenv("GRAFANA_CLIENT_URL_INTERNAL", GRAFANA_URL).rstrip("/")
 ADMIN_GRAFANA_URL = os.getenv("GRAFANA_ADMIN_URL_INTERNAL", GRAFANA_URL).rstrip("/")
@@ -240,6 +242,14 @@ def _load_master_dashboards(
                 headers={"X-Grafana-Org-Id": master_org_id},
             )
             if response.status_code != 200:
+                if not _require_master_dashboards():
+                    logger.warning(
+                        "Skipping Grafana master dashboard %s fetch after %s: %s",
+                        master_uid,
+                        response.status_code,
+                        response.text[:300],
+                    )
+                    continue
                 raise ProvisioningError(
                     f"Grafana master dashboard fetch failed for {master_uid}: {response.status_code} {response.text}"
                 )
@@ -258,6 +268,10 @@ def _load_master_dashboards(
         ) as admin_client:
             fetch_dashboards(admin_client)
     return dashboards
+
+
+def _require_master_dashboards() -> bool:
+    return os.getenv("GRAFANA_REQUIRE_MASTER_DASHBOARDS", "").strip().lower() in {"true", "1", "yes"}
 
 
 def _master_dashboard_uids() -> list[str]:
