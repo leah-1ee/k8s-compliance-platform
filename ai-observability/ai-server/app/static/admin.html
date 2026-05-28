@@ -1366,19 +1366,36 @@
           const body = await requestJson("/admin/api/grafana/url");
           renderAdminGrafanaLinks(body.grafana?.links);
           const links = Array.isArray(body.grafana?.links) ? body.grafana.links : [];
-          const url = links[linkIndex]?.url || body.grafana?.url || "";
+          const url = absoluteGrafanaUrl(
+            links[linkIndex]?.url || body.grafana?.url || "",
+            body.grafana?.public_origin || "",
+          );
           if (!url) {
             throw new Error("Grafana URL이 비어 있습니다.");
           }
           if (grafanaWindow) {
-            grafanaWindow.location.href = url;
+            grafanaWindow.location.replace(url);
           } else {
-            window.location.href = url;
+            window.location.assign(url);
           }
           setMessage("Admin Grafana를 열었습니다.");
         } catch (error) {
           grafanaWindow?.close();
           setMessage(error.message);
+        }
+      }
+
+      function absoluteGrafanaUrl(value, publicOrigin) {
+        const raw = String(value || "").trim();
+        if (!raw) {
+          return "";
+        }
+        try {
+          const parsed = new URL(raw);
+          return parsed.href;
+        } catch (error) {
+          const origin = String(publicOrigin || window.location.origin || "").replace(/\/$/, "");
+          return new URL(raw.startsWith("/") ? raw : `/${raw}`, origin).href;
         }
       }
 

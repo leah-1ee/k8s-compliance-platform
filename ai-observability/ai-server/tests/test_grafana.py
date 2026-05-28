@@ -755,6 +755,7 @@ def test_admin_grafana_url_sets_admin_proxy_cookie(monkeypatch):
 
     assert url_response.status_code == 200
     assert url_body["grafana"]["url"] == "https://console.example.test/admin-grafana/dashboards?orgId=1"
+    assert url_body["grafana"]["public_origin"] == "https://console.example.test"
     assert url_body["grafana"]["mode"] == "admin"
     assert url_body["grafana"]["scope"] == "admin-cluster"
     assert url_body["grafana"]["links"] == [

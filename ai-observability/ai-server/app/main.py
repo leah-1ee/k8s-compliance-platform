@@ -1399,6 +1399,7 @@ def admin_grafana_url(request: Request, x_admin_token: str | None = Header(defau
         content={
             "grafana": {
                 "url": _admin_grafana_url(request),
+                "public_origin": public_origin_url(request),
                 "org_id": org_id,
                 "mode": "admin",
                 "scope": "admin-cluster",
