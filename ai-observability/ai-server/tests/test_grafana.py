@@ -752,6 +752,11 @@ def test_admin_grafana_url_sets_admin_proxy_cookie(monkeypatch):
             "description": "Falco/Sidekick 런타임 이벤트, 웹훅 보안, 클러스터별 이벤트 폭주를 봅니다.",
             "url": "/grafana-ui/d/compliance-runtime-detection/runtime-detection?orgId=1",
         },
+        {
+            "label": "Platform Admin Errors",
+            "description": "관리자 전용 플랫폼 오류, CrashLoopBackOff, Gatekeeper/Falco 상태를 봅니다.",
+            "url": "/grafana-ui/d/platform-admin-errors/kubeowl-platform-admin-errors?orgId=1",
+        },
     ]
     assert admin_cookie
 

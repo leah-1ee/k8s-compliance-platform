@@ -1107,6 +1107,11 @@ def _admin_grafana_links(org_id: str) -> list[dict[str, str]]:
             "description": "Falco/Sidekick 런타임 이벤트, 웹훅 보안, 클러스터별 이벤트 폭주를 봅니다.",
             "url": _grafana_dashboard_url("/d/compliance-runtime-detection/runtime-detection", org_id),
         },
+        {
+            "label": "Platform Admin Errors",
+            "description": "관리자 전용 플랫폼 오류, CrashLoopBackOff, Gatekeeper/Falco 상태를 봅니다.",
+            "url": _grafana_dashboard_url("/d/platform-admin-errors/kubeowl-platform-admin-errors", org_id),
+        },
     ]
 
 
