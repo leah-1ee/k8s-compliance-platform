@@ -484,7 +484,7 @@ def test_grafana_ui_proxy_serves_root_public_lazy_chunks(monkeypatch):
     assert captured["upstream_path"] == "/grafana-ui/public/build/7651.06c4a6f267dfa91784a2.js"
 
 
-def test_grafana_ui_proxy_serves_public_assets_without_auth_headers(monkeypatch):
+def test_grafana_ui_proxy_serves_public_assets_with_asset_identity(monkeypatch):
     captured = {}
 
     async def fake_forward(request, upstream_path, user, context=ui_proxy.CLIENT_GRAFANA_CONTEXT):
@@ -504,9 +504,9 @@ def test_grafana_ui_proxy_serves_public_assets_without_auth_headers(monkeypatch)
     assert response.status_code == 200
     assert response.text == "asset ok"
     assert captured["upstream_path"] == "/grafana-ui/public/build/public-assets.js"
-    assert "X-KUBEOWL-CLIENT-USER" not in captured["headers"]
-    assert "X-KUBEOWL-CLIENT-EMAIL" not in captured["headers"]
-    assert "X-KUBEOWL-CLIENT-NAME" not in captured["headers"]
+    assert captured["headers"]["X-KUBEOWL-CLIENT-USER"] == "kubeowl-client-assets@local"
+    assert captured["headers"]["X-KUBEOWL-CLIENT-EMAIL"] == "kubeowl-client-assets@local"
+    assert captured["headers"]["X-KUBEOWL-CLIENT-NAME"] == "KubeOwl Client Assets"
     assert "content-encoding" not in response.headers
 
 

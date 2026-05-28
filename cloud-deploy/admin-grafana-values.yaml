@@ -77,12 +77,12 @@ grafana:
       enabled: true
       header_name: X-KUBEOWL-ADMIN-USER
       header_property: email
-      auto_sign_up: false
+      auto_sign_up: true
       sync_ttl: 1
       enable_login_token: false
       headers: "Email:X-KUBEOWL-ADMIN-EMAIL Name:X-KUBEOWL-ADMIN-NAME"
     users:
-      auto_assign_org_role: Viewer
+      auto_assign_org_role: Admin
       viewers_can_edit: false
 
   sidecar:

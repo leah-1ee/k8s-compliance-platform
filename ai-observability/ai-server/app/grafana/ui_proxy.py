@@ -316,8 +316,18 @@ def _optional_proxy_user(
     kubeowl_admin_grafana: str | None,
 ) -> dict[str, Any]:
     if context.admin:
-        return admin_user_from_token(kubeowl_admin_grafana) or {}
-    return storage.get_user_by_session(compliance_ai_session or "") or {}
+        return admin_user_from_token(kubeowl_admin_grafana) or _asset_proxy_user(context)
+    return storage.get_user_by_session(compliance_ai_session or "") or _asset_proxy_user(context)
+
+
+def _asset_proxy_user(context: GrafanaProxyContext) -> dict[str, Any]:
+    prefix = "admin" if context.admin else "client"
+    return {
+        "id": f"kubeowl-{prefix}-assets",
+        "email": f"kubeowl-{prefix}-assets@local",
+        "name": f"KubeOwl {prefix.title()} Assets",
+        "provider": "asset-proxy",
+    }
 
 
 async def _forward_grafana_request(
