@@ -60,8 +60,6 @@ spec:
               value: "https://compliance-ai-console.shares.zrok.io/grafana-ui/"
             - name: GF_SERVER_DOMAIN
               value: compliance-ai-console.shares.zrok.io
-            - name: GF_SERVER_PROTOCOL
-              value: https
             - name: GF_SERVER_SERVE_FROM_SUB_PATH
               value: "true"
           ports:
