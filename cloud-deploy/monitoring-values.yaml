@@ -73,7 +73,7 @@ grafana:
     server:
       domain: compliance-ai-console.shares.zrok.io
       root_url: "https://compliance-ai-console.shares.zrok.io/grafana-ui/"
-      serve_from_sub_path: true
+      serve_from_sub_path: false
     auth:
       disable_login_form: true
       login_cookie_name: kubeowl_client_grafana_session
