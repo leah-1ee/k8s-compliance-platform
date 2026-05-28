@@ -15,6 +15,8 @@ from app import storage
 
 
 GRAFANA_URL = os.getenv("GRAFANA_URL_INTERNAL", "http://grafana.monitoring.svc.cluster.local:3000").rstrip("/")
+CLIENT_GRAFANA_URL = os.getenv("GRAFANA_CLIENT_URL_INTERNAL", GRAFANA_URL).rstrip("/")
+ADMIN_GRAFANA_URL = os.getenv("GRAFANA_ADMIN_URL_INTERNAL", GRAFANA_URL).rstrip("/")
 AI_SERVER_PROXY_BASE_URL = os.getenv(
     "AI_SERVER_PROXY_BASE_URL",
     "http://ai-server.compliance-system.svc.cluster.local:8000",
@@ -39,7 +41,7 @@ def provision_user(user_id: str, cluster_id: str, email: str) -> dict[str, Any]:
     created_org = False
 
     try:
-        with httpx.Client(base_url=GRAFANA_URL, auth=auth, timeout=10) as client:
+        with httpx.Client(base_url=CLIENT_GRAFANA_URL, auth=auth, timeout=10) as client:
             org = _get_org(client, org_name)
             if org is None:
                 response = client.post("/api/orgs", json={"name": org_name})
@@ -185,8 +187,13 @@ def _import_dashboards(client: httpx.Client, org_id: int, datasource_uid: str) -
     return dashboard_urls
 
 
-def _dashboard_payloads(client: httpx.Client, datasource_uid: str) -> list[dict[str, Any]]:
-    dashboards = _load_master_dashboards(client)
+def _dashboard_payloads(
+    client: httpx.Client,
+    datasource_uid: str,
+    *,
+    master_client: httpx.Client | None = None,
+) -> list[dict[str, Any]]:
+    dashboards = _load_master_dashboards(master_client)
     local_dashboard = _load_local_dashboard_template()
     if _include_local_dashboard() and not any(
         dashboard.get("uid") == local_dashboard.get("uid") for dashboard in dashboards
@@ -200,25 +207,33 @@ def _dashboard_payloads(client: httpx.Client, datasource_uid: str) -> list[dict[
     ]
 
 
-def _load_master_dashboards(client: httpx.Client) -> list[dict[str, Any]]:
+def _load_master_dashboards(master_client: httpx.Client | None = None) -> list[dict[str, Any]]:
     master_uids = _master_dashboard_uids()
     if not master_uids:
         return []
     master_org_id = os.getenv("GRAFANA_MASTER_ORG_ID", "1").strip() or "1"
     dashboards: list[dict[str, Any]] = []
-    for master_uid in master_uids:
-        response = client.get(
-            f"/api/dashboards/uid/{master_uid}",
-            headers={"X-Grafana-Org-Id": master_org_id},
-        )
-        if response.status_code != 200:
-            raise ProvisioningError(
-                f"Grafana master dashboard fetch failed for {master_uid}: {response.status_code} {response.text}"
+
+    def fetch_dashboards(admin_client: httpx.Client) -> None:
+        for master_uid in master_uids:
+            response = admin_client.get(
+                f"/api/dashboards/uid/{master_uid}",
+                headers={"X-Grafana-Org-Id": master_org_id},
             )
-        dashboard = response.json().get("dashboard")
-        if not isinstance(dashboard, dict):
-            raise ProvisioningError(f"Grafana master dashboard response missing dashboard for {master_uid}")
-        dashboards.append(dashboard)
+            if response.status_code != 200:
+                raise ProvisioningError(
+                    f"Grafana master dashboard fetch failed for {master_uid}: {response.status_code} {response.text}"
+                )
+            dashboard = response.json().get("dashboard")
+            if not isinstance(dashboard, dict):
+                raise ProvisioningError(f"Grafana master dashboard response missing dashboard for {master_uid}")
+            dashboards.append(dashboard)
+
+    if master_client is not None:
+        fetch_dashboards(master_client)
+    else:
+        with httpx.Client(base_url=ADMIN_GRAFANA_URL, auth=_grafana_auth(), timeout=10) as admin_client:
+            fetch_dashboards(admin_client)
     return dashboards
 
 

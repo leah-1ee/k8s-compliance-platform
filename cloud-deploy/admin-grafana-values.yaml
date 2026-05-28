@@ -1,0 +1,75 @@
+# kube-prometheus-stack values for the isolated KubeOwl Admin Grafana release.
+# Install as a second Helm release so admin sessions, cookies, org context, and
+# editable dashboards cannot collide with client Grafana.
+
+alertmanager:
+  enabled: false
+
+prometheus:
+  enabled: false
+
+grafana:
+  enabled: true
+  fullnameOverride: kubeowl-admin-grafana
+  replicas: 1
+
+  nodeSelector:
+    kubernetes.io/hostname: k8s-worker1
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  persistence:
+    enabled: false
+
+  grafana.ini:
+    server:
+      root_url: "%(protocol)s://%(domain)s/admin-grafana/"
+      serve_from_sub_path: true
+    auth:
+      disable_login_form: true
+      login_cookie_name: kubeowl_admin_grafana_session
+    auth.anonymous:
+      enabled: false
+    auth.proxy:
+      enabled: true
+      header_name: X-KUBEOWL-ADMIN-USER
+      header_property: email
+      auto_sign_up: false
+      sync_ttl: 1
+      enable_login_token: false
+      headers: "Email:X-KUBEOWL-ADMIN-EMAIL Name:X-KUBEOWL-ADMIN-NAME"
+    users:
+      auto_assign_org_role: Viewer
+      viewers_can_edit: false
+
+  sidecar:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+    dashboards:
+      folderAnnotation: grafana_folder
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+    datasources:
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi

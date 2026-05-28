@@ -68,17 +68,24 @@ grafana:
   persistence:
     enabled: false
 
-  # ai-server /grafana-ui 프록시가 전달하는 사용자 헤더를 신뢰한다.
+  # ai-server /grafana-ui 프록시가 전달하는 client 사용자 헤더만 신뢰한다.
   grafana.ini:
+    server:
+      root_url: "%(protocol)s://%(domain)s/grafana-ui/"
+      serve_from_sub_path: true
+    auth:
+      disable_login_form: true
+      login_cookie_name: kubeowl_client_grafana_session
     auth.anonymous:
       enabled: false
     auth.proxy:
       enabled: true
-      header_name: X-WEBAUTH-USER
+      header_name: X-KUBEOWL-CLIENT-USER
       header_property: email
       auto_sign_up: true
-      sync_ttl: 60
-      headers: "Email:X-WEBAUTH-EMAIL Name:X-WEBAUTH-NAME"
+      sync_ttl: 1
+      enable_login_token: false
+      headers: "Email:X-KUBEOWL-CLIENT-EMAIL Name:X-KUBEOWL-CLIENT-NAME"
     users:
       auto_assign_org_role: Viewer
       viewers_can_edit: false

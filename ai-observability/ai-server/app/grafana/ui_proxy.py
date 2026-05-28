@@ -4,6 +4,7 @@ import asyncio
 import os
 import re
 import unicodedata
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -16,17 +17,55 @@ from app.grafana.admin_session import admin_user_from_token
 
 
 GRAFANA_URL = os.getenv("GRAFANA_URL_INTERNAL", "http://grafana.monitoring.svc.cluster.local:3000").rstrip("/")
+CLIENT_GRAFANA_URL = os.getenv("GRAFANA_CLIENT_URL_INTERNAL", GRAFANA_URL).rstrip("/")
+ADMIN_GRAFANA_URL = os.getenv("GRAFANA_ADMIN_URL_INTERNAL", GRAFANA_URL).rstrip("/")
 SESSION_COOKIE_NAME = "compliance_ai_session"
+CLIENT_GRAFANA_PREFIX = "/grafana-ui"
+ADMIN_GRAFANA_PREFIX = "/admin-grafana"
 router = APIRouter()
 GRAFANA_PUBLIC_DIRS = ("build", "fonts", "img", "plugins", "app", "locales")
 GRAFANA_PUBLIC_PATH_RE = re.compile(
-    rf"(?<!/grafana-ui)/public/({'|'.join(GRAFANA_PUBLIC_DIRS)})/"
+    rf"(?<!/grafana-ui)(?<!/admin-grafana)/public/({'|'.join(GRAFANA_PUBLIC_DIRS)})/"
 )
 GRAFANA_RELATIVE_PUBLIC_PATH_RE = re.compile(
     rf"(?P<prefix>[\"'`=(])public/({'|'.join(GRAFANA_PUBLIC_DIRS)})/"
 )
-GRAFANA_LIVE_WEBSOCKET_PATHS = {"/api/live/ws", "/grafana-ui/api/live/ws"}
+GRAFANA_LIVE_WEBSOCKET_PATHS = {
+    "/api/live/ws",
+    f"{CLIENT_GRAFANA_PREFIX}/api/live/ws",
+    f"{ADMIN_GRAFANA_PREFIX}/api/live/ws",
+}
 GRAFANA_RETRY_STATUS_CODES = {502, 503, 504}
+
+
+@dataclass(frozen=True)
+class GrafanaProxyContext:
+    name: str
+    upstream_url: str
+    public_prefix: str
+    user_header: str
+    email_header: str
+    name_header: str
+    admin: bool = False
+
+
+CLIENT_GRAFANA_CONTEXT = GrafanaProxyContext(
+    name="client",
+    upstream_url=CLIENT_GRAFANA_URL,
+    public_prefix=CLIENT_GRAFANA_PREFIX,
+    user_header="X-KUBEOWL-CLIENT-USER",
+    email_header="X-KUBEOWL-CLIENT-EMAIL",
+    name_header="X-KUBEOWL-CLIENT-NAME",
+)
+ADMIN_GRAFANA_CONTEXT = GrafanaProxyContext(
+    name="admin",
+    upstream_url=ADMIN_GRAFANA_URL,
+    public_prefix=ADMIN_GRAFANA_PREFIX,
+    user_header="X-KUBEOWL-ADMIN-USER",
+    email_header="X-KUBEOWL-ADMIN-EMAIL",
+    name_header="X-KUBEOWL-ADMIN-NAME",
+    admin=True,
+)
 
 
 class GrafanaLiveWebSocketMiddleware:
@@ -43,7 +82,12 @@ class GrafanaLiveWebSocketMiddleware:
 
 @router.api_route("/grafana-ui", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def grafana_ui_root() -> RedirectResponse:
-    return RedirectResponse("/grafana-ui/", status_code=307)
+    return RedirectResponse(f"{CLIENT_GRAFANA_PREFIX}/", status_code=307)
+
+
+@router.api_route("/admin-grafana", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+async def admin_grafana_root() -> RedirectResponse:
+    return RedirectResponse(f"{ADMIN_GRAFANA_PREFIX}/", status_code=307)
 
 
 @router.api_route("/public/{path:path}", methods=["GET"])
@@ -51,13 +95,12 @@ async def grafana_public_asset_proxy(
     request: Request,
     path: str,
     compliance_ai_session: str | None = Cookie(default=None),
-    kubeowl_admin_grafana: str | None = Cookie(default=None),
 ) -> Response:
     return await _proxy_grafana_path(
         request=request,
         path=f"public/{path}",
+        context=CLIENT_GRAFANA_CONTEXT,
         compliance_ai_session=compliance_ai_session,
-        kubeowl_admin_grafana=kubeowl_admin_grafana,
     )
 
 
@@ -169,18 +212,18 @@ async def grafana_public_asset_proxy(
 async def grafana_root_api_proxy(
     request: Request,
     compliance_ai_session: str | None = Cookie(default=None),
-    kubeowl_admin_grafana: str | None = Cookie(default=None),
 ) -> Response:
     return await _proxy_grafana_path(
         request=request,
         path=request.url.path.lstrip("/"),
+        context=CLIENT_GRAFANA_CONTEXT,
         compliance_ai_session=compliance_ai_session,
-        kubeowl_admin_grafana=kubeowl_admin_grafana,
     )
 
 
 @router.websocket("/api/live/ws")
 @router.websocket("/grafana-ui/api/live/ws")
+@router.websocket("/admin-grafana/api/live/ws")
 async def grafana_live_websocket_disabled(websocket: WebSocket) -> None:
     await websocket.accept()
     await websocket.close(code=1000)
@@ -191,12 +234,25 @@ async def grafana_ui_proxy(
     request: Request,
     path: str,
     compliance_ai_session: str | None = Cookie(default=None),
+) -> Response:
+    return await _proxy_grafana_path(
+        request=request,
+        path=path,
+        context=CLIENT_GRAFANA_CONTEXT,
+        compliance_ai_session=compliance_ai_session,
+    )
+
+
+@router.api_route("/admin-grafana/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+async def admin_grafana_proxy(
+    request: Request,
+    path: str,
     kubeowl_admin_grafana: str | None = Cookie(default=None),
 ) -> Response:
     return await _proxy_grafana_path(
         request=request,
         path=path,
-        compliance_ai_session=compliance_ai_session,
+        context=ADMIN_GRAFANA_CONTEXT,
         kubeowl_admin_grafana=kubeowl_admin_grafana,
     )
 
@@ -204,15 +260,18 @@ async def grafana_ui_proxy(
 async def _proxy_grafana_path(
     request: Request,
     path: str,
-    compliance_ai_session: str | None,
-    kubeowl_admin_grafana: str | None,
+    context: GrafanaProxyContext,
+    compliance_ai_session: str | None = None,
+    kubeowl_admin_grafana: str | None = None,
 ) -> Response:
     if path.startswith("public/") or path == "public":
         user = {}
-    else:
+    elif context.admin:
         user = admin_user_from_token(kubeowl_admin_grafana)
         if user is None:
-            user = storage.get_user_by_session(compliance_ai_session or "")
+            return JSONResponse(status_code=401, content={"error": "admin grafana token required"})
+    else:
+        user = storage.get_user_by_session(compliance_ai_session or "")
         if user is None:
             return JSONResponse(status_code=401, content={"error": "login required"})
 
@@ -225,6 +284,7 @@ async def _proxy_grafana_path(
             request,
             upstream_path=upstream_path,
             user=user,
+            context=context,
         )
     except httpx.HTTPError as error:
         return JSONResponse(status_code=502, content={"error": f"Grafana request failed: {error}"})
@@ -236,8 +296,8 @@ async def _proxy_grafana_path(
     ):
         return JSONResponse(content=_empty_grafana_user_storage(path))
 
-    content = _response_content(response)
-    headers = _response_headers(response)
+    content = _response_content(response, context)
+    headers = _response_headers(response, context)
     return Response(
         content=content,
         status_code=response.status_code,
@@ -246,10 +306,15 @@ async def _proxy_grafana_path(
     )
 
 
-async def _forward_grafana_request(request: Request, upstream_path: str, user: dict[str, Any]) -> httpx.Response:
+async def _forward_grafana_request(
+    request: Request,
+    upstream_path: str,
+    user: dict[str, Any],
+    context: GrafanaProxyContext = CLIENT_GRAFANA_CONTEXT,
+) -> httpx.Response:
     body = await request.body()
-    headers = _request_headers(request, user)
-    async with httpx.AsyncClient(base_url=GRAFANA_URL, timeout=30, follow_redirects=False) as client:
+    headers = _request_headers(request, user, context)
+    async with httpx.AsyncClient(base_url=context.upstream_url, timeout=30, follow_redirects=False) as client:
         last_error: httpx.HTTPError | None = None
         for attempt in range(3):
             try:
@@ -272,32 +337,27 @@ async def _forward_grafana_request(request: Request, upstream_path: str, user: d
     raise httpx.HTTPError("Grafana request failed without a response")
 
 
-def _request_headers(request: Request, user: dict[str, Any]) -> dict[str, str]:
+def _request_headers(
+    request: Request,
+    user: dict[str, Any],
+    context: GrafanaProxyContext = CLIENT_GRAFANA_CONTEXT,
+) -> dict[str, str]:
     email = _ascii_header_value(user.get("email") or user.get("id") or "")
     name = _ascii_header_value(user.get("name") or user.get("email") or "") or email
     headers: dict[str, str] = {
         "X-Forwarded-Host": _ascii_header_value(request.headers.get("host", "")),
         "X-Forwarded-Proto": _ascii_header_value(request.url.scheme),
-        "X-Forwarded-Prefix": "/grafana-ui",
+        "X-Forwarded-Prefix": context.public_prefix,
     }
     if email:
-        headers["X-WEBAUTH-USER"] = email
-        headers["X-WEBAUTH-EMAIL"] = email
-        headers["X-WEBAUTH-NAME"] = name
+        headers[context.user_header] = email
+        headers[context.email_header] = email
+        headers[context.name_header] = name
     for key in ("accept", "content-type", "user-agent"):
         value = request.headers.get(key)
         if value:
             headers[key] = _ascii_header_value(value)
-    cookie = _request_cookie_header(request, user)
-    if cookie:
-        headers["cookie"] = cookie
     return headers
-
-
-def _request_cookie_header(request: Request, user: dict[str, Any]) -> str:
-    if user.get("provider") == "admin":
-        return ""
-    return _ascii_header_value(request.headers.get("cookie", ""))
 
 
 def _upstream_path(path: str, query: str) -> str:
@@ -355,20 +415,26 @@ def _ascii_header_value(value: Any) -> str:
     return normalized.encode("ascii", "ignore").decode("ascii").strip()
 
 
-def _response_headers(response: httpx.Response) -> dict[str, str]:
+def _response_headers(
+    response: httpx.Response,
+    context: GrafanaProxyContext = CLIENT_GRAFANA_CONTEXT,
+) -> dict[str, str]:
     headers: dict[str, str] = {}
     for key, value in response.headers.items():
         lower = key.lower()
-        if lower in {"content-length", "content-encoding", "transfer-encoding", "connection"}:
+        if lower in {"content-length", "content-encoding", "transfer-encoding", "connection", "set-cookie"}:
             continue
         if lower == "location":
-            headers[key] = _rewrite_location(value)
+            headers[key] = _rewrite_location(value, context)
         else:
             headers[key] = value
     return headers
 
 
-def _response_content(response: httpx.Response) -> bytes:
+def _response_content(
+    response: httpx.Response,
+    context: GrafanaProxyContext = CLIENT_GRAFANA_CONTEXT,
+) -> bytes:
     content_type = response.headers.get("content-type", "")
     lower_content_type = content_type.lower()
     if not any(
@@ -381,49 +447,52 @@ def _response_content(response: httpx.Response) -> bytes:
     except UnicodeDecodeError:
         return response.content
     if "text/html" in lower_content_type:
-        text = _rewrite_html(text)
+        text = _rewrite_html(text, context.public_prefix)
     else:
-        text = _rewrite_asset_text(text)
+        text = _rewrite_asset_text(text, context.public_prefix)
     return text.encode(response.encoding or "utf-8")
 
 
-def _rewrite_html(html: str) -> str:
+def _rewrite_html(html: str, public_prefix: str = CLIENT_GRAFANA_PREFIX) -> str:
     replacements = {
-        '<base href="/">': '<base href="/grafana-ui/">',
-        '<base href="/grafana-ui//">': '<base href="/grafana-ui/">',
-        'src="/public/': 'src="/grafana-ui/public/',
-        'href="/public/': 'href="/grafana-ui/public/',
-        'content="/public/': 'content="/grafana-ui/public/',
-        'url(/public/': 'url(/grafana-ui/public/',
-        'src="public/': 'src="/grafana-ui/public/',
-        'href="public/': 'href="/grafana-ui/public/',
-        '"appSubUrl":""': '"appSubUrl":"/grafana-ui"',
-        '"appSubUrl":"/"': '"appSubUrl":"/grafana-ui"',
+        '<base href="/">': f'<base href="{public_prefix}/">',
+        f'<base href="{public_prefix}//">': f'<base href="{public_prefix}/">',
+        'src="/public/': f'src="{public_prefix}/public/',
+        'href="/public/': f'href="{public_prefix}/public/',
+        'content="/public/': f'content="{public_prefix}/public/',
+        'url(/public/': f'url({public_prefix}/public/',
+        'src="public/': f'src="{public_prefix}/public/',
+        'href="public/': f'href="{public_prefix}/public/',
+        '"appSubUrl":""': f'"appSubUrl":"{public_prefix}"',
+        '"appSubUrl":"/"': f'"appSubUrl":"{public_prefix}"',
     }
     rewritten = html
     for old, new in replacements.items():
         rewritten = rewritten.replace(old, new)
-    return _rewrite_asset_text(rewritten)
+    return _rewrite_asset_text(rewritten, public_prefix)
 
 
-def _rewrite_asset_text(text: str) -> str:
-    rewritten = GRAFANA_PUBLIC_PATH_RE.sub(r"/grafana-ui/public/\1/", text)
-    rewritten = GRAFANA_RELATIVE_PUBLIC_PATH_RE.sub(r"\g<prefix>/grafana-ui/public/\2/", rewritten)
+def _rewrite_asset_text(text: str, public_prefix: str = CLIENT_GRAFANA_PREFIX) -> str:
+    rewritten = GRAFANA_PUBLIC_PATH_RE.sub(rf"{public_prefix}/public/\1/", text)
+    rewritten = GRAFANA_RELATIVE_PUBLIC_PATH_RE.sub(rf"\g<prefix>{public_prefix}/public/\2/", rewritten)
     rewritten = rewritten.replace('"liveEnabled":true', '"liveEnabled":false')
     rewritten = rewritten.replace('"liveEnabled": true', '"liveEnabled": false')
     rewritten = rewritten.replace("liveEnabled:true", "liveEnabled:false")
     for asset_dir in GRAFANA_PUBLIC_DIRS:
         rewritten = rewritten.replace(
             f"\\/public\\/{asset_dir}\\/",
-            f"\\/grafana-ui\\/public\\/{asset_dir}\\/",
+            f"\\/{public_prefix.strip('/')}\\/public\\/{asset_dir}\\/",
         )
     return rewritten
 
 
-def _rewrite_location(value: str) -> str:
+def _rewrite_location(
+    value: str,
+    context: GrafanaProxyContext = CLIENT_GRAFANA_CONTEXT,
+) -> str:
     rewritten = value
-    if value.startswith(GRAFANA_URL):
-        rewritten = value.replace(GRAFANA_URL, "", 1) or "/"
-    if rewritten.startswith("/") and not rewritten.startswith("/grafana-ui"):
-        return f"/grafana-ui{rewritten}"
+    if value.startswith(context.upstream_url):
+        rewritten = value.replace(context.upstream_url, "", 1) or "/"
+    if rewritten.startswith("/") and not rewritten.startswith(context.public_prefix):
+        return f"{context.public_prefix}{rewritten}"
     return rewritten

@@ -1078,11 +1078,11 @@ def _grafana_dashboard_url(dashboard_url: str, org_id: int | str | None) -> str:
 
 def _admin_grafana_url() -> str:
     configured = os.getenv("ADMIN_GRAFANA_PATH", "").strip()
-    normalized = configured or "/grafana-ui/dashboards"
+    normalized = configured or "/admin-grafana/dashboards"
     if not normalized.startswith("/"):
         normalized = f"/{normalized}"
-    if not normalized.startswith("/grafana-ui/"):
-        normalized = f"/grafana-ui{normalized}"
+    if not normalized.startswith("/admin-grafana/"):
+        normalized = f"/admin-grafana{normalized}"
     org_id = os.getenv("GRAFANA_MASTER_ORG_ID", "1").strip() or "1"
     parts = urlsplit(normalized)
     query = [(key, value) for key, value in parse_qsl(parts.query, keep_blank_values=True) if key != "orgId"]
@@ -1100,19 +1100,33 @@ def _admin_grafana_links(org_id: str) -> list[dict[str, str]]:
         {
             "label": "Gatekeeper Compliance",
             "description": "관리자 클러스터에서 수집한 정책 위반, 감사 지연, AI 분류 지표를 봅니다.",
-            "url": _grafana_dashboard_url("/d/compliance-overview/gatekeeper-compliance-overview", org_id),
+            "url": _admin_grafana_dashboard_url("/d/compliance-overview/gatekeeper-compliance-overview", org_id),
         },
         {
             "label": "Runtime Detection",
             "description": "Falco/Sidekick 런타임 이벤트, 웹훅 보안, 클러스터별 이벤트 폭주를 봅니다.",
-            "url": _grafana_dashboard_url("/d/compliance-runtime-detection/runtime-detection", org_id),
+            "url": _admin_grafana_dashboard_url("/d/compliance-runtime-detection/runtime-detection", org_id),
         },
         {
             "label": "Platform Admin Errors",
             "description": "관리자 전용 플랫폼 오류, CrashLoopBackOff, Gatekeeper/Falco 상태를 봅니다.",
-            "url": _grafana_dashboard_url("/d/platform-admin-errors/kubeowl-platform-admin-errors", org_id),
+            "url": _admin_grafana_dashboard_url("/d/platform-admin-errors/kubeowl-platform-admin-errors", org_id),
         },
     ]
+
+
+def _admin_grafana_dashboard_url(dashboard_url: str, org_id: int | str | None) -> str:
+    normalized = str(dashboard_url or "").strip() or "/dashboards"
+    if not normalized.startswith("/"):
+        normalized = f"/{normalized}"
+    if not normalized.startswith("/admin-grafana/"):
+        normalized = f"/admin-grafana{normalized}"
+    if not org_id:
+        return normalized
+    parts = urlsplit(normalized)
+    query = [(key, value) for key, value in parse_qsl(parts.query, keep_blank_values=True) if key != "orgId"]
+    query.append(("orgId", str(org_id)))
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 
 def _metric_labels(row: dict, keys: tuple[str, ...]) -> str:
@@ -1365,7 +1379,7 @@ def admin_grafana_url(request: Request, x_admin_token: str | None = Header(defau
         httponly=True,
         secure=session_cookie_secure(request),
         samesite="lax",
-        path="/grafana-ui",
+        path="/admin-grafana",
     )
     record_audit_action(
         request,

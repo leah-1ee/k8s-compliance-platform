@@ -35,15 +35,21 @@ spec:
             - name: GF_AUTH_PROXY_ENABLED
               value: "true"
             - name: GF_AUTH_PROXY_HEADER_NAME
-              value: X-WEBAUTH-USER
+              value: X-KUBEOWL-CLIENT-USER
             - name: GF_AUTH_PROXY_HEADER_PROPERTY
               value: email
             - name: GF_AUTH_PROXY_AUTO_SIGN_UP
               value: "true"
+            - name: GF_AUTH_PROXY_ENABLE_LOGIN_TOKEN
+              value: "false"
+            - name: GF_AUTH_PROXY_SYNC_TTL
+              value: "1"
             - name: GF_AUTH_PROXY_HEADERS
-              value: Email:X-WEBAUTH-EMAIL Name:X-WEBAUTH-NAME
+              value: Email:X-KUBEOWL-CLIENT-EMAIL Name:X-KUBEOWL-CLIENT-NAME
             - name: GF_AUTH_DISABLE_LOGIN_FORM
               value: "true"
+            - name: GF_AUTH_LOGIN_COOKIE_NAME
+              value: kubeowl_client_grafana_session
             - name: GF_AUTH_ANONYMOUS_ENABLED
               value: "false"
             - name: GF_USERS_AUTO_ASSIGN_ORG_ROLE

@@ -273,6 +273,27 @@ def test_grafana_ui_proxy_requires_login():
     assert response.json()["error"] == "login required"
 
 
+def test_client_grafana_proxy_ignores_admin_cookie(monkeypatch):
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", "false")
+    admin_cookie = client.get(
+        "/admin/api/grafana/url",
+        headers={"X-Admin-Token": "test-admin-token"},
+    ).cookies.get("kubeowl_admin_grafana")
+
+    response = client.get("/grafana-ui/", cookies={"kubeowl_admin_grafana": admin_cookie})
+
+    assert response.status_code == 401
+    assert response.json()["error"] == "login required"
+
+
+def test_admin_grafana_proxy_requires_admin_cookie():
+    client.cookies.clear()
+    response = client.get("/admin-grafana/")
+
+    assert response.status_code == 401
+    assert response.json()["error"] == "admin grafana token required"
+
+
 def test_favicon_is_served_from_kubeowl_logo():
     response = client.get("/favicon.ico")
 
@@ -291,7 +312,7 @@ def test_grafana_ui_proxy_injects_auth_proxy_headers(monkeypatch):
     session = storage.create_session(user["id"])
     captured = {}
 
-    async def fake_forward(request, upstream_path, user):
+    async def fake_forward(request, upstream_path, user, context=ui_proxy.CLIENT_GRAFANA_CONTEXT):
         headers = ui_proxy._request_headers(request, user)
         captured["upstream_path"] = upstream_path
         captured["headers"] = headers
@@ -311,9 +332,9 @@ def test_grafana_ui_proxy_injects_auth_proxy_headers(monkeypatch):
     assert response.status_code == 200
     assert response.text == "grafana ok"
     assert captured["upstream_path"] == "/d/kubeowl-observability/kubeowl-observability"
-    assert captured["headers"]["X-WEBAUTH-USER"] == "grafana-ui-proxy@example.test"
-    assert captured["headers"]["X-WEBAUTH-EMAIL"] == "grafana-ui-proxy@example.test"
-    assert captured["headers"]["X-WEBAUTH-NAME"] == "Grafana Viewer"
+    assert captured["headers"]["X-KUBEOWL-CLIENT-USER"] == "grafana-ui-proxy@example.test"
+    assert captured["headers"]["X-KUBEOWL-CLIENT-EMAIL"] == "grafana-ui-proxy@example.test"
+    assert captured["headers"]["X-KUBEOWL-CLIENT-NAME"] == "Grafana Viewer"
 
 
 def test_grafana_ui_proxy_strips_subpath_for_static_assets(monkeypatch):
@@ -325,7 +346,7 @@ def test_grafana_ui_proxy_strips_subpath_for_static_assets(monkeypatch):
     session = storage.create_session(user["id"])
     captured = {}
 
-    async def fake_forward(request, upstream_path, user):
+    async def fake_forward(request, upstream_path, user, context=ui_proxy.CLIENT_GRAFANA_CONTEXT):
         captured["upstream_path"] = upstream_path
         return httpx.Response(
             200,
@@ -352,7 +373,7 @@ def test_grafana_ui_proxy_rewrites_html_asset_paths(monkeypatch):
     )
     session = storage.create_session(user["id"])
 
-    async def fake_forward(request, upstream_path, user):
+    async def fake_forward(request, upstream_path, user, context=ui_proxy.CLIENT_GRAFANA_CONTEXT):
         return httpx.Response(
             200,
             text=(
@@ -387,7 +408,7 @@ def test_grafana_ui_proxy_rewrites_javascript_chunk_paths(monkeypatch):
     )
     session = storage.create_session(user["id"])
 
-    async def fake_forward(request, upstream_path, user):
+    async def fake_forward(request, upstream_path, user, context=ui_proxy.CLIENT_GRAFANA_CONTEXT):
         return httpx.Response(
             200,
             text='__webpack_require__.p="/public/build/";import("/public/build/7651.js")',
@@ -415,7 +436,7 @@ def test_grafana_ui_proxy_disables_grafana_live_in_rewritten_settings(monkeypatc
     )
     session = storage.create_session(user["id"])
 
-    async def fake_forward(request, upstream_path, user):
+    async def fake_forward(request, upstream_path, user, context=ui_proxy.CLIENT_GRAFANA_CONTEXT):
         return httpx.Response(
             200,
             text='{"appSubUrl":"","liveEnabled":true,"assets":"/public/build/runtime.js"}',
@@ -443,7 +464,7 @@ def test_grafana_ui_proxy_serves_root_public_lazy_chunks(monkeypatch):
     session = storage.create_session(user["id"])
     captured = {}
 
-    async def fake_forward(request, upstream_path, user):
+    async def fake_forward(request, upstream_path, user, context=ui_proxy.CLIENT_GRAFANA_CONTEXT):
         captured["upstream_path"] = upstream_path
         return httpx.Response(
             200,
@@ -466,7 +487,7 @@ def test_grafana_ui_proxy_serves_root_public_lazy_chunks(monkeypatch):
 def test_grafana_ui_proxy_serves_public_assets_without_auth_headers(monkeypatch):
     captured = {}
 
-    async def fake_forward(request, upstream_path, user):
+    async def fake_forward(request, upstream_path, user, context=ui_proxy.CLIENT_GRAFANA_CONTEXT):
         headers = ui_proxy._request_headers(request, user)
         captured["upstream_path"] = upstream_path
         captured["headers"] = headers
@@ -483,9 +504,9 @@ def test_grafana_ui_proxy_serves_public_assets_without_auth_headers(monkeypatch)
     assert response.status_code == 200
     assert response.text == "asset ok"
     assert captured["upstream_path"] == "/public/build/public-assets.js"
-    assert "X-WEBAUTH-USER" not in captured["headers"]
-    assert "X-WEBAUTH-EMAIL" not in captured["headers"]
-    assert "X-WEBAUTH-NAME" not in captured["headers"]
+    assert "X-KUBEOWL-CLIENT-USER" not in captured["headers"]
+    assert "X-KUBEOWL-CLIENT-EMAIL" not in captured["headers"]
+    assert "X-KUBEOWL-CLIENT-NAME" not in captured["headers"]
     assert "content-encoding" not in response.headers
 
 
@@ -498,7 +519,7 @@ def test_grafana_ui_proxy_serves_root_grafana_api_paths(monkeypatch):
     session = storage.create_session(user["id"])
     captured = []
 
-    async def fake_forward(request, upstream_path, user):
+    async def fake_forward(request, upstream_path, user, context=ui_proxy.CLIENT_GRAFANA_CONTEXT):
         captured.append(upstream_path)
         return httpx.Response(200, json={"ok": True})
 
@@ -568,7 +589,7 @@ def test_grafana_ui_proxy_suppresses_live_http_without_touching_data_queries(mon
     session = storage.create_session(user["id"])
     captured = []
 
-    async def fake_forward(request, upstream_path, user):
+    async def fake_forward(request, upstream_path, user, context=ui_proxy.CLIENT_GRAFANA_CONTEXT):
         captured.append(upstream_path)
         return httpx.Response(200, json={"ok": True})
 
@@ -656,7 +677,7 @@ def test_grafana_ui_proxy_suppresses_missing_splash_user_storage(monkeypatch):
     session = storage.create_session(user["id"])
     captured = []
 
-    async def fake_forward(request, upstream_path, user):
+    async def fake_forward(request, upstream_path, user, context=ui_proxy.CLIENT_GRAFANA_CONTEXT):
         captured.append(upstream_path)
         return httpx.Response(404, json={"message": "not found"})
 
@@ -701,7 +722,7 @@ def test_grafana_ui_proxy_headers_are_ascii_safe_for_non_ascii_names(monkeypatch
     session = storage.create_session(user["id"])
     captured = {}
 
-    async def fake_forward(request, upstream_path, user):
+    async def fake_forward(request, upstream_path, user, context=ui_proxy.CLIENT_GRAFANA_CONTEXT):
         headers = ui_proxy._request_headers(request, user)
         captured["headers"] = headers
         return httpx.Response(200, text="grafana ok")
@@ -714,8 +735,8 @@ def test_grafana_ui_proxy_headers_are_ascii_safe_for_non_ascii_names(monkeypatch
     )
 
     assert response.status_code == 200
-    assert captured["headers"]["X-WEBAUTH-USER"] == "grafana-ui-korean@example.test"
-    assert captured["headers"]["X-WEBAUTH-NAME"] == "grafana-ui-korean@example.test"
+    assert captured["headers"]["X-KUBEOWL-CLIENT-USER"] == "grafana-ui-korean@example.test"
+    assert captured["headers"]["X-KUBEOWL-CLIENT-NAME"] == "grafana-ui-korean@example.test"
     for value in captured["headers"].values():
         value.encode("ascii")
 
@@ -733,37 +754,37 @@ def test_admin_grafana_url_sets_admin_proxy_cookie(monkeypatch):
     admin_cookie = url_response.cookies.get("kubeowl_admin_grafana")
 
     assert url_response.status_code == 200
-    assert url_body["grafana"]["url"] == "/grafana-ui/dashboards?orgId=1"
+    assert url_body["grafana"]["url"] == "/admin-grafana/dashboards?orgId=1"
     assert url_body["grafana"]["mode"] == "admin"
     assert url_body["grafana"]["scope"] == "admin-cluster"
     assert url_body["grafana"]["links"] == [
         {
             "label": "전체 Grafana",
             "description": "관리자 org의 모든 대시보드와 데이터소스를 확인합니다.",
-            "url": "/grafana-ui/dashboards?orgId=1",
+            "url": "/admin-grafana/dashboards?orgId=1",
         },
         {
             "label": "Gatekeeper Compliance",
             "description": "관리자 클러스터에서 수집한 정책 위반, 감사 지연, AI 분류 지표를 봅니다.",
-            "url": "/grafana-ui/d/compliance-overview/gatekeeper-compliance-overview?orgId=1",
+            "url": "/admin-grafana/d/compliance-overview/gatekeeper-compliance-overview?orgId=1",
         },
         {
             "label": "Runtime Detection",
             "description": "Falco/Sidekick 런타임 이벤트, 웹훅 보안, 클러스터별 이벤트 폭주를 봅니다.",
-            "url": "/grafana-ui/d/compliance-runtime-detection/runtime-detection?orgId=1",
+            "url": "/admin-grafana/d/compliance-runtime-detection/runtime-detection?orgId=1",
         },
         {
             "label": "Platform Admin Errors",
             "description": "관리자 전용 플랫폼 오류, CrashLoopBackOff, Gatekeeper/Falco 상태를 봅니다.",
-            "url": "/grafana-ui/d/platform-admin-errors/kubeowl-platform-admin-errors?orgId=1",
+            "url": "/admin-grafana/d/platform-admin-errors/kubeowl-platform-admin-errors?orgId=1",
         },
     ]
     assert admin_cookie
 
     captured = {}
 
-    async def fake_forward(request, upstream_path, user):
-        headers = ui_proxy._request_headers(request, user)
+    async def fake_forward(request, upstream_path, user, context=ui_proxy.CLIENT_GRAFANA_CONTEXT):
+        headers = ui_proxy._request_headers(request, user, context)
         captured["upstream_path"] = upstream_path
         captured["headers"] = headers
         return httpx.Response(200, text="admin grafana ok")
@@ -771,19 +792,19 @@ def test_admin_grafana_url_sets_admin_proxy_cookie(monkeypatch):
     monkeypatch.setattr(ui_proxy, "_forward_grafana_request", fake_forward)
 
     grafana_response = client.get(
-        "/grafana-ui/dashboards?orgId=1",
+        "/admin-grafana/dashboards?orgId=1",
         cookies={
             "kubeowl_admin_grafana": admin_cookie,
-            "grafana_session": "client-grafana-session",
+            "kubeowl_client_grafana_session": "client-grafana-session",
         },
     )
 
     assert grafana_response.status_code == 200
     assert grafana_response.text == "admin grafana ok"
     assert captured["upstream_path"] == "/dashboards?orgId=1"
-    assert captured["headers"]["X-WEBAUTH-USER"] == "kubeowl-admin@local"
-    assert captured["headers"]["X-WEBAUTH-EMAIL"] == "kubeowl-admin@local"
-    assert captured["headers"]["X-WEBAUTH-NAME"] == "KubeOwl Admin"
+    assert captured["headers"]["X-KUBEOWL-ADMIN-USER"] == "kubeowl-admin@local"
+    assert captured["headers"]["X-KUBEOWL-ADMIN-EMAIL"] == "kubeowl-admin@local"
+    assert captured["headers"]["X-KUBEOWL-ADMIN-NAME"] == "KubeOwl Admin"
     assert "cookie" not in captured["headers"]
 
 
@@ -826,7 +847,7 @@ def test_dashboard_payload_fetches_master_dashboard_and_rewrites_datasource(monk
     monkeypatch.setenv("GRAFANA_MASTER_DASHBOARD_UID", "admin-master")
     monkeypatch.setenv("GRAFANA_MASTER_ORG_ID", "1")
 
-    dashboards = provisioning._dashboard_payloads(FakeClient(), "user-datasource")
+    dashboards = provisioning._dashboard_payloads(FakeClient(), "user-datasource", master_client=FakeClient())
     dashboard = dashboards[0]
 
     assert requested["path"] == "/api/dashboards/uid/admin-master"
@@ -870,7 +891,7 @@ def test_dashboard_payloads_support_multiple_master_uids(monkeypatch):
     )
     monkeypatch.setenv("GRAFANA_MASTER_ORG_ID", "1")
 
-    dashboards = provisioning._dashboard_payloads(FakeClient(), "user-datasource")
+    dashboards = provisioning._dashboard_payloads(FakeClient(), "user-datasource", master_client=FakeClient())
 
     assert [dashboard["uid"] for dashboard in dashboards] == [
         "compliance-overview",
@@ -898,7 +919,7 @@ def test_dashboard_payloads_can_disable_local_dashboard(monkeypatch):
     monkeypatch.setenv("GRAFANA_MASTER_DASHBOARD_UIDS", "compliance-overview")
     monkeypatch.setenv("GRAFANA_INCLUDE_LOCAL_DASHBOARD", "false")
 
-    dashboards = provisioning._dashboard_payloads(FakeClient(), "user-datasource")
+    dashboards = provisioning._dashboard_payloads(FakeClient(), "user-datasource", master_client=FakeClient())
 
     assert [dashboard["uid"] for dashboard in dashboards] == ["compliance-overview"]
 
