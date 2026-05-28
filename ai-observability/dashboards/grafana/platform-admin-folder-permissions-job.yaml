@@ -141,11 +141,13 @@ spec:
               request(
                   "POST",
                   f"/api/folders/{folder_uid}/permissions",
-                  [
-                      {
-                          "role": "Admin",
-                          "permission": 4,
-                      }
-                  ],
+                  {
+                      "items": [
+                          {
+                              "role": "Admin",
+                              "permission": 4,
+                          }
+                      ]
+                  },
               )
               print(f"Applied Admin-only permissions to Grafana folder {folder_uid}")
