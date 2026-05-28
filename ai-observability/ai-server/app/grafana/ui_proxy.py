@@ -265,7 +265,11 @@ async def _proxy_grafana_path(
     kubeowl_admin_grafana: str | None = None,
 ) -> Response:
     if path.startswith("public/") or path == "public":
-        user = {}
+        user = _optional_proxy_user(
+            context=context,
+            compliance_ai_session=compliance_ai_session,
+            kubeowl_admin_grafana=kubeowl_admin_grafana,
+        )
     elif context.admin:
         user = admin_user_from_token(kubeowl_admin_grafana)
         if user is None:
@@ -304,6 +308,16 @@ async def _proxy_grafana_path(
         headers=headers,
         media_type=response.headers.get("content-type"),
     )
+
+
+def _optional_proxy_user(
+    context: GrafanaProxyContext,
+    compliance_ai_session: str | None,
+    kubeowl_admin_grafana: str | None,
+) -> dict[str, Any]:
+    if context.admin:
+        return admin_user_from_token(kubeowl_admin_grafana) or {}
+    return storage.get_user_by_session(compliance_ai_session or "") or {}
 
 
 async def _forward_grafana_request(

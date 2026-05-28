@@ -510,6 +510,37 @@ def test_grafana_ui_proxy_serves_public_assets_without_auth_headers(monkeypatch)
     assert "content-encoding" not in response.headers
 
 
+def test_grafana_ui_public_assets_use_auth_headers_when_session_exists(monkeypatch):
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="grafana-ui-public-auth@example.test",
+        email="grafana-ui-public-auth@example.test",
+        name="Public Asset User",
+    )
+    session = storage.create_session(user["id"])
+    captured = {}
+
+    async def fake_forward(request, upstream_path, user, context=ui_proxy.CLIENT_GRAFANA_CONTEXT):
+        captured["upstream_path"] = upstream_path
+        captured["headers"] = ui_proxy._request_headers(request, user, context)
+        return httpx.Response(
+            200,
+            text="asset ok",
+            headers={"content-type": "application/javascript"},
+        )
+
+    monkeypatch.setattr(ui_proxy, "_forward_grafana_request", fake_forward)
+
+    response = client.get(
+        "/grafana-ui/public/build/runtime.js",
+        cookies={"compliance_ai_session": session},
+    )
+
+    assert response.status_code == 200
+    assert captured["upstream_path"] == "/grafana-ui/public/build/runtime.js"
+    assert captured["headers"]["X-KUBEOWL-CLIENT-USER"] == "grafana-ui-public-auth@example.test"
+
+
 def test_grafana_ui_proxy_serves_root_grafana_api_paths(monkeypatch):
     user = storage.upsert_user(
         provider="dev",
