@@ -65,7 +65,9 @@ grafana:
 
   grafana.ini:
     server:
-      root_url: "%(protocol)s://%(domain)s/admin-grafana/"
+      domain: compliance-ai-console.shares.zrok.io
+      protocol: https
+      root_url: "https://compliance-ai-console.shares.zrok.io/admin-grafana/"
       serve_from_sub_path: true
     auth:
       disable_login_form: true

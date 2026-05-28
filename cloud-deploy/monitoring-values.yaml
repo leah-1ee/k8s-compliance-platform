@@ -71,7 +71,9 @@ grafana:
   # ai-server /grafana-ui 프록시가 전달하는 client 사용자 헤더만 신뢰한다.
   grafana.ini:
     server:
-      root_url: "%(protocol)s://%(domain)s/grafana-ui/"
+      domain: compliance-ai-console.shares.zrok.io
+      protocol: https
+      root_url: "https://compliance-ai-console.shares.zrok.io/grafana-ui/"
       serve_from_sub_path: true
     auth:
       disable_login_form: true
