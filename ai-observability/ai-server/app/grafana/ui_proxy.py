@@ -284,11 +284,20 @@ def _request_headers(request: Request, user: dict[str, Any]) -> dict[str, str]:
         headers["X-WEBAUTH-USER"] = email
         headers["X-WEBAUTH-EMAIL"] = email
         headers["X-WEBAUTH-NAME"] = name
-    for key in ("accept", "content-type", "cookie", "user-agent"):
+    for key in ("accept", "content-type", "user-agent"):
         value = request.headers.get(key)
         if value:
             headers[key] = _ascii_header_value(value)
+    cookie = _request_cookie_header(request, user)
+    if cookie:
+        headers["cookie"] = cookie
     return headers
+
+
+def _request_cookie_header(request: Request, user: dict[str, Any]) -> str:
+    if user.get("provider") == "admin":
+        return ""
+    return _ascii_header_value(request.headers.get("cookie", ""))
 
 
 def _upstream_path(path: str, query: str) -> str:

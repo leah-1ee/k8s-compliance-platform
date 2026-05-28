@@ -772,7 +772,10 @@ def test_admin_grafana_url_sets_admin_proxy_cookie(monkeypatch):
 
     grafana_response = client.get(
         "/grafana-ui/dashboards?orgId=1",
-        cookies={"kubeowl_admin_grafana": admin_cookie},
+        cookies={
+            "kubeowl_admin_grafana": admin_cookie,
+            "grafana_session": "client-grafana-session",
+        },
     )
 
     assert grafana_response.status_code == 200
@@ -781,6 +784,7 @@ def test_admin_grafana_url_sets_admin_proxy_cookie(monkeypatch):
     assert captured["headers"]["X-WEBAUTH-USER"] == "kubeowl-admin@local"
     assert captured["headers"]["X-WEBAUTH-EMAIL"] == "kubeowl-admin@local"
     assert captured["headers"]["X-WEBAUTH-NAME"] == "KubeOwl Admin"
+    assert "cookie" not in captured["headers"]
 
 
 def test_dashboard_payload_fetches_master_dashboard_and_rewrites_datasource(monkeypatch):
