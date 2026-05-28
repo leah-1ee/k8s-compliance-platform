@@ -169,6 +169,14 @@ def public_base_url(request: Request) -> str:
     return str(request.base_url).rstrip("/")
 
 
+def public_origin_url(request: Request) -> str:
+    configured = os.getenv("PUBLIC_BASE_URL", "").strip() or str(request.base_url).rstrip("/")
+    parsed = urlparse(configured)
+    if parsed.scheme and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return str(request.base_url).rstrip("/")
+
+
 def oauth_redirect_uri(request: Request) -> str:
     return f"{public_base_url(request)}/auth/google/callback"
 
@@ -1076,7 +1084,7 @@ def _grafana_dashboard_url(dashboard_url: str, org_id: int | str | None) -> str:
     return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 
-def _admin_grafana_url() -> str:
+def _admin_grafana_url(request: Request | None = None) -> str:
     configured = os.getenv("ADMIN_GRAFANA_PATH", "").strip()
     normalized = configured or "/admin-grafana/dashboards"
     if not normalized.startswith("/"):
@@ -1087,46 +1095,72 @@ def _admin_grafana_url() -> str:
     parts = urlsplit(normalized)
     query = [(key, value) for key, value in parse_qsl(parts.query, keep_blank_values=True) if key != "orgId"]
     query.append(("orgId", org_id))
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+    path = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+    return _public_grafana_url(request, path)
 
 
-def _admin_grafana_links(org_id: str) -> list[dict[str, str]]:
+def _admin_grafana_links(org_id: str, request: Request | None = None) -> list[dict[str, str]]:
     return [
         {
             "label": "전체 Grafana",
             "description": "관리자 org의 모든 대시보드와 데이터소스를 확인합니다.",
-            "url": _admin_grafana_url(),
+            "url": _admin_grafana_url(request),
         },
         {
             "label": "Gatekeeper Compliance",
             "description": "관리자 클러스터에서 수집한 정책 위반, 감사 지연, AI 분류 지표를 봅니다.",
-            "url": _admin_grafana_dashboard_url("/d/compliance-overview/gatekeeper-compliance-overview", org_id),
+            "url": _admin_grafana_dashboard_url(
+                "/d/compliance-overview/gatekeeper-compliance-overview",
+                org_id,
+                request,
+            ),
         },
         {
             "label": "Runtime Detection",
             "description": "Falco/Sidekick 런타임 이벤트, 웹훅 보안, 클러스터별 이벤트 폭주를 봅니다.",
-            "url": _admin_grafana_dashboard_url("/d/compliance-runtime-detection/runtime-detection", org_id),
+            "url": _admin_grafana_dashboard_url(
+                "/d/compliance-runtime-detection/runtime-detection",
+                org_id,
+                request,
+            ),
         },
         {
             "label": "Platform Admin Errors",
             "description": "관리자 전용 플랫폼 오류, CrashLoopBackOff, Gatekeeper/Falco 상태를 봅니다.",
-            "url": _admin_grafana_dashboard_url("/d/platform-admin-errors/kubeowl-platform-admin-errors", org_id),
+            "url": _admin_grafana_dashboard_url(
+                "/d/platform-admin-errors/kubeowl-platform-admin-errors",
+                org_id,
+                request,
+            ),
         },
     ]
 
 
-def _admin_grafana_dashboard_url(dashboard_url: str, org_id: int | str | None) -> str:
+def _admin_grafana_dashboard_url(
+    dashboard_url: str,
+    org_id: int | str | None,
+    request: Request | None = None,
+) -> str:
     normalized = str(dashboard_url or "").strip() or "/dashboards"
     if not normalized.startswith("/"):
         normalized = f"/{normalized}"
     if not normalized.startswith("/admin-grafana/"):
         normalized = f"/admin-grafana{normalized}"
     if not org_id:
-        return normalized
+        return _public_grafana_url(request, normalized)
     parts = urlsplit(normalized)
     query = [(key, value) for key, value in parse_qsl(parts.query, keep_blank_values=True) if key != "orgId"]
     query.append(("orgId", str(org_id)))
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+    path = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+    return _public_grafana_url(request, path)
+
+
+def _public_grafana_url(request: Request | None, path: str) -> str:
+    if path.startswith("http://") or path.startswith("https://"):
+        return path
+    if request is None:
+        return path
+    return f"{public_origin_url(request)}{path}"
 
 
 def _metric_labels(row: dict, keys: tuple[str, ...]) -> str:
@@ -1364,11 +1398,11 @@ def admin_grafana_url(request: Request, x_admin_token: str | None = Header(defau
     response = JSONResponse(
         content={
             "grafana": {
-                "url": _admin_grafana_url(),
+                "url": _admin_grafana_url(request),
                 "org_id": org_id,
                 "mode": "admin",
                 "scope": "admin-cluster",
-                "links": _admin_grafana_links(org_id),
+                "links": _admin_grafana_links(org_id, request),
             }
         }
     )

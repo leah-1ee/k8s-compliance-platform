@@ -754,29 +754,29 @@ def test_admin_grafana_url_sets_admin_proxy_cookie(monkeypatch):
     admin_cookie = url_response.cookies.get("kubeowl_admin_grafana")
 
     assert url_response.status_code == 200
-    assert url_body["grafana"]["url"] == "/admin-grafana/dashboards?orgId=1"
+    assert url_body["grafana"]["url"] == "https://console.example.test/admin-grafana/dashboards?orgId=1"
     assert url_body["grafana"]["mode"] == "admin"
     assert url_body["grafana"]["scope"] == "admin-cluster"
     assert url_body["grafana"]["links"] == [
         {
             "label": "전체 Grafana",
             "description": "관리자 org의 모든 대시보드와 데이터소스를 확인합니다.",
-            "url": "/admin-grafana/dashboards?orgId=1",
+            "url": "https://console.example.test/admin-grafana/dashboards?orgId=1",
         },
         {
             "label": "Gatekeeper Compliance",
             "description": "관리자 클러스터에서 수집한 정책 위반, 감사 지연, AI 분류 지표를 봅니다.",
-            "url": "/admin-grafana/d/compliance-overview/gatekeeper-compliance-overview?orgId=1",
+            "url": "https://console.example.test/admin-grafana/d/compliance-overview/gatekeeper-compliance-overview?orgId=1",
         },
         {
             "label": "Runtime Detection",
             "description": "Falco/Sidekick 런타임 이벤트, 웹훅 보안, 클러스터별 이벤트 폭주를 봅니다.",
-            "url": "/admin-grafana/d/compliance-runtime-detection/runtime-detection?orgId=1",
+            "url": "https://console.example.test/admin-grafana/d/compliance-runtime-detection/runtime-detection?orgId=1",
         },
         {
             "label": "Platform Admin Errors",
             "description": "관리자 전용 플랫폼 오류, CrashLoopBackOff, Gatekeeper/Falco 상태를 봅니다.",
-            "url": "/admin-grafana/d/platform-admin-errors/kubeowl-platform-admin-errors?orgId=1",
+            "url": "https://console.example.test/admin-grafana/d/platform-admin-errors/kubeowl-platform-admin-errors?orgId=1",
         },
     ]
     assert admin_cookie
