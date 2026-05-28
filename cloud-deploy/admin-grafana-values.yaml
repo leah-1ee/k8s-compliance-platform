@@ -17,7 +17,7 @@ prometheusOperator:
 kube-state-metrics:
   enabled: false
 
-nodeExporter:
+prometheus-node-exporter:
   enabled: false
 
 kubeApiServer:
