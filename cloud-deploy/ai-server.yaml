@@ -102,6 +102,8 @@ spec:
               value: "https://compliance-ai-console.shares.zrok.io"
             - name: GRAFANA_URL_INTERNAL
               value: "http://monitoring-grafana.monitoring.svc.cluster.local:80"
+            - name: GRAFANA_MASTER_DASHBOARD_UIDS
+              value: "compliance-overview,compliance-runtime-detection,platform-admin-errors"
             - name: PROMETHEUS_URL
               value: "http://monitoring-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090"
             - name: AI_SERVER_PROXY_BASE_URL
