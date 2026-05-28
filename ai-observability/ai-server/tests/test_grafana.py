@@ -215,7 +215,7 @@ def test_cluster_grafana_provision_endpoint_calls_provisioner(monkeypatch):
             "org_id": 42,
             "org_name": f"org-{user_id}",
             "datasource_uid": "kubeowl-prom-test",
-            "dashboard_url": "/d/kubeowl-observability/kubeowl-observability",
+            "dashboard_url": "/grafana-ui/d/kubeowl-observability/kubeowl-observability",
         }
 
     monkeypatch.setenv("GRAFANA_PUBLIC_URL", "http://grafana.example.test")
@@ -331,7 +331,7 @@ def test_grafana_ui_proxy_injects_auth_proxy_headers(monkeypatch):
 
     assert response.status_code == 200
     assert response.text == "grafana ok"
-    assert captured["upstream_path"] == "/d/kubeowl-observability/kubeowl-observability"
+    assert captured["upstream_path"] == "/grafana-ui/d/kubeowl-observability/kubeowl-observability"
     assert captured["headers"]["X-KUBEOWL-CLIENT-USER"] == "grafana-ui-proxy@example.test"
     assert captured["headers"]["X-KUBEOWL-CLIENT-EMAIL"] == "grafana-ui-proxy@example.test"
     assert captured["headers"]["X-KUBEOWL-CLIENT-NAME"] == "Grafana Viewer"
@@ -362,7 +362,7 @@ def test_grafana_ui_proxy_strips_subpath_for_static_assets(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert captured["upstream_path"] == "/public/build/statPanel.3fd0656497f2451671cd.js"
+    assert captured["upstream_path"] == "/grafana-ui/public/build/statPanel.3fd0656497f2451671cd.js"
 
 
 def test_grafana_ui_proxy_rewrites_html_asset_paths(monkeypatch):
@@ -475,13 +475,13 @@ def test_grafana_ui_proxy_serves_root_public_lazy_chunks(monkeypatch):
     monkeypatch.setattr(ui_proxy, "_forward_grafana_request", fake_forward)
 
     response = client.get(
-        "/public/build/7651.06c4a6f267dfa91784a2.js",
+        "/grafana-ui/public/build/7651.06c4a6f267dfa91784a2.js",
         cookies={"compliance_ai_session": session},
     )
 
     assert response.status_code == 200
     assert response.text == "chunk ok"
-    assert captured["upstream_path"] == "/public/build/7651.06c4a6f267dfa91784a2.js"
+    assert captured["upstream_path"] == "/grafana-ui/public/build/7651.06c4a6f267dfa91784a2.js"
 
 
 def test_grafana_ui_proxy_serves_public_assets_without_auth_headers(monkeypatch):
@@ -499,11 +499,11 @@ def test_grafana_ui_proxy_serves_public_assets_without_auth_headers(monkeypatch)
 
     monkeypatch.setattr(ui_proxy, "_forward_grafana_request", fake_forward)
 
-    response = client.get("/public/build/public-assets.js")
+    response = client.get("/grafana-ui/public/build/public-assets.js")
 
     assert response.status_code == 200
     assert response.text == "asset ok"
-    assert captured["upstream_path"] == "/public/build/public-assets.js"
+    assert captured["upstream_path"] == "/grafana-ui/public/build/public-assets.js"
     assert "X-KUBEOWL-CLIENT-USER" not in captured["headers"]
     assert "X-KUBEOWL-CLIENT-EMAIL" not in captured["headers"]
     assert "X-KUBEOWL-CLIENT-NAME" not in captured["headers"]
@@ -526,57 +526,57 @@ def test_grafana_ui_proxy_serves_root_grafana_api_paths(monkeypatch):
     monkeypatch.setattr(ui_proxy, "_forward_grafana_request", fake_forward)
 
     for path in (
-        "/api/access-control/user/permissions",
-        "/api/datasources/uid/kubeowl-prom-test",
-        "/api/frontend/settings",
-        "/api/login/ping",
-        "/api/library-elements?perPage=100",
-        "/api/org",
-        "/api/org/preferences",
-        "/api/plugins/grafana-lokiexplore-app/settings",
-        "/api/user/orgs",
-        "/api/search?type=dash-db",
-        "/api/search/sorting",
-        "/api/folders",
-        "/api/folders/uid/general",
-        "/api/dashboards/uid/compliance-overview",
-        "/api/browse/dashboards?sort=alpha-asc",
-        "/api/ds/query?ds_type=prometheus",
-        "/api/prometheus/grafana/api/v1/rules?dashboard_uid=compliance-overview",
-        "/api/query-history",
-        "/api/ruler/grafana/api/v1/rules",
-        "/apis/dashboard.grafana.app/v1beta1/namespaces/default/dashboards",
-        "/avatar/78d07744450b61186736ffc6f97b1082",
+        "/grafana-ui/api/access-control/user/permissions",
+        "/grafana-ui/api/datasources/uid/kubeowl-prom-test",
+        "/grafana-ui/api/frontend/settings",
+        "/grafana-ui/api/login/ping",
+        "/grafana-ui/api/library-elements?perPage=100",
+        "/grafana-ui/api/org",
+        "/grafana-ui/api/org/preferences",
+        "/grafana-ui/api/plugins/grafana-lokiexplore-app/settings",
+        "/grafana-ui/api/user/orgs",
+        "/grafana-ui/api/search?type=dash-db",
+        "/grafana-ui/api/search/sorting",
+        "/grafana-ui/api/folders",
+        "/grafana-ui/api/folders/uid/general",
+        "/grafana-ui/api/dashboards/uid/compliance-overview",
+        "/grafana-ui/api/browse/dashboards?sort=alpha-asc",
+        "/grafana-ui/api/ds/query?ds_type=prometheus",
+        "/grafana-ui/api/prometheus/grafana/api/v1/rules?dashboard_uid=compliance-overview",
+        "/grafana-ui/api/query-history",
+        "/grafana-ui/api/ruler/grafana/api/v1/rules",
+        "/grafana-ui/apis/dashboard.grafana.app/v1beta1/namespaces/default/dashboards",
+        "/grafana-ui/avatar/78d07744450b61186736ffc6f97b1082",
     ):
         response = client.get(path, cookies={"compliance_ai_session": session})
         assert response.status_code == 200, path
 
-    metrics_response = client.post("/api/frontend-metrics", cookies={"compliance_ai_session": session})
+    metrics_response = client.post("/grafana-ui/api/frontend-metrics", cookies={"compliance_ai_session": session})
     assert metrics_response.status_code == 200
 
     assert captured == [
-        "/api/access-control/user/permissions",
-        "/api/datasources/uid/kubeowl-prom-test",
-        "/api/frontend/settings",
-        "/api/login/ping",
-        "/api/library-elements?perPage=100",
-        "/api/org",
-        "/api/org/preferences",
-        "/api/plugins/grafana-lokiexplore-app/settings",
-        "/api/user/orgs",
-        "/api/search?type=dash-db",
-        "/api/search/sorting",
-        "/api/folders",
-        "/api/folders/uid/general",
-        "/api/dashboards/uid/compliance-overview",
-        "/api/browse/dashboards?sort=alpha-asc",
-        "/api/ds/query?ds_type=prometheus",
-        "/api/prometheus/grafana/api/v1/rules?dashboard_uid=compliance-overview",
-        "/api/query-history",
-        "/api/ruler/grafana/api/v1/rules",
-        "/apis/dashboard.grafana.app/v1beta1/namespaces/default/dashboards",
-        "/avatar/78d07744450b61186736ffc6f97b1082",
-        "/api/frontend-metrics",
+        "/grafana-ui/api/access-control/user/permissions",
+        "/grafana-ui/api/datasources/uid/kubeowl-prom-test",
+        "/grafana-ui/api/frontend/settings",
+        "/grafana-ui/api/login/ping",
+        "/grafana-ui/api/library-elements?perPage=100",
+        "/grafana-ui/api/org",
+        "/grafana-ui/api/org/preferences",
+        "/grafana-ui/api/plugins/grafana-lokiexplore-app/settings",
+        "/grafana-ui/api/user/orgs",
+        "/grafana-ui/api/search?type=dash-db",
+        "/grafana-ui/api/search/sorting",
+        "/grafana-ui/api/folders",
+        "/grafana-ui/api/folders/uid/general",
+        "/grafana-ui/api/dashboards/uid/compliance-overview",
+        "/grafana-ui/api/browse/dashboards?sort=alpha-asc",
+        "/grafana-ui/api/ds/query?ds_type=prometheus",
+        "/grafana-ui/api/prometheus/grafana/api/v1/rules?dashboard_uid=compliance-overview",
+        "/grafana-ui/api/query-history",
+        "/grafana-ui/api/ruler/grafana/api/v1/rules",
+        "/grafana-ui/apis/dashboard.grafana.app/v1beta1/namespaces/default/dashboards",
+        "/grafana-ui/avatar/78d07744450b61186736ffc6f97b1082",
+        "/grafana-ui/api/frontend-metrics",
     ]
 
 
@@ -609,8 +609,8 @@ def test_grafana_ui_proxy_suppresses_live_http_without_touching_data_queries(mon
     assert data_response.status_code == 200
     assert annotations_response.status_code == 200
     assert captured == [
-        "/api/ds/query?ds_type=prometheus",
-        "/api/annotations?dashboardUID=kubeowl",
+        "/grafana-ui/api/ds/query?ds_type=prometheus",
+        "/grafana-ui/api/annotations?dashboardUID=kubeowl",
     ]
 
 
@@ -653,8 +653,8 @@ def test_grafana_ui_proxy_retries_transient_upstream_502(monkeypatch):
     assert response.status_code == 200
     assert response.json() == {"ok": True}
     assert attempts == [
-        ("POST", "/api/ds/query?ds_type=prometheus"),
-        ("POST", "/api/ds/query?ds_type=prometheus"),
+        ("POST", "/grafana-ui/api/ds/query?ds_type=prometheus"),
+        ("POST", "/grafana-ui/api/ds/query?ds_type=prometheus"),
     ]
 
 
@@ -691,7 +691,7 @@ def test_grafana_ui_proxy_suppresses_missing_splash_user_storage(monkeypatch):
 
     assert response.status_code == 200
     assert captured == [
-        "/apis/userstorage.grafana.app/v0alpha1/namespaces/org-2/user-storage/"
+        "/grafana-ui/apis/userstorage.grafana.app/v0alpha1/namespaces/org-2/user-storage/"
         "grafana-splash-screen:ffn4cad28ctfke"
     ]
     assert response.json() == {
@@ -802,7 +802,7 @@ def test_admin_grafana_url_sets_admin_proxy_cookie(monkeypatch):
 
     assert grafana_response.status_code == 200
     assert grafana_response.text == "admin grafana ok"
-    assert captured["upstream_path"] == "/dashboards?orgId=1"
+    assert captured["upstream_path"] == "/admin-grafana/dashboards?orgId=1"
     assert captured["headers"]["X-KUBEOWL-ADMIN-USER"] == "kubeowl-admin@local"
     assert captured["headers"]["X-KUBEOWL-ADMIN-EMAIL"] == "kubeowl-admin@local"
     assert captured["headers"]["X-KUBEOWL-ADMIN-NAME"] == "KubeOwl Admin"

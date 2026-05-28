@@ -278,7 +278,7 @@ async def _proxy_grafana_path(
     if _is_grafana_live_path(path):
         return Response(status_code=204)
 
-    upstream_path = _upstream_path(path, request.url.query)
+    upstream_path = _upstream_path(path, request.url.query, context)
     try:
         response = await _forward_grafana_request(
             request,
@@ -360,10 +360,10 @@ def _request_headers(
     return headers
 
 
-def _upstream_path(path: str, query: str) -> str:
-    upstream_path = f"/{path}".rstrip("/") if path else "/"
+def _upstream_path(path: str, query: str, context: GrafanaProxyContext = CLIENT_GRAFANA_CONTEXT) -> str:
+    upstream_path = f"{context.public_prefix}/{path}".rstrip("/") if path else f"{context.public_prefix}/"
     if not upstream_path:
-        upstream_path = "/"
+        upstream_path = f"{context.public_prefix}/"
     if query:
         upstream_path = f"{upstream_path}?{query}"
     return upstream_path
