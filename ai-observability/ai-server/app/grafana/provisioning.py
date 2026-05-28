@@ -35,13 +35,14 @@ def provision_user(user_id: str, cluster_id: str, email: str) -> dict[str, Any]:
     if not normalized_user_id or not normalized_cluster_id or not normalized_email:
         raise ProvisioningError("user_id, cluster_id, and email are required")
 
-    auth = _grafana_auth()
+    client_auth = _grafana_auth("CLIENT")
+    admin_auth = _grafana_auth("ADMIN")
     org_name = f"org-{normalized_user_id}"
     org_id: int | None = None
     created_org = False
 
     try:
-        with httpx.Client(base_url=CLIENT_GRAFANA_URL, auth=auth, timeout=10) as client:
+        with httpx.Client(base_url=CLIENT_GRAFANA_URL, auth=client_auth, timeout=10) as client:
             org = _get_org(client, org_name)
             if org is None:
                 response = client.post("/api/orgs", json={"name": org_name})
@@ -55,7 +56,7 @@ def provision_user(user_id: str, cluster_id: str, email: str) -> dict[str, Any]:
             _switch_org(client, org_id)
             datasource_uid = _datasource_uid(normalized_cluster_id)
             datasource = _ensure_datasource(client, org_id, normalized_user_id, normalized_cluster_id, datasource_uid)
-            dashboard_urls = _import_dashboards(client, org_id, datasource_uid)
+            dashboard_urls = _import_dashboards(client, org_id, datasource_uid, admin_auth)
 
             user_response = client.post(
                 f"/api/orgs/{org_id}/users",
@@ -85,15 +86,24 @@ def provision_user(user_id: str, cluster_id: str, email: str) -> dict[str, Any]:
             return mapping
     except Exception as error:
         if created_org and org_id is not None:
-            _rollback_org(org_id, auth)
+            _rollback_org(org_id, client_auth)
         if isinstance(error, ProvisioningError):
             raise
         raise ProvisioningError(str(error)) from error
 
 
-def _grafana_auth() -> tuple[str, str]:
-    user = os.getenv("GRAFANA_ADMIN_USER") or os.getenv("GF_SECURITY_ADMIN_USER", "admin")
-    password = os.getenv("GRAFANA_ADMIN_PASSWORD") or os.getenv("GF_SECURITY_ADMIN_PASSWORD", "")
+def _grafana_auth(scope: str = "") -> tuple[str, str]:
+    prefix = f"GRAFANA_{scope.strip().upper()}_ADMIN" if scope else "GRAFANA_ADMIN"
+    user = (
+        os.getenv(f"{prefix}_USER")
+        or os.getenv("GRAFANA_ADMIN_USER")
+        or os.getenv("GF_SECURITY_ADMIN_USER", "admin")
+    )
+    password = (
+        os.getenv(f"{prefix}_PASSWORD")
+        or os.getenv("GRAFANA_ADMIN_PASSWORD")
+        or os.getenv("GF_SECURITY_ADMIN_PASSWORD", "")
+    )
     if not password:
         raise ProvisioningError("Grafana admin password is required")
     return user, password
@@ -169,9 +179,14 @@ def _ensure_user(client: httpx.Client, email: str) -> None:
         raise ProvisioningError(f"Grafana user create failed: {response.status_code} {response.text}")
 
 
-def _import_dashboards(client: httpx.Client, org_id: int, datasource_uid: str) -> list[str]:
+def _import_dashboards(
+    client: httpx.Client,
+    org_id: int,
+    datasource_uid: str,
+    admin_auth: tuple[str, str] | None = None,
+) -> list[str]:
     dashboard_urls: list[str] = []
-    for dashboard in _dashboard_payloads(client, datasource_uid):
+    for dashboard in _dashboard_payloads(client, datasource_uid, admin_auth=admin_auth):
         dash_response = client.post(
             "/api/dashboards/db",
             headers={"X-Grafana-Org-Id": str(org_id)},
@@ -192,8 +207,9 @@ def _dashboard_payloads(
     datasource_uid: str,
     *,
     master_client: httpx.Client | None = None,
+    admin_auth: tuple[str, str] | None = None,
 ) -> list[dict[str, Any]]:
-    dashboards = _load_master_dashboards(master_client)
+    dashboards = _load_master_dashboards(master_client, admin_auth)
     local_dashboard = _load_local_dashboard_template()
     if _include_local_dashboard() and not any(
         dashboard.get("uid") == local_dashboard.get("uid") for dashboard in dashboards
@@ -207,7 +223,10 @@ def _dashboard_payloads(
     ]
 
 
-def _load_master_dashboards(master_client: httpx.Client | None = None) -> list[dict[str, Any]]:
+def _load_master_dashboards(
+    master_client: httpx.Client | None = None,
+    admin_auth: tuple[str, str] | None = None,
+) -> list[dict[str, Any]]:
     master_uids = _master_dashboard_uids()
     if not master_uids:
         return []
@@ -232,7 +251,11 @@ def _load_master_dashboards(master_client: httpx.Client | None = None) -> list[d
     if master_client is not None:
         fetch_dashboards(master_client)
     else:
-        with httpx.Client(base_url=ADMIN_GRAFANA_URL, auth=_grafana_auth(), timeout=10) as admin_client:
+        with httpx.Client(
+            base_url=ADMIN_GRAFANA_URL,
+            auth=admin_auth or _grafana_auth("ADMIN"),
+            timeout=10,
+        ) as admin_client:
             fetch_dashboards(admin_client)
     return dashboards
 

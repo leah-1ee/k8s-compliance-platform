@@ -87,7 +87,7 @@ spec:
       serviceAccountName: ai-classifier
       containers:
         - name: ai-classifier
-          image: docker.io/leeon3345/compliance-ai-server:0.2.24
+          image: docker.io/leeon3345/compliance-ai-server:0.2.25
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -123,6 +123,30 @@ spec:
                 secretKeyRef:
                   name: grafana-admin-credentials
                   key: GRAFANA_ADMIN_PASSWORD
+                  optional: true
+            - name: GRAFANA_CLIENT_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin-credentials
+                  key: GRAFANA_CLIENT_ADMIN_USER
+                  optional: true
+            - name: GRAFANA_CLIENT_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin-credentials
+                  key: GRAFANA_CLIENT_ADMIN_PASSWORD
+                  optional: true
+            - name: GRAFANA_ADMIN_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin-credentials
+                  key: GRAFANA_ADMIN_ADMIN_USER
+                  optional: true
+            - name: GRAFANA_ADMIN_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin-credentials
+                  key: GRAFANA_ADMIN_ADMIN_PASSWORD
                   optional: true
             - name: SQLITE_PATH
               value: "/data/compliance-ai-server.sqlite3"
