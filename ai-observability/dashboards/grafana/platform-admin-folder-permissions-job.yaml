@@ -21,16 +21,16 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - name: GRAFANA_URL
-              value: http://grafana.monitoring.svc:3000
+              value: http://monitoring-grafana.monitoring.svc.cluster.local:80
             - name: GRAFANA_ADMIN_USER
               valueFrom:
                 secretKeyRef:
-                  name: grafana-secret
+                  name: monitoring-grafana
                   key: admin-user
             - name: GRAFANA_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: grafana-secret
+                  name: monitoring-grafana
                   key: admin-password
             - name: KUBEOWL_GRAFANA_ADMIN_EMAIL
               value: kubeowl-admin@local
