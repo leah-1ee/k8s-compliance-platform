@@ -464,6 +464,98 @@ def save_slack_settings(user_id: str, webhook_url: str) -> dict[str, Any]:
     return get_slack_settings(normalized_user_id)
 
 
+def register_slack_notification_event(
+    fingerprint: str,
+    event_id: str = "",
+    seen_at: str | None = None,
+    cooldown_seconds: int = 600,
+) -> dict[str, Any]:
+    init_db()
+    normalized_fingerprint = str(fingerprint or "").strip()
+    if not normalized_fingerprint:
+        raise ValueError("fingerprint is required")
+    now = _normalize_datetime_value(seen_at) or _utc_now()
+    cooldown = max(0, int(cooldown_seconds or 0))
+    with _LOCK, _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT fingerprint, first_seen_at, last_seen_at, last_notified_at, count, last_event_id
+            FROM slack_notification_state
+            WHERE fingerprint = ?
+            """,
+            (normalized_fingerprint,),
+        ).fetchone()
+        if row is None:
+            conn.execute(
+                """
+                INSERT INTO slack_notification_state (
+                    fingerprint, first_seen_at, last_seen_at, last_notified_at, count, last_event_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (normalized_fingerprint, now, now, now, 1, str(event_id or "")),
+            )
+            return {
+                "fingerprint": normalized_fingerprint,
+                "should_notify": True,
+                "is_repeat": False,
+                "count": 1,
+                "first_seen_at": now,
+                "last_seen_at": now,
+                "last_notified_at": now,
+            }
+
+        next_count = max(0, int(row["count"] or 0)) + 1
+        last_notified_at = _parse_datetime_value(row["last_notified_at"])
+        current_seen_at = _parse_datetime_value(now)
+        should_notify = (
+            last_notified_at is None
+            or current_seen_at is None
+            or (current_seen_at - last_notified_at).total_seconds() >= cooldown
+        )
+        if should_notify:
+            conn.execute(
+                """
+                UPDATE slack_notification_state
+                SET last_seen_at = ?,
+                    last_notified_at = ?,
+                    count = ?,
+                    last_event_id = ?
+                WHERE fingerprint = ?
+                """,
+                (now, now, 1, str(event_id or ""), normalized_fingerprint),
+            )
+            return {
+                "fingerprint": normalized_fingerprint,
+                "should_notify": True,
+                "is_repeat": next_count > 1,
+                "count": next_count,
+                "first_seen_at": row["first_seen_at"],
+                "last_seen_at": now,
+                "last_notified_at": now,
+            }
+
+        conn.execute(
+            """
+            UPDATE slack_notification_state
+            SET last_seen_at = ?,
+                count = ?,
+                last_event_id = ?
+            WHERE fingerprint = ?
+            """,
+            (now, next_count, str(event_id or ""), normalized_fingerprint),
+        )
+        return {
+            "fingerprint": normalized_fingerprint,
+            "should_notify": False,
+            "is_repeat": True,
+            "count": next_count,
+            "first_seen_at": row["first_seen_at"],
+            "last_seen_at": now,
+            "last_notified_at": row["last_notified_at"],
+        }
+
+
 def create_session(user_id: str, ttl_days: int = 30) -> str:
     init_db()
     user = get_user(user_id)
@@ -1751,6 +1843,28 @@ def _demo_cluster_names() -> set[str]:
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _normalize_datetime_value(value: str | None) -> str | None:
+    parsed = _parse_datetime_value(value)
+    if parsed is None:
+        return None
+    return parsed.isoformat()
+
+
+def _parse_datetime_value(value: str | None) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    if raw.endswith("Z"):
+        raw = f"{raw[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _token_hash(token: str) -> str:

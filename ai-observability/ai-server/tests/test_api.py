@@ -727,6 +727,76 @@ def test_slack_notification_only_for_enabled_high_or_critical_events(monkeypatch
     assert len(calls) == 1
 
 
+def test_slack_notification_cooldown_groups_duplicate_events(monkeypatch):
+    calls = []
+
+    class FakeSlackResponse:
+        def raise_for_status(self):
+            return None
+
+    def fake_post(url, json, timeout):
+        calls.append({"url": url, "json": json, "timeout": timeout})
+        return FakeSlackResponse()
+
+    monkeypatch.setattr("app.main.httpx.post", fake_post)
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="slack-cooldown-owner@example.test",
+        email="slack-cooldown-owner@example.test",
+    )
+    session = storage.create_session(owner["id"])
+    cluster = storage.create_cluster("slack-cooldown-cluster", user_id=owner["id"])
+    client.post(
+        "/api/slack-settings",
+        cookies={"compliance_ai_session": session},
+        json={"webhook_url": "https://hooks.slack.com/services/T333/B444/ZZZ"},
+    )
+
+    def send_repeated_event(at: str, pod_name: str = "repeat-pod"):
+        return client.post(
+            "/ingest/falco-events",
+            headers={"Authorization": f"Bearer {cluster['token']}"},
+            json={
+                "event": {
+                    "time": at,
+                    "rule": "Repeated Critical Event",
+                    "priority": "Critical",
+                    "output_fields": {
+                        "k8s.ns.name": "prod",
+                        "k8s.pod.name": pod_name,
+                        "container.name": "app",
+                    },
+                }
+            },
+        )
+
+    first_response = send_repeated_event("2026-05-14T00:00:00Z")
+    assert first_response.status_code == 200
+    assert len(calls) == 1
+    assert "반복 발생" not in calls[0]["json"]["text"]
+
+    suppressed_response = send_repeated_event("2026-05-14T00:05:00Z")
+    assert suppressed_response.status_code == 200
+    assert len(calls) == 1
+
+    with storage._connect() as conn:
+        pending_row = conn.execute(
+            "SELECT count FROM slack_notification_state ORDER BY last_seen_at DESC LIMIT 1"
+        ).fetchone()
+    assert pending_row["count"] == 2
+
+    repeat_response = send_repeated_event("2026-05-14T00:11:00Z")
+    assert repeat_response.status_code == 200
+    assert len(calls) == 2
+    assert "반복 발생 3건" in calls[1]["json"]["text"]
+    assert "cooldown 동안 *3건* 반복 발생" in calls[1]["json"]["blocks"][1]["text"]["text"]
+
+    different_pod_response = send_repeated_event("2026-05-14T00:12:00Z", pod_name="other-pod")
+    assert different_pod_response.status_code == 200
+    assert len(calls) == 3
+    assert "other-pod" in calls[2]["json"]["text"]
+
+
 def test_classify_contract():
     response = client.post(
         "/classify",

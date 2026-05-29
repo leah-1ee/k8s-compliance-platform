@@ -66,6 +66,16 @@ AUDIT_PUBLIC_USER_ID = "public"
 AUDIT_PUBLIC_EMAIL = "public actor"
 
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)) or default)
+    except ValueError:
+        return default
+
+
+SLACK_NOTIFICATION_COOLDOWN_SECONDS = max(0, _env_int("SLACK_NOTIFICATION_COOLDOWN_SECONDS", 600))
+
+
 def sanitize_llm_api_key(value: str | None) -> str:
     # 사용자 키 정규화
     if not value:
@@ -1868,8 +1878,23 @@ def _notify_slack_for_event(cluster: dict, event: dict) -> None:
     webhook_url = settings.get("webhook_url", "")
     if not webhook_url:
         return
+    notification_state = storage.register_slack_notification_event(
+        _slack_event_fingerprint(cluster, event),
+        event_id=str(event.get("id") or ""),
+        seen_at=str(event.get("timestamp") or ""),
+        cooldown_seconds=SLACK_NOTIFICATION_COOLDOWN_SECONDS,
+    )
+    if not notification_state.get("should_notify"):
+        logger.info(
+            "slack notification suppressed cluster_id=%s event_id=%s fingerprint=%s count=%s",
+            cluster.get("id", ""),
+            event.get("id", ""),
+            notification_state.get("fingerprint", ""),
+            notification_state.get("count", 0),
+        )
+        return
     try:
-        _post_slack_message(webhook_url, _slack_event_payload(cluster, event))
+        _post_slack_message(webhook_url, _slack_event_payload(cluster, event, notification_state))
     except httpx.HTTPError as error:
         logger.warning(
             "slack notification failed cluster_id=%s event_id=%s error=%s",
@@ -1879,33 +1904,60 @@ def _notify_slack_for_event(cluster: dict, event: dict) -> None:
         )
 
 
-def _slack_event_payload(cluster: dict, event: dict) -> dict:
+def _slack_event_fingerprint(cluster: dict, event: dict) -> str:
+    parts = [
+        str(cluster.get("id") or event.get("cluster_id") or event.get("cluster") or ""),
+        str(event.get("rule") or ""),
+        str(event.get("namespace") or ""),
+        str(event.get("pod_name") or ""),
+        str(event.get("container_name") or ""),
+    ]
+    normalized = "\0".join(part.strip().lower() for part in parts)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _slack_event_payload(cluster: dict, event: dict, notification_state: dict | None = None) -> dict:
     severity = str(event.get("severity") or event.get("priority") or "unknown").upper()
     rule = str(event.get("rule") or "Unknown runtime rule")
     namespace = str(event.get("namespace") or "unknown")
     pod_name = str(event.get("pod_name") or "unknown")
     cluster_name = str(event.get("cluster") or cluster.get("name") or "unknown")
-    text = f"[{severity}] {rule} on {cluster_name}/{namespace}/{pod_name}"
-    return {
-        "text": text,
-        "blocks": [
+    repeat_count = int((notification_state or {}).get("count") or 1)
+    is_repeat = bool((notification_state or {}).get("is_repeat")) and repeat_count > 1
+    prefix = f"반복 발생 {repeat_count}건 - " if is_repeat else ""
+    text = f"[{severity}] {prefix}{rule} on {cluster_name}/{namespace}/{pod_name}"
+    blocks = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*{severity} runtime event*\n{rule}",
+            },
+        },
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*Cluster*\n{cluster_name}"},
+                {"type": "mrkdwn", "text": f"*Namespace*\n{namespace}"},
+                {"type": "mrkdwn", "text": f"*Pod*\n{pod_name}"},
+                {"type": "mrkdwn", "text": f"*Container*\n{event.get('container_name') or 'unknown'}"},
+            ],
+        },
+    ]
+    if is_repeat:
+        blocks.insert(
+            1,
             {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"*{severity} runtime event*\n{rule}",
+                    "text": f"같은 원인의 High/Critical 이벤트가 cooldown 동안 *{repeat_count}건* 반복 발생했습니다.",
                 },
             },
-            {
-                "type": "section",
-                "fields": [
-                    {"type": "mrkdwn", "text": f"*Cluster*\n{cluster_name}"},
-                    {"type": "mrkdwn", "text": f"*Namespace*\n{namespace}"},
-                    {"type": "mrkdwn", "text": f"*Pod*\n{pod_name}"},
-                    {"type": "mrkdwn", "text": f"*Container*\n{event.get('container_name') or 'unknown'}"},
-                ],
-            },
-        ],
+        )
+    return {
+        "text": text,
+        "blocks": blocks,
     }
 
 
