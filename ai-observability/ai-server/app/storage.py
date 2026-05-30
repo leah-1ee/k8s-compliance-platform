@@ -303,6 +303,27 @@ def record_auth_login_event(ip_hash: str, provider: str, email: str, result: str
         )
 
 
+def cleanup_old_records(days: int = 90) -> int:
+    init_db()
+    normalized_days = max(1, int(days or 90))
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=normalized_days)).isoformat()
+    deleted = 0
+    with _LOCK, _connect() as conn:
+        deleted += conn.execute(
+            "DELETE FROM sessions WHERE datetime(expires_at) < datetime(?)",
+            (cutoff,),
+        ).rowcount
+        deleted += conn.execute(
+            "DELETE FROM auth_login_events WHERE datetime(created_at) < datetime(?)",
+            (cutoff,),
+        ).rowcount
+        deleted += conn.execute(
+            "DELETE FROM audit_events WHERE datetime(created_at) < datetime(?)",
+            (cutoff,),
+        ).rowcount
+    return deleted
+
+
 def list_users() -> list[dict[str, Any]]:
     init_db()
     with _connect() as conn:

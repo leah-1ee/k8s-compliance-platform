@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kubeowl-cleanup-job
+  namespace: compliance-system
+  labels:
+    app.kubernetes.io/name: kubeowl-cleanup-job
+    app.kubernetes.io/part-of: compliance-platform
+spec:
+  schedule: "0 3 * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: cleanup-curl
+              image: curlimages/curl:8.10.1
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: ADMIN_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: ai-classifier-admin
+                      key: ADMIN_TOKEN
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -eu
+                  curl --fail --silent --show-error -X POST \
+                    "http://ai-classifier.compliance-system.svc.cluster.local/admin/api/cleanup?days=90" \
+                    -H "X-Admin-Token: ${ADMIN_TOKEN}"

@@ -992,6 +992,109 @@ def test_policy_generate_audit_separates_public_and_login_actor():
     assert any(event["actor_email"] == user["email"] for event in login_audit_body["audit_events"])
 
 
+def test_admin_cleanup_old_records_removes_expired_logs():
+    user = storage.upsert_user(
+        provider="dev",
+        provider_subject="cleanup@example.test",
+        email="cleanup@example.test",
+        name="Cleanup User",
+    )
+    old_at = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat()
+    fresh_at = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    with storage._connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO sessions (token_hash, user_id, created_at, expires_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            ("session-old", user["id"], old_at, old_at),
+        )
+        conn.execute(
+            """
+            INSERT INTO sessions (token_hash, user_id, created_at, expires_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            ("session-fresh", user["id"], fresh_at, fresh_at),
+        )
+        conn.execute(
+            """
+            INSERT INTO auth_login_events (id, ip_hash, provider, email, result, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            ("auth-old", "ip-old", "google", "cleanup@example.test", "success", old_at),
+        )
+        conn.execute(
+            """
+            INSERT INTO auth_login_events (id, ip_hash, provider, email, result, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            ("auth-fresh", "ip-fresh", "google", "cleanup@example.test", "success", fresh_at),
+        )
+        conn.execute(
+            """
+            INSERT INTO audit_events (
+                id, actor_user_id, actor_email, action, target_type, target_id,
+                before_hash, after_hash, request_id, result, details_json, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "audit-old",
+                "user-old",
+                "old@example.test",
+                "policy.generate",
+                "policy",
+                "old-policy",
+                "",
+                "",
+                "",
+                "success",
+                "{}",
+                old_at,
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO audit_events (
+                id, actor_user_id, actor_email, action, target_type, target_id,
+                before_hash, after_hash, request_id, result, details_json, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "audit-fresh",
+                "user-fresh",
+                "fresh@example.test",
+                "policy.generate",
+                "policy",
+                "fresh-policy",
+                "",
+                "",
+                "",
+                "success",
+                "{}",
+                fresh_at,
+            ),
+        )
+
+    response = client.post(
+        "/admin/api/cleanup?days=90",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body == {"status": "success", "deleted": 3}
+
+    with storage._connect() as conn:
+        assert conn.execute("SELECT 1 FROM sessions WHERE token_hash = ?", ("session-old",)).fetchone() is None
+        assert conn.execute("SELECT 1 FROM auth_login_events WHERE id = ?", ("auth-old",)).fetchone() is None
+        assert conn.execute("SELECT 1 FROM audit_events WHERE id = ?", ("audit-old",)).fetchone() is None
+        assert conn.execute("SELECT 1 FROM sessions WHERE token_hash = ?", ("session-fresh",)).fetchone() is not None
+        assert conn.execute("SELECT 1 FROM auth_login_events WHERE id = ?", ("auth-fresh",)).fetchone() is not None
+        assert conn.execute("SELECT 1 FROM audit_events WHERE id = ?", ("audit-fresh",)).fetchone() is not None
+
+
 def test_llm_partial_review_is_completed(monkeypatch):
     def fake_review_policy(self, prompt: str) -> str:
         return "정책 의도: 기본 ingress 트래픽을 제한합니다."

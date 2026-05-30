@@ -1697,6 +1697,18 @@ def admin_list_audit_events(
     }
 
 
+@app.post("/admin/api/cleanup")
+def admin_cleanup_old_records(
+    days: int = 90,
+    x_admin_token: str | None = Header(default=None),
+):
+    auth_error = require_admin(x_admin_token)
+    if auth_error:
+        return auth_error
+    deleted_count = storage.cleanup_old_records(days)
+    return {"status": "success", "deleted": deleted_count}
+
+
 @app.get("/resource-manifest")
 def resource_manifest(
     namespace: str = "",
