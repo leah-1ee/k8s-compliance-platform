@@ -89,6 +89,9 @@ def test_ui_is_served():
     assert "LLM 검토를 선택하면 여기에 결과가 표시됩니다" in response.text
     assert "Violation Detail" in response.text
     assert "Resource Manifest" in response.text
+    assert "최근 위반 이벤트를 선택하면 이벤트 JSON이 여기에 표시됩니다." in response.text
+    assert "Shell spawned in container" not in response.text
+    assert "nginx:latest" not in response.text
     assert "LLM으로 원인/수정 YAML 생성" in response.text
     assert "최근 위반 새로고침" in response.text
     assert "클러스터 구분" not in response.text
@@ -2655,6 +2658,18 @@ def test_admin_dashboard_lists_users_and_event_counts():
             },
         },
     )
+    storage.save_event(
+        {
+            "source": "gatekeeper",
+            "cluster_id": cluster["id"],
+            "cluster": "admin-dashboard-cluster",
+            "cluster_kind": "customer",
+            "timestamp": "2026-05-13T00:01:00Z",
+            "rule": "Admin Dashboard Gatekeeper Event",
+            "priority": "Warning",
+            "severity": "medium",
+        }
+    )
 
     unauthorized = client.get("/admin/api/users")
     assert unauthorized.status_code == 401
@@ -2672,7 +2687,9 @@ def test_admin_dashboard_lists_users_and_event_counts():
     assert listed_user["cluster_count"] == 1
     assert listed_user["active_cluster_count"] == 1
     assert listed_user["deleted_cluster_count"] == 0
-    assert listed_user["event_count"] == 1
+    assert listed_user["event_count"] == 2
+    assert listed_user["gatekeeper_events"] == 1
+    assert listed_user["falco_events"] == 1
     assert listed_user["last_seen_at"] == "2026-05-13T00:00:00Z"
     assert listed_user["slack_configured"] is True
 
@@ -2685,7 +2702,9 @@ def test_admin_dashboard_lists_users_and_event_counts():
     assert clusters_response.status_code == 200
     listed_cluster = next(item for item in clusters_body["clusters"] if item["id"] == cluster["id"])
     assert listed_cluster["user_email"] == "admin-dashboard-user@example.test"
-    assert listed_cluster["event_count"] == 1
+    assert listed_cluster["event_count"] == 2
+    assert listed_cluster["gatekeeper_events"] == 1
+    assert listed_cluster["falco_events"] == 1
 
     user_clusters_response = client.get(
         f"/admin/api/users/{user['id']}/clusters",
@@ -2698,6 +2717,8 @@ def test_admin_dashboard_lists_users_and_event_counts():
     assert user_clusters_body["user"]["status"] == "active"
     assert user_clusters_body["slack"]["configured"] is True
     assert [item["id"] for item in user_clusters_body["clusters"]] == [cluster["id"]]
+    assert user_clusters_body["clusters"][0]["gatekeeper_events"] == 1
+    assert user_clusters_body["clusters"][0]["falco_events"] == 1
 
 
 def test_resource_manifest_direct_params_return_kubectl_guidance():

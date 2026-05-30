@@ -360,6 +360,20 @@ def list_users() -> list[dict[str, Any]]:
                        )
                    ) AS event_count,
                    (
+                       SELECT COALESCE(SUM(CASE WHEN events.source = 'gatekeeper' THEN 1 ELSE 0 END), 0)
+                       FROM events
+                       WHERE events.cluster_id IN (
+                           SELECT clusters.id FROM clusters WHERE clusters.user_id = users.id
+                       )
+                   ) AS gatekeeper_events,
+                   (
+                       SELECT COALESCE(SUM(CASE WHEN events.source IN ('sidekick', 'falco-agent') THEN 1 ELSE 0 END), 0)
+                       FROM events
+                       WHERE events.cluster_id IN (
+                           SELECT clusters.id FROM clusters WHERE clusters.user_id = users.id
+                       )
+                   ) AS falco_events,
+                   (
                        SELECT MAX(clusters.last_seen_at)
                        FROM clusters
                        WHERE clusters.user_id = users.id
@@ -1222,7 +1236,17 @@ def list_clusters(
                        SELECT COUNT(*)
                        FROM events
                        WHERE events.cluster_id = clusters.id
-                   ) AS event_count
+                   ) AS event_count,
+                   (
+                       SELECT COALESCE(SUM(CASE WHEN events.source = 'gatekeeper' THEN 1 ELSE 0 END), 0)
+                       FROM events
+                       WHERE events.cluster_id = clusters.id
+                   ) AS gatekeeper_events,
+                   (
+                       SELECT COALESCE(SUM(CASE WHEN events.source IN ('sidekick', 'falco-agent') THEN 1 ELSE 0 END), 0)
+                       FROM events
+                       WHERE events.cluster_id = clusters.id
+                   ) AS falco_events
             FROM clusters
             LEFT JOIN users ON users.id = clusters.user_id
             {where}

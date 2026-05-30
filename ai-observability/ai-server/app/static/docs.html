@@ -772,21 +772,21 @@
                 <p>Gatekeeper 정책 생성과 Falco 런타임 이벤트는 UI에서 같은 운영 흐름으로 묶입니다. 정책은 적용 전 YAML로 확인하고, 이벤트는 저장 후 상세 분석과 리포트 생성에 사용됩니다.</p>
                 <div class="flow" aria-label="KubeOwl request flow">
                   <div class="flow-step"><span>1</span><strong>Cluster Token</strong><p>사용자별 클러스터 토큰을 발급합니다.</p></div>
-                  <div class="flow-step"><span>2</span><strong>Sidekick Ingest</strong><p>Falco Sidekick이 이벤트를 전송합니다.</p></div>
-                  <div class="flow-step"><span>3</span><strong>Scoped Metrics</strong><p>사용자 클러스터 기준으로 집계합니다.</p></div>
+                  <div class="flow-step"><span>2</span><strong>Event Ingest</strong><p>Falco Sidekick과 Gatekeeper 이벤트를 저장합니다.</p></div>
+                  <div class="flow-step"><span>3</span><strong>Source Metrics</strong><p>Gatekeeper와 Falco 이벤트를 source 기준으로 분리 집계합니다.</p></div>
                   <div class="flow-step"><span>4</span><strong>Grafana Proxy</strong><p>인증 프록시로 대시보드를 엽니다.</p></div>
                 </div>
               </article>
               <article class="topic-detail" data-docs-panel="arch-pattern">
                 <span class="kicker">Service Architecture Pattern</span>
                 <h3>이 서비스는 경량 BFF + 모듈형 백엔드 + 프록시된 관측 도구 패턴으로 구성합니다.</h3>
-                <p>KubeOwl은 프론트, 정책 생성, 런타임 분석, 관리자 기능을 하나의 FastAPI 백엔드에서 통합하는 경량 BFF 형태에 가깝습니다. 사용자-facing 경로는 public landing과 public docs, 인증된 사용자 콘솔로 나뉘고, 데이터가 민감한 경로는 user_id와 admin token으로 다시 한 번 좁힙니다. Grafana와 외부 LLM은 직접 노출하지 않고 프록시 또는 세션 단위 경계 안에 둡니다.</p>
+                <p>KubeOwl은 프론트, 정책 생성, 런타임 분석, 관리자 기능을 하나의 FastAPI 백엔드에서 통합하는 경량 BFF 형태에 가깝습니다. 사용자-facing 경로는 <code>/ui</code>의 랜딩/콘솔, public docs, 관리자 콘솔로 나뉘고, 데이터가 민감한 경로는 user_id와 admin token으로 다시 한 번 좁힙니다. Grafana와 외부 LLM은 직접 노출하지 않고 프록시 또는 세션 단위 경계 안에 둡니다.</p>
                 <div class="topic-chips"><span>lightweight BFF</span><span>modular backend</span><span>proxy boundary</span></div>
               </article>
               <article class="topic-detail" data-docs-panel="arch-stack">
                 <span class="kicker">Frontend / Backend / DB</span>
                 <h3>프론트, 백엔드, DB는 하나의 AI 서버 배포 안에서 동작하고, DB는 SQLite 파일을 PVC에 저장합니다.</h3>
-                <p>프론트엔드는 별도 SPA 빌드 서버나 별도 프론트 Pod가 아니라 FastAPI가 제공하는 정적 HTML/CSS/JavaScript입니다. <code>/</code>, <code>/ui</code>, <code>/admin</code>, <code>/docs</code> 같은 화면은 같은 AI 서버에서 서빙되고, 브라우저는 API 호출만 FastAPI 엔드포인트로 보냅니다.</p>
+                <p>프론트엔드는 별도 SPA 빌드 서버나 별도 프론트 Pod가 아니라 FastAPI가 제공하는 정적 HTML/CSS/JavaScript입니다. 현재 코드 기준 주요 화면은 <code>/ui</code>, <code>/admin</code>, <code>/docs</code>에서 같은 AI 서버가 서빙하고, 브라우저는 API 호출만 FastAPI 엔드포인트로 보냅니다.</p>
                 <p>백엔드는 <code>ai-classifier</code> FastAPI 배포가 담당합니다. Google OAuth 콜백, 세션 쿠키, 정책 생성, 클러스터 토큰 발급, Falco 이벤트 ingest, 감사 로그, Grafana 프록시, LLM 호출 경계를 모두 이 계층에서 통제합니다.</p>
                 <p>DB는 별도 PostgreSQL/MySQL 서버가 아니라 SQLite만 사용합니다. Kubernetes에서는 <code>SQLITE_PATH=/data/compliance-ai-server.sqlite3</code>로 설정하고, <code>ai-classifier-data</code> PVC를 <code>/data</code>에 마운트해 Pod 재시작 후에도 사용자, 클러스터, 세션, 감사 로그, 이벤트 메타데이터가 유지되도록 합니다.</p>
                 <p>SQLite는 WAL 모드로 열고, 동시 쓰기 충돌을 줄이기 위해 배포는 <code>replicas: 1</code>과 <code>strategy.type: Recreate</code>를 유지합니다. 즉, PVC는 앱 DB 파일을 보존하기 위한 저장소이고, Grafana/Prometheus는 관측용 서비스일 뿐 KubeOwl의 주 DB가 아닙니다.</p>
@@ -859,11 +859,11 @@
               </article>
               <article class="topic-detail" data-docs-panel="arch-slack">
                 <span class="kicker">Slack Notification Flow</span>
-                <h3>High/Critical 런타임 이벤트는 즉시 알리되, 같은 원인은 묶어서 알림 폭주를 막습니다.</h3>
+                <h3>High/Critical 런타임 이벤트는 클러스터별 설정을 통과하면 즉시 알립니다.</h3>
                 <p>현재 자동 Slack 알림은 Falco Sidekick으로 들어온 런타임 이벤트를 기준으로 동작합니다. 이벤트가 저장되면 클러스터별 Slack 설정, webhook 등록 여부, severity/priority 조건을 확인하고 High 또는 Critical만 발송 후보로 올립니다.</p>
-                <p>실무 운영에서는 이벤트마다 무제한으로 알림을 보내지 않습니다. <code>cluster</code>, <code>rule</code>, <code>namespace</code>, <code>pod</code>, <code>container</code>를 fingerprint로 묶고, 첫 발생은 즉시 발송한 뒤 같은 fingerprint는 cooldown 동안 count만 증가시킵니다. cooldown 이후에도 반복되면 "반복 발생 N건" 형태로 한 번 더 알리고, 운영자는 Violation Detail과 Grafana에서 원본 이벤트 흐름을 확인합니다.</p>
-                <p>중복 제어 상태는 <code>slack_notification_state</code> 테이블에 저장합니다. 이 테이블은 원문 이벤트를 복제하지 않고 <code>first_seen_at</code>, <code>last_seen_at</code>, <code>last_notified_at</code>, <code>count</code>, <code>last_event_id</code>만 보관해 재배포 후에도 최근 알림 상태를 유지합니다.</p>
-                <div class="topic-chips"><span>High/Critical only</span><span>fingerprint</span><span>cooldown</span><span>slack_notification_state</span></div>
+                <p>현재 구현 기준으로는 같은 원인의 이벤트를 시간 간격으로 묶어 보내는 cooldown 로직이 발송 경로에 연결되어 있지 않습니다. 조건을 만족하는 High/Critical 이벤트가 들어오면 <code>_notify_slack_for_event()</code>가 즉시 Slack webhook을 호출합니다.</p>
+                <p><code>slack_notification_state</code> 테이블은 향후 dedupe/cooldown 확장을 위해 준비되어 있지만, 현재 발송 로직에서는 fingerprint, count, last_notified_at을 갱신하지 않습니다. 따라서 "High/Critical 필터와 클러스터별 on/off는 구현, 시간 간격 기반 묶음 발송은 확장 예정"으로 설명하는 것이 정확합니다.</p>
+                <div class="topic-chips"><span>High/Critical only</span><span>cluster toggle</span><span>immediate webhook</span><span>dedupe planned</span></div>
               </article>
             </div>
           </div>
@@ -993,7 +993,10 @@ falco-sidekick-7f6c9d9b6c-jh2qx   <span class="ok">Running</span>
                 <span class="kicker">Violation Detail / AI Report</span>
                 <h3>런타임 이벤트를 운영자가 읽을 수 있는 조치 문장으로 바꿉니다.</h3>
                 <ul>
-                  <li>Violation Detail은 rule, cluster, namespace, pod, container 맥락을 한 화면에 묶습니다.</li>
+                  <li>Violation Detail은 처음에 Event JSON과 Resource Manifest를 비워 두고, 사용자가 최근 이벤트를 클릭하면 저장된 이벤트 데이터로 자동 채웁니다.</li>
+                  <li>최근 이벤트 목록은 <code>/runtime-events</code>에서 가져오고, 이벤트 클릭 시 <code>/runtime-events/{event_id}</code> 상세를 조회합니다.</li>
+                  <li>Analyze 버튼은 선택된 이벤트가 있을 때 <code>/analyze-runtime-event/{event_id}</code>를 호출해 저장된 이벤트와 manifest 기준으로 분석합니다.</li>
+                  <li>분석 결과는 rule, cluster, namespace, pod, container 맥락을 한 화면에 묶습니다.</li>
                   <li>분석 결과는 심각도 설명, 원인 요약, 권장 수정, 구체적 조치로 분리합니다.</li>
                   <li>AI Report는 최근 이벤트를 집계해 리포트 복사와 PDF 다운로드 흐름으로 넘깁니다.</li>
                   <li>생성된 정책 산출물, Falco Sidekick 설치 명령, Event JSON, 리포트 코드 블록은 터미널 스타일 패널로 보여 복사와 검토를 빠르게 합니다.</li>
@@ -1187,7 +1190,9 @@ scope=current browser session
                 <span class="kicker">AI Hallucination Guard</span>
                 <h3>Q. AI가 잘못된 Gatekeeper 정책을 만들면 어떻게 막습니까?</h3>
                 <ul>
-                  <li><strong>A.</strong> LLM 출력은 최종 권한자가 아니라 초안 생성기로 취급합니다.</li>
+                  <li><strong>A.</strong> LLM 출력은 최종 권한자가 아니라 검토 보조로 취급합니다.</li>
+                  <li><strong>Prompt Injection / Jailbreak</strong> 위험을 줄이기 위해 사용자 자유 입력 프롬프트 UI를 제거하고 정책 유형 선택식 UI로 제한했습니다.</li>
+                  <li>현재 프론트엔드는 선택된 정책 유형을 서버 API 호환용 내부 canned prompt로 변환해 보내지만, 사용자가 직접 자유 prompt를 입력하는 화면은 없습니다.</li>
                   <li>Policy Generator는 선택된 정책 유형을 바로 클러스터에 적용하지 않고, ConstraintTemplate과 Constraint YAML을 먼저 노출합니다.</li>
                   <li>생성 결과는 지원 정책 유형, 필수 필드, enforcementAction, namespace exclusion, Rego 구조를 서버에서 정규화합니다.</li>
                   <li>적용 단계는 <code>dryrun</code> 또는 server-side validation을 먼저 거치도록 안내하며, 운영 반영 전 사람이 YAML을 확인합니다.</li>
@@ -1298,6 +1303,7 @@ scope=current browser session
                 <ul>
                   <li><strong>A.</strong> 보안 솔루션은 자기 자신의 변경 이력도 남겨야 합니다. KubeOwl은 클러스터 이벤트뿐 아니라 플랫폼 write action 감사 로그가 필요합니다.</li>
                   <li>현재 정책 적용 기록은 policy apply history로 남고, 관리자 페이지의 감사 로그와 <code>/admin/api/audit-events</code>에서 생성, 적용, 토큰 회전, 클러스터 삭제, 계정 삭제, Grafana 관리자 링크 발급을 함께 조회할 수 있습니다.</li>
+                  <li>사용자 상세의 이벤트 메트릭은 단일 total만 보여주지 않고 <code>events.source = 'gatekeeper'</code>인 Gatekeeper(Admission)과 <code>source IN ('sidekick', 'falco-agent')</code>인 Falco(Runtime)를 분리해 표시합니다.</li>
                   <li>감사 로그에는 actor user id, actor email, action, target type, target id, before/after hash, request id, timestamp, result와 기본 redacted details를 저장합니다.</li>
                   <li>관리자 페이지에서는 날짜 범위, 액션, 대상 유형, 대상 ID로 필터링하고, actor별 요약 카드로 최근 작업 분포를 빠르게 볼 수 있습니다.</li>
                 </ul>

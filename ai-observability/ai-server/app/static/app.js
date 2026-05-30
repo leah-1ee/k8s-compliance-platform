@@ -1113,7 +1113,7 @@ async function analyzeViolation() {
     );
     let result;
     const manualManifest = $("#resourceManifest").value.trim();
-    if (hasSelectedEvent && !manualManifest) {
+    if (hasSelectedEvent) {
       payload = eventToAnalysisPayload(selectedRuntimeEvent);
       const response = await fetch(`/analyze-runtime-event/${encodeURIComponent(selectedRuntimeEvent.id)}`, {
         method: "POST",
@@ -1125,6 +1125,10 @@ async function analyzeViolation() {
       }
       result = body;
     } else {
+      if (!$("#eventPayload").value.trim()) {
+        setAnalysisState("error", "이벤트를 선택하세요", "최근 위반 이벤트 목록에서 분석할 이벤트를 먼저 선택하세요.");
+        throw new Error("최근 위반 이벤트 목록에서 분석할 이벤트를 먼저 선택하세요.");
+      }
       if (hasSelectedEvent) {
         payload = eventToAnalysisPayload(selectedRuntimeEvent);
       } else {

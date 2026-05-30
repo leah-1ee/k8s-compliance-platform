@@ -1215,7 +1215,8 @@
         currentUserDetailId = body.user?.id || "";
         const status = body.user?.status || "active";
         const deletedAt = body.user?.deleted_at || "";
-        const totalEvents = clusters.reduce((sum, cluster) => sum + Number(cluster.event_count || 0), 0);
+        const gatekeeperEvents = clusters.reduce((sum, cluster) => sum + Number(cluster.gatekeeper_events || 0), 0);
+        const falcoEvents = clusters.reduce((sum, cluster) => sum + Number(cluster.falco_events || 0), 0);
         const clusterList = clusters.length
           ? clusters.map((cluster) => `
               <div class="user-cluster">
@@ -1224,7 +1225,8 @@
                   <span class="pill">${escapeHtml(displayClusterStatus(cluster.status || "active"))}</span>
                   slack=${cluster.slack_enabled === false ? "off" : "on"} ·
                   last_seen=${escapeHtml(cluster.last_seen_at || "-")} ·
-                  events=${escapeHtml(cluster.event_count || 0)}
+                  Gatekeeper(Admission)=${escapeHtml(cluster.gatekeeper_events || 0)} ·
+                  Falco(Runtime)=${escapeHtml(cluster.falco_events || 0)}
                   ${cluster.status === "deleted" ? ` · deleted_at=${escapeHtml(cluster.deleted_at || "-")}` : ""}
                 </span>
               </div>
@@ -1247,7 +1249,8 @@
               status=<span class="status-${escapeHtml(status)}">${escapeHtml(displayUserStatus(status))}</span> ·
               slack=${body.slack?.configured ? "configured" : "off"} ·
               clusters=${escapeHtml(clusters.length)} ·
-              events=${escapeHtml(totalEvents)}
+              Gatekeeper(Admission)=${escapeHtml(gatekeeperEvents)} ·
+              Falco(Runtime)=${escapeHtml(falcoEvents)}
               ${deletedAt ? ` · deleted_at=${escapeHtml(deletedAt)}` : ""}
             </span>
             ${status === "deleted" ? '<p class="meta">삭제된 계정입니다. 세션과 클러스터 토큰은 무효화되며, 이벤트와 정책 기록은 감사 목적으로 보존됩니다.</p>' : ""}

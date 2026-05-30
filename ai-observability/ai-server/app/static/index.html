@@ -567,37 +567,11 @@
               <div class="form-grid">
                 <label>
                   Event JSON (이벤트 JSON)
-                  <textarea id="eventPayload" class="terminal-textarea" rows="16">{
-  "cluster": "school-cloud",
-  "rule": "Compliance - Shell Spawned in Container",
-  "priority": "Warning",
-  "output": "Shell spawned in container by root user",
-  "time": "2026-05-09T00:00:00Z",
-  "output_fields": {
-    "k8s.ns.name": "default",
-    "k8s.pod.name": "test-pod",
-    "user.name": "root",
-    "user.uid": 0,
-    "proc.name": "sh",
-    "container.id": "abc123"
-  },
-  "tags": ["shell", "runtime"]
-}</textarea>
+                  <textarea id="eventPayload" class="terminal-textarea" rows="16" placeholder="최근 위반 이벤트를 선택하면 이벤트 JSON이 여기에 표시됩니다."></textarea>
                 </label>
                 <label>
                   Resource Manifest (관련 리소스 매니페스트, 직접 입력 가능)
-                  <textarea id="resourceManifest" class="terminal-textarea" rows="12" placeholder="선택 이벤트에 매니페스트가 저장되어 있지 않으면 kubectl get pod <pod-name> -n <namespace> -o yaml 결과를 붙여넣으세요.">apiVersion: v1
-kind: Pod
-metadata:
-  name: test-pod
-  namespace: default
-  labels:
-    app: test-pod
-spec:
-  containers:
-    - name: app
-      image: nginx:latest
-      command: ["sh"]</textarea>
+                  <textarea id="resourceManifest" class="terminal-textarea" rows="12" placeholder="최근 위반 이벤트를 선택하면 저장된 매니페스트가 여기에 표시됩니다. 저장된 매니페스트가 없으면 kubectl get pod <pod-name> -n <namespace> -o yaml 결과를 붙여넣으세요."></textarea>
                   <span class="field-help" id="resourceManifestHelp">선택한 이벤트에 저장된 매니페스트가 없으면 사용자가 직접 붙여넣는 입력칸입니다. 예: <code>kubectl get pod test-pod -n default -o yaml</code></span>
                 </label>
               </div>
