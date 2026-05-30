@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>KubeOwl</title>
-    <link rel="stylesheet" href="/static/styles.css?v=task26-policy-size-grafana-center" />
+    <link rel="stylesheet" href="/static/styles.css?v=task28-showcase-options" />
   </head>
   <body class="logged-out">
     <div class="app-shell">
@@ -113,13 +113,9 @@
               <div class="showcase-demo">
                 <div class="showcase-demo-stage">
                   <div class="showcase-demo-media" aria-live="polite">
-                    <img class="showcase-demo-image" data-showcase-image="primary" src="/static/assets/showcase/policy-1.png" alt="Policy generator showcase preview" />
+                    <img class="showcase-demo-image is-ready is-current" data-showcase-image="primary" src="/static/assets/showcase/policy-1.png" alt="Policy generator showcase preview" />
                     <img class="showcase-demo-image" data-showcase-image="secondary" alt="" aria-hidden="true" />
-                    <div class="showcase-demo-placeholder" id="showcaseDemoPlaceholder">
-                      <span>쇼케이스 이미지 준비 영역</span>
-                      <strong>/static/assets/showcase/policy-1.png</strong>
-                      <p>탭별로 1번, 2번 이미지를 추가하면 자동으로 전환됩니다.</p>
-                    </div>
+                    <div class="showcase-demo-placeholder" id="showcaseDemoPlaceholder" hidden aria-hidden="true"></div>
                   </div>
                 </div>
                 <div class="showcase-tabs" role="tablist" aria-label="Interactive product demo">
@@ -157,9 +153,9 @@
                 <div class="showcase-demo-copy">
                   <span class="showcase-kicker" id="showcaseDemoKicker">Policy</span>
                   <h3 id="showcaseDemoTitle">정책 생성</h3>
-                  <p id="showcaseDemoDescription">운영 기준을 자연어로 입력하면 검토 가능한 Kubernetes 정책 YAML로 정리합니다.</p>
+                  <p id="showcaseDemoDescription">정책 유형을 선택하면 검토 가능한 Kubernetes 정책 YAML로 정리합니다.</p>
                   <div class="showcase-code" id="showcaseDemoBullets" aria-label="demo highlights">
-                    <span>자연어 정책 요청</span>
+                    <span>정책 유형 선택</span>
                     <span>Gatekeeper YAML 생성</span>
                     <span>클러스터 적용 가이드</span>
                   </div>
@@ -660,6 +656,6 @@ spec:
       </main>
     </div>
     <div class="toast" id="toast" role="status"></div>
-    <script src="/static/app.js?v=task26-policy-size-grafana-center"></script>
+    <script src="/static/app.js?v=task28-showcase-options"></script>
   </body>
 </html>

@@ -1368,8 +1368,8 @@ function setupShowcaseDemo() {
     policy: {
       kicker: "Policy",
       title: "정책 생성",
-      description: "자연어 요청을 검토 가능한 Kubernetes 정책 YAML로 정리합니다.",
-      bullets: ["자연어 정책 요청", "Gatekeeper YAML 생성", "클러스터 적용 가이드"],
+      description: "선택한 정책 유형을 검토 가능한 Kubernetes 정책 YAML로 정리합니다.",
+      bullets: ["정책 유형 선택", "Gatekeeper YAML 생성", "클러스터 적용 가이드"],
       alt: "Policy generator showcase preview",
     },
     runtime: {
@@ -1390,7 +1390,6 @@ function setupShowcaseDemo() {
   const tabs = Array.from(document.querySelectorAll("[data-showcase-demo]"));
   const images = Array.from(document.querySelectorAll("[data-showcase-image]"));
   const placeholder = $("#showcaseDemoPlaceholder");
-  const placeholderPath = placeholder?.querySelector("strong");
   const kicker = $("#showcaseDemoKicker");
   const title = $("#showcaseDemoTitle");
   const description = $("#showcaseDemoDescription");
@@ -1434,16 +1433,14 @@ function setupShowcaseDemo() {
     return loadedPaths.filter(Boolean).slice(0, 2);
   };
 
-  const showPlaceholder = (path) => {
+  const clearShowcaseImages = () => {
+    stopShowcaseSlides();
     images.forEach((image) => {
       image.classList.remove("is-ready", "is-current");
       image.removeAttribute("src");
     });
     if (placeholder) {
-      placeholder.hidden = false;
-    }
-    if (placeholderPath) {
-      placeholderPath.textContent = path;
+      placeholder.hidden = true;
     }
   };
 
@@ -1487,7 +1484,6 @@ function setupShowcaseDemo() {
     const key = tab.dataset.showcaseDemo;
     const demo = demos[key] || demos.policy;
     const imagePaths = imageCandidatesFor(tab);
-    const imagePath = imagePaths[0] || "";
     tabs.forEach((candidate) => {
       const active = candidate === tab;
       candidate.classList.toggle("is-active", active);
@@ -1497,7 +1493,6 @@ function setupShowcaseDemo() {
     title.textContent = demo.title;
     description.textContent = demo.description;
     bullets.innerHTML = demo.bullets.map((item) => `<span>${escapeHtml(item)}</span>`).join("");
-    showPlaceholder(imagePath);
     restartTransition();
     const loadedImagePaths = await resolveImagePaths(imagePaths);
     if (activationId !== showcaseActivationId) {
@@ -1506,7 +1501,7 @@ function setupShowcaseDemo() {
     if (loadedImagePaths.length) {
       renderImages(loadedImagePaths, demo);
     } else {
-      showPlaceholder(imagePath);
+      clearShowcaseImages();
     }
   };
 
@@ -2469,9 +2464,9 @@ function handleReportNextAction(target) {
     return;
   }
   if (target === "grafana") {
-    activateTab("dashboard");
-    $(".grafana-dashboard-heading")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    showToast("Grafana 대시보드 영역으로 이동했습니다");
+    activateTab("setup");
+    $("#clusterSetupContent")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    showToast("Cluster Setup으로 이동했습니다");
   }
 }
 

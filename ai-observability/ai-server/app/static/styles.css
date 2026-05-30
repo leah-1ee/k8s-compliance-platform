@@ -946,7 +946,7 @@ body:has(#landingIntro:not([hidden])) button.primary:focus-visible {
 .landing-hero {
   grid-row: 1;
   display: grid;
-  grid-template-columns: minmax(0, clamp(340px, 36vw, 520px)) minmax(32vw, 1fr);
+  grid-template-columns: minmax(0, clamp(340px, 42vw, 640px)) minmax(0, 1fr);
   align-items: center;
   width: 100%;
   min-height: min(50vh, 560px);
@@ -965,7 +965,7 @@ body:has(#landingIntro:not([hidden])) button.primary:focus-visible {
   justify-self: start;
   gap: clamp(0.9rem, 1.8vw, 1.35rem);
   width: 100%;
-  max-width: clamp(320px, 34vw, 500px);
+  max-width: clamp(320px, 42vw, 640px);
   min-width: 0;
   text-align: left;
   transform: translateY(clamp(-1.6rem, -2.5vh, -0.7rem));
@@ -1015,10 +1015,16 @@ body:has(#landingIntro:not([hidden])) .landing-copy .eyebrow {
   display: flex;
   justify-content: flex-start;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: clamp(0.85rem, 1.4vw, 1.1rem);
   width: 100%;
+  max-width: 100%;
   margin-top: clamp(0.15rem, 0.7vh, 0.5rem);
+}
+
+.landing-login-actions > .button-like,
+.landing-login-actions > button {
+  flex: 0 0 auto;
 }
 
 body:has(#landingIntro:not([hidden])) .landing-login-actions > .button-like,
@@ -2476,6 +2482,52 @@ select {
   min-height: 54px;
 }
 
+:root:not([data-theme="dark"]) #policyKind,
+:root:not([data-theme="dark"]) #enforcementAction,
+:root:not([data-theme="dark"]) #policyApplyCluster,
+:root:not([data-theme="dark"]) #runtimeCluster,
+:root:not([data-theme="dark"]) #runtimeSource,
+:root:not([data-theme="dark"]) #runtimeEventLimit,
+:root:not([data-theme="dark"]) #reportCluster {
+  color-scheme: light;
+}
+
+:root:not([data-theme="dark"]) #policyKind option,
+:root:not([data-theme="dark"]) #enforcementAction option,
+:root:not([data-theme="dark"]) #policyApplyCluster option,
+:root:not([data-theme="dark"]) #runtimeCluster option,
+:root:not([data-theme="dark"]) #runtimeSource option,
+:root:not([data-theme="dark"]) #runtimeEventLimit option,
+:root:not([data-theme="dark"]) #reportCluster option {
+  background-color: #ffffff;
+  color: #111827;
+  -webkit-text-fill-color: #111827;
+}
+
+:root:not([data-theme="dark"]) #policyKind option:checked,
+:root:not([data-theme="dark"]) #enforcementAction option:checked,
+:root:not([data-theme="dark"]) #policyApplyCluster option:checked,
+:root:not([data-theme="dark"]) #runtimeCluster option:checked,
+:root:not([data-theme="dark"]) #runtimeSource option:checked,
+:root:not([data-theme="dark"]) #runtimeEventLimit option:checked,
+:root:not([data-theme="dark"]) #reportCluster option:checked {
+  background-color: #dbeafe;
+  color: #111827;
+  -webkit-text-fill-color: #111827;
+}
+
+[data-theme="dark"] #policyKind option,
+[data-theme="dark"] #enforcementAction option,
+[data-theme="dark"] #policyApplyCluster option,
+[data-theme="dark"] #runtimeCluster option,
+[data-theme="dark"] #runtimeSource option,
+[data-theme="dark"] #runtimeEventLimit option,
+[data-theme="dark"] #reportCluster option {
+  background-color: #101b2d;
+  color: #eef5ff;
+  -webkit-text-fill-color: #eef5ff;
+}
+
 #policyPanel select {
   min-height: 58px;
   padding-top: 14px;
@@ -3391,6 +3443,7 @@ pre[data-empty="true"] {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
   gap: var(--section-gap);
+  align-items: start;
 }
 
 .setup-install-card {
@@ -3572,6 +3625,7 @@ pre[data-empty="true"] {
 }
 
 .setup-grid .setup-terminal-card {
+  align-self: start;
   overflow: hidden;
   padding: 0;
   border: 1px solid var(--code-line);
@@ -5135,6 +5189,10 @@ button.event-row:focus-visible {
   .landing-login-actions > .button-like,
   .landing-login-actions > button {
     width: 100%;
+  }
+
+  .landing-login-actions {
+    flex-wrap: wrap;
   }
 
   .landing-marquee {
