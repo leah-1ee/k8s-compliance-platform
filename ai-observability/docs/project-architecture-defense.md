@@ -6,6 +6,35 @@
 
 KubeOwl은 Kubernetes 클러스터에서 정책 위반과 런타임 보안 이벤트를 수집하고, Gatekeeper 정책 생성, Falco 이벤트 분석, LLM 보조 분석, Grafana 관측, 관리자 감사 기능을 하나의 웹 콘솔로 연결한 Policy-as-Code 기반 컴플라이언스 플랫폼입니다.
 
+## 1.1 현재 코드 기준 중요 정정
+
+이 문서는 현재 코드 기준으로 다시 맞춘 버전입니다. 발표할 때 특히 아래 내용을 혼동하지 않아야 합니다.
+
+### Policy Generator에는 사용자 자유 prompt 입력창이 없습니다
+
+현재 `/ui`의 Policy Generator 화면에는 사용자가 자연어 prompt를 직접 입력하는 textarea/input이 없습니다. 사용자는 아래 값만 선택하거나 입력합니다.
+
+- Policy Type
+- EnforcementAction
+- Constraint Name
+- Allowed Registries
+- Excluded Namespaces
+- 생성 결과 LLM 검토 여부
+
+다만 backend API `PolicyGenerationRequest`는 기존 호환 때문에 아직 `prompt` 필드를 요구합니다. 그래서 `app/static/app.js`는 사용자가 선택한 `policyKind`를 내부 상수 `POLICY_PROMPTS`의 canned prompt로 변환해 `/generate-policy`에 보냅니다.
+
+즉, 발표에서 이렇게 설명해야 합니다.
+
+> "사용자 자유 prompt UI는 제거했습니다. Prompt injection 위험을 줄이기 위해 사용자는 정책 유형을 선택하고, 프론트엔드는 그 선택값을 내부 canned prompt와 `policy_kind`로 서버에 전달합니다. 최종 YAML은 LLM 자유 생성이 아니라 서버 템플릿으로 만듭니다."
+
+### 현재 최근 수정 사항
+
+- TASK-01: Violation Detail의 Event JSON / Resource Manifest 초기 샘플을 제거했습니다.
+- TASK-01: `/runtime-events`에서 이벤트 목록을 가져오고, 이벤트 클릭 시 `/runtime-events/{event_id}`로 상세를 불러옵니다.
+- TASK-01: 선택 이벤트가 있으면 Analyze 버튼이 `/analyze-runtime-event/{event_id}`를 호출합니다.
+- TASK-02: Admin user detail에서 `totalEvents` 단일 표시 대신 `Gatekeeper(Admission)`과 `Falco(Runtime)`를 분리 표시합니다.
+- TASK-02: 분리 기준은 `action_taken`이 아니라 `events.source`입니다.
+
 ## 2. 내가 발표에서 말할 핵심 성과
 
 이 프로젝트에서 만든 결과물은 단순한 YAML 모음이 아니라, 다음 흐름을 하나로 연결한 운영형 플랫폼입니다.
