@@ -53,7 +53,6 @@ PolicyKind = Literal[
     "host-namespace",
     "security-context-mutation",
     "resource-limits-mutation",
-    "network-policy",
 ]
 
 

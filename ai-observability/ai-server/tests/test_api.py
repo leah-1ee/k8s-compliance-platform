@@ -887,35 +887,28 @@ def test_generate_mutation_policy_contract():
     assert "resources.limits.cpu" in body["constraint"]
 
 
-def test_generate_network_policy_from_ingress_prompt():
-    response = client.post(
-        "/generate-policy",
-        json={
-            "prompt": "ingress 네트워크 정책 만들어줘",
-            "constraint_name": "default-deny-ingress",
-        },
-    )
-
-    body = response.json()
-
-    assert response.status_code == 200
-    assert body["policy_kind"] == "network-policy"
-    assert body["constraint_template"] == ""
-    assert body["rego"] == ""
-    assert "kind: NetworkPolicy" in body["constraint"]
-    assert 'compliance.kubeowl.io/isms-p: "2.6.7"' in body["constraint"]
-    assert "NetworkPolicy ICMP enforcement is CNI-dependent" in body["constraint"]
-    assert "policyTypes:\n    - Ingress" in body["constraint"]
-    assert "ingress: []" in body["constraint"]
-    assert "latest" not in body["constraint"]
-
-
 def test_generate_policy_rejects_unsupported_prompt_with_examples():
     response = client.post(
         "/generate-policy",
         json={
             "prompt": "서비스 메시 mTLS 정책 만들어줘",
             "constraint_name": "mesh-mtls",
+        },
+    )
+
+    body = response.json()
+
+    assert response.status_code == 400
+    assert "지원하지 않는 정책 요청" in body["error"]
+    assert "ingress 네트워크 정책 만들어줘" not in body["examples"]
+
+
+def test_generate_policy_rejects_network_policy_prompt():
+    response = client.post(
+        "/generate-policy",
+        json={
+            "prompt": "ingress 네트워크 정책 만들어줘",
+            "constraint_name": "default-deny-ingress",
         },
     )
 
@@ -1100,7 +1093,7 @@ def test_admin_cleanup_old_records_removes_expired_logs():
 
 def test_llm_partial_review_is_completed(monkeypatch):
     def fake_review_policy(self, prompt: str) -> str:
-        return "정책 의도: 기본 ingress 트래픽을 제한합니다."
+        return "정책 의도: Pod 컨테이너가 root 권한으로 실행되지 않도록 강제합니다."
 
     monkeypatch.setattr(LLMClient, "review_policy", fake_review_policy)
     response = client.post(
@@ -1110,8 +1103,11 @@ def test_llm_partial_review_is_completed(monkeypatch):
             "X-LLM-API-Key": "test-user-key",
         },
         json={
-            "prompt": "ingress 네트워크 정책 만들어줘",
-            "constraint_name": "default-deny-ingress",
+            "prompt": "non-root 실행을 강제하는 정책을 만들어줘",
+            "policy_kind": "non-root",
+            "constraint_name": "require-non-root",
+            "enforcement_action": "deny",
+            "excluded_namespaces": ["kube-system", "gatekeeper-system", "monitoring"],
             "use_llm": True,
         },
     )
@@ -1121,10 +1117,10 @@ def test_llm_partial_review_is_completed(monkeypatch):
     assert response.status_code == 200
     assert body["llm_used"] is True
     assert body["llm_review"].splitlines() == [
-        "정책 의도: 기본 ingress 트래픽을 제한합니다.",
-        "적용 범위: 생성된 NetworkPolicy의 namespace와 podSelector 대상 Pod에 적용됩니다.",
-        "주의할 점: podSelector가 비어 있으면 namespace 내 모든 Pod에 적용될 수 있습니다.",
-        "운영 권장사항: 테스트 네임스페이스에서 통신 영향도를 먼저 확인하고, ICMP는 CNI별 동작 차이를 별도로 검증하세요.",
+        "정책 의도: Pod 컨테이너가 root 권한으로 실행되지 않도록 강제합니다.",
+        "적용 범위: Pod 리소스에 적용되며 kube-system, gatekeeper-system, monitoring 네임스페이스는 제외됩니다.",
+        "주의할 점: 기존 워크로드가 정책 조건을 만족하지 않으면 배포가 거부될 수 있습니다.",
+        "운영 권장사항: deny 적용 전 테스트 네임스페이스에서 검증하세요.",
     ]
 
 

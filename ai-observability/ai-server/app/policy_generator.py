@@ -27,7 +27,6 @@ SUPPORTED_POLICY_EXAMPLES = [
     "host namespace 사용을 금지해줘",
     "securityContext를 자동 주입해줘",
     "resource limits를 자동 주입해줘",
-    "ingress 네트워크 정책 만들어줘",
 ]
 
 
@@ -38,8 +37,7 @@ class UnsupportedPolicyError(ValueError):
         self.prompt = prompt
         super().__init__(
             "지원하지 않는 정책 요청입니다. 현재는 latest 태그 금지, non-root 강제, "
-            "레지스트리 제한, host namespace 금지, securityContext/resource limits 자동 주입, "
-            "NetworkPolicy 생성만 지원합니다."
+            "레지스트리 제한, host namespace 금지, securityContext/resource limits 자동 주입만 지원합니다."
         )
 
 
@@ -98,7 +96,7 @@ def generate_policy(
     elif policy_kind == "resource-limits-mutation":
         rego, template, constraint = _resource_limits_mutation_policy(excluded_namespaces)
     else:
-        rego, template, constraint = _network_policy(constraint_name, request.prompt)
+        raise UnsupportedPolicyError(request.prompt)
 
     prompt = build_policy_prompt(
         request,
@@ -206,16 +204,6 @@ def _format_llm_http_error(error: httpx.HTTPStatusError) -> str:
 def _detect_policy_kind(prompt: str) -> PolicyKind | None:
     # 키워드 기반 분류
     normalized = prompt.lower()
-    if (
-        "networkpolicy" in normalized
-        or "network policy" in normalized
-        or "network-policy" in normalized
-        or "네트워크 정책" in normalized
-        or "네트워크정책" in normalized
-        or "ingress" in normalized
-        or "인그레스" in normalized
-    ):
-        return "network-policy"
     if "latest" in normalized or "태그" in normalized:
         return "latest-tag"
     if "resource" in normalized or "limit" in normalized or "리소스" in normalized:
@@ -300,23 +288,10 @@ def _default_review_lines(
         "host-namespace": "hostPID, hostIPC, hostNetwork 사용을 차단합니다.",
         "security-context-mutation": "누락된 securityContext 기본값을 Pod 컨테이너에 자동 주입합니다.",
         "resource-limits-mutation": "누락된 CPU와 메모리 limit 값을 Pod 컨테이너에 자동 주입합니다.",
-        "network-policy": "선택한 방향의 기본 네트워크 트래픽을 NetworkPolicy로 제한합니다. ISMS-P 2.6.7 네트워크 접근 통제 증적으로 분류합니다.",
     }
-    scope = (
-        "적용 범위: 생성된 NetworkPolicy의 namespace와 podSelector 대상 Pod에 적용됩니다."
-        if policy_kind == "network-policy"
-        else f"적용 범위: Pod 리소스에 적용되며 {excluded} 네임스페이스는 제외됩니다."
-    )
-    caution = (
-        "주의할 점: podSelector가 비어 있으면 namespace 내 모든 Pod에 적용될 수 있습니다."
-        if policy_kind == "network-policy"
-        else "주의할 점: 기존 워크로드가 정책 조건을 만족하지 않으면 배포가 거부될 수 있습니다."
-    )
-    recommendation = (
-        "운영 권장사항: 테스트 네임스페이스에서 통신 영향도를 먼저 확인하고, ICMP는 CNI별 동작 차이를 별도로 검증하세요."
-        if policy_kind == "network-policy"
-        else f"운영 권장사항: {enforcement_action} 적용 전 테스트 네임스페이스에서 검증하세요."
-    )
+    scope = f"적용 범위: Pod 리소스에 적용되며 {excluded} 네임스페이스는 제외됩니다."
+    caution = "주의할 점: 기존 워크로드가 정책 조건을 만족하지 않으면 배포가 거부될 수 있습니다."
+    recommendation = f"운영 권장사항: {enforcement_action} 적용 전 테스트 네임스페이스에서 검증하세요."
     return {
         "정책 의도": f"정책 의도: {intent_by_kind[policy_kind]}",
         "적용 범위": scope,
@@ -517,44 +492,6 @@ def _resource_limits_mutation_policy(excluded_namespaces: list[str]) -> tuple[st
         excluded_namespaces,
     )
     return "", "", mutation
-
-
-def _network_policy(name: str, prompt: str) -> tuple[str, str, str]:
-    # Kubernetes NetworkPolicy 생성
-    normalized = prompt.lower()
-    include_egress = "egress" in normalized or "이그레스" in normalized
-    if include_egress and ("ingress" not in normalized and "인그레스" not in normalized):
-        policy_types = "  policyTypes:\n    - Egress"
-        rule_block = "  egress: []"
-        description = "기본 egress 트래픽을 차단합니다."
-    elif include_egress:
-        policy_types = "  policyTypes:\n    - Ingress\n    - Egress"
-        rule_block = "  ingress: []\n  egress: []"
-        description = "기본 ingress와 egress 트래픽을 차단합니다."
-    else:
-        policy_types = "  policyTypes:\n    - Ingress"
-        rule_block = "  ingress: []"
-        description = "기본 ingress 트래픽을 차단합니다."
-
-    manifest = "\n".join(
-        [
-            "apiVersion: networking.k8s.io/v1",
-            "kind: NetworkPolicy",
-            "metadata:",
-            f"  name: {name}",
-            "  namespace: default",
-            "  annotations:",
-            f'    description: "{description}"',
-            '    compliance.kubeowl.io/isms-p: "2.6.7"',
-            '    compliance.kubeowl.io/control: "network-access-control"',
-            '    compliance.kubeowl.io/icmp-note: "Kubernetes NetworkPolicy ICMP enforcement is CNI-dependent; verify separately."',
-            "spec:",
-            "  podSelector: {}",
-            policy_types,
-            rule_block,
-        ]
-    )
-    return "", "", manifest
 
 
 def _assign_yaml(

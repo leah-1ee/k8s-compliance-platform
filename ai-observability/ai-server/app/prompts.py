@@ -9,9 +9,7 @@ def build_policy_prompt(
     # 정책 검토 프롬프트
     registries = ", ".join(request.allowed_registries) or "docker.io/library/, gcr.io/, ghcr.io/, registry.k8s.io/"
     excluded = ", ".join(request.excluded_namespaces) or "kube-system, gatekeeper-system, kube-flannel, monitoring"
-    if policy_kind == "network-policy":
-        output_type = "Kubernetes NetworkPolicy YAML"
-    elif "mutation" in policy_kind:
+    if "mutation" in policy_kind:
         output_type = "Assign mutation YAML"
     else:
         output_type = "Rego, ConstraintTemplate YAML, and Constraint YAML"
@@ -21,8 +19,7 @@ def build_policy_prompt(
         f"- Exclude namespaces when appropriate: {excluded}",
         f"- Allowed registries when needed: {registries}",
     ]
-    if policy_kind != "network-policy":
-        context_lines.insert(1, f"- Use enforcementAction: {request.enforcement_action}")
+    context_lines.insert(1, f"- Use enforcementAction: {request.enforcement_action}")
 
     artifact_lines = ""
     if generated_artifacts:
