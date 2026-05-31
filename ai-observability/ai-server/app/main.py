@@ -290,6 +290,16 @@ def _bearer_or_raw_token(value: str | None) -> str:
     return normalized
 
 
+def _cluster_for_ingest_token(authorization: str | None):
+    cluster_token = _bearer_or_raw_token(authorization)
+    cluster = storage.find_cluster_by_token(cluster_token)
+    if cluster is None:
+        return None
+    if cluster.get("kind", "customer") != "demo" and storage.is_demo_cluster_name(cluster["name"]):
+        cluster = storage.update_cluster_kind(cluster["id"], "demo") or cluster
+    return cluster
+
+
 def _manifest_guidance(
     namespace: str = "",
     pod: str = "",
@@ -747,14 +757,10 @@ def runtime_event(event_id: str, compliance_ai_session: str | None = Cookie(defa
 @app.post("/ingest/falco-events")
 def ingest_falco_events(payload: dict, authorization: str | None = Header(default=None)) -> dict:
     # Falco Sidekick이 전송한 이벤트를 클러스터 토큰으로 인증 후 수집
-    cluster_token = _bearer_or_raw_token(authorization)
-    cluster = storage.find_cluster_by_token(cluster_token)
+    cluster = _cluster_for_ingest_token(authorization)
     if cluster is None:
         return JSONResponse(status_code=401, content={"error": "valid cluster token required"})
     cluster_kind = cluster.get("kind", "customer")
-    if cluster_kind != "demo" and storage.is_demo_cluster_name(cluster["name"]):
-        cluster = storage.update_cluster_kind(cluster["id"], "demo") or cluster
-        cluster_kind = "demo"
     event = record_falco_event(
         payload,
         cluster_id=cluster["id"],
@@ -1807,9 +1813,19 @@ def analyze_runtime_event(
 
 
 @app.post("/gatekeeper-events")
-def gatekeeper_events(payload: dict) -> dict:
-    # Gatekeeper deny/audit 이벤트 push 수집
-    event = record_gatekeeper_event(payload)
+def gatekeeper_events(payload: dict, authorization: str | None = Header(default=None)) -> dict:
+    # Gatekeeper deny/audit 이벤트를 클러스터 토큰으로 인증 후 수집
+    cluster = _cluster_for_ingest_token(authorization)
+    if cluster is None:
+        return JSONResponse(status_code=401, content={"error": "valid cluster token required"})
+    event = record_gatekeeper_event(
+        payload,
+        cluster_id=cluster["id"],
+        cluster_name=cluster["name"],
+        cluster_kind=cluster.get("kind", "customer"),
+    )
+    storage.mark_cluster_seen(cluster["id"], event.get("timestamp", ""))
+    _notify_slack_for_event(cluster, event)
     return {"status": "recorded", "event": event}
 
 

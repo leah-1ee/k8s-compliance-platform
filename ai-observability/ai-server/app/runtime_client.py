@@ -583,13 +583,22 @@ def build_dashboard_summary(user_id: str = "") -> dict[str, Any]:
     last_sync = summary.get("last_seen_at") or summary.get("latest_event_at") or ""
     if user_id:
         applied_policy_count = storage.count_policy_apply_history(user_id=user_id, statuses={"applied"})
-        active_policies = {"count": applied_policy_count, "source": "user_policy_apply_history", "error": ""}
+        guided_policy_count = storage.count_policy_apply_history(user_id=user_id, statuses={"not_configured"})
+        active_policies = {
+            "count": applied_policy_count + guided_policy_count,
+            "source": "user_policy_apply_history",
+            "error": "",
+            "applied": applied_policy_count,
+            "generated_guides": guided_policy_count,
+        }
     else:
         active_policies = _count_gatekeeper_constraints()
     return {
         "active_policies": active_policies.get("count"),
         "active_policies_source": active_policies.get("source", "unknown"),
         "active_policies_error": active_policies.get("error", ""),
+        "active_policies_applied": active_policies.get("applied"),
+        "active_policies_generated_guides": active_policies.get("generated_guides"),
         "recent_violations": int(summary.get("recent_24h", 0) or 0),
         "runtime_events": int(summary.get("total_events", 0) or 0),
         "last_sync": last_sync,
@@ -683,33 +692,55 @@ def _count_gatekeeper_constraints() -> dict[str, Any]:
     }
 
 
-def record_gatekeeper_event(payload: dict[str, Any]) -> dict[str, Any]:
+def record_gatekeeper_event(
+    payload: dict[str, Any],
+    cluster_id: str = "",
+    cluster_name: str = "",
+    cluster_kind: str = "customer",
+) -> dict[str, Any]:
     # Gatekeeper deny/audit 이벤트를 UI 위반 목록과 같은 형태로 정규화
     now = datetime.now(timezone.utc).isoformat()
-    review = payload.get("review", {}) if isinstance(payload.get("review"), dict) else {}
+    raw_event = payload.get("event", payload)
+    if not isinstance(raw_event, dict):
+        raw_event = {}
+    review = raw_event.get("review", {}) if isinstance(raw_event.get("review"), dict) else {}
     obj = review.get("object", {}) if isinstance(review.get("object"), dict) else {}
     metadata = obj.get("metadata", {}) if isinstance(obj.get("metadata"), dict) else {}
-    namespace = payload.get("namespace") or metadata.get("namespace", "")
-    name = payload.get("pod_name") or metadata.get("name", "")
+    involved = raw_event.get("involvedObject", {}) if isinstance(raw_event.get("involvedObject"), dict) else {}
+    namespace = raw_event.get("namespace") or metadata.get("namespace", "") or involved.get("namespace", "")
+    name = raw_event.get("pod_name") or metadata.get("name", "") or involved.get("name", "")
+    message = (
+        raw_event.get("message")
+        or raw_event.get("reason")
+        or raw_event.get("note")
+        or "Gatekeeper admission denied the request."
+    )
     event = {
-        "timestamp": payload.get("timestamp") or now,
+        "timestamp": (
+            raw_event.get("timestamp")
+            or raw_event.get("eventTime")
+            or raw_event.get("lastTimestamp")
+            or metadata.get("creationTimestamp")
+            or now
+        ),
         "source": "gatekeeper",
-        "cluster": payload.get("cluster") or DEMO_CLUSTER_NAME,
-        "cluster_kind": payload.get("cluster_kind") or "demo",
-        "rule": payload.get("constraint") or payload.get("rule") or "Gatekeeper deny",
+        "cluster_id": cluster_id or raw_event.get("cluster_id", ""),
+        "cluster": cluster_name or raw_event.get("cluster") or DEMO_CLUSTER_NAME,
+        "cluster_kind": cluster_kind or raw_event.get("cluster_kind") or "demo",
+        "rule": raw_event.get("constraint") or raw_event.get("rule") or "Gatekeeper deny",
         "priority": "Warning",
-        "severity": payload.get("severity") or "medium",
+        "severity": raw_event.get("severity") or "medium",
         "classification_source": "gatekeeper",
-        "classification_reason": payload.get("message") or payload.get("reason") or "Gatekeeper admission denied the request.",
+        "classification_reason": message,
         "confidence": 0.82,
         "namespace": namespace,
         "pod_name": name,
-        "container_name": payload.get("container_name", ""),
-        "image": payload.get("image", ""),
-        "user": payload.get("user", ""),
-        "command": payload.get("command", ""),
+        "container_name": raw_event.get("container_name", ""),
+        "image": raw_event.get("image", ""),
+        "user": raw_event.get("user", ""),
+        "command": raw_event.get("command", ""),
         "action_taken": "deny",
-        "raw_event": payload,
+        "raw_event": raw_event,
     }
     return storage.save_event(event)
 

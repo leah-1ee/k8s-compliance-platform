@@ -369,11 +369,15 @@ function renderDashboardSummary(summary = {}) {
     summary.active_policies === null || summary.active_policies === undefined
       ? "-"
       : String(summary.active_policies);
+  const appliedCount = Number(summary.active_policies_applied || 0);
+  const guideCount = Number(summary.active_policies_generated_guides || 0);
   $("#activePoliciesMetricDetail").textContent =
     summary.active_policies_error
       ? `Policy history error: ${summary.active_policies_error}`
-      : summary.active_policies_source === "user_policy_apply_history"
-      ? "Applied in your clusters"
+    : summary.active_policies_source === "user_policy_apply_history"
+      ? guideCount > 0
+        ? `${appliedCount} server-applied / ${guideCount} kubectl guides`
+        : "Applied in your clusters"
       : "Your applied policies";
   $("#recentViolationsMetric").textContent = String(summary.recent_violations ?? 0);
   $("#runtimeEventsMetric").textContent = String(summary.runtime_events ?? 0);
@@ -1688,6 +1692,7 @@ async function applyGeneratedPolicy() {
       await refreshDashboardSummary();
       showToast("정책 적용 완료");
     } else if (result.status === "not_configured") {
+      await refreshDashboardSummary();
       showToast("kubectl 적용 가이드 준비 완료");
     } else {
       showToast("정책 적용 결과 확인 필요");

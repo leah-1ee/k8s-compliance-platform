@@ -1326,8 +1326,26 @@ spec:
 
 
 def test_gatekeeper_event_is_collected_and_reported():
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="gatekeeper-event-owner@example.test",
+        email="gatekeeper-event-owner@example.test",
+    )
+    session = storage.create_session(owner["id"])
+    cluster = storage.create_cluster("gatekeeper-event-cluster", user_id=owner["id"])
+
+    unauthorized = client.post(
+        "/gatekeeper-events",
+        json={
+            "constraint": "k8sdisallowlatesttag",
+            "message": "container <app> uses latest image tag",
+            "namespace": "default",
+            "pod_name": "bad-pod",
+        },
+    )
     response = client.post(
         "/gatekeeper-events",
+        headers={"Authorization": f"Bearer {cluster['token']}"},
         json={
             "constraint": "k8sdisallowlatesttag",
             "message": "container <app> uses latest image tag",
@@ -1338,12 +1356,24 @@ def test_gatekeeper_event_is_collected_and_reported():
 
     body = response.json()
 
+    assert unauthorized.status_code == 401
     assert response.status_code == 200
     assert body["status"] == "recorded"
     event_id = body["event"]["id"]
     assert event_id.startswith("gk-")
     assert body["event"]["source"] == "gatekeeper"
+    assert body["event"]["cluster_id"] == cluster["id"]
+    assert body["event"]["cluster"] == "gatekeeper-event-cluster"
     assert body["event"]["action_taken"] == "deny"
+
+    events_response = client.get(
+        "/runtime-events?source=gatekeeper",
+        cookies={"compliance_ai_session": session},
+    )
+    events_body = events_response.json()
+
+    assert events_response.status_code == 200
+    assert event_id in {event["id"] for event in events_body["events"]}
 
 
 def test_ingested_falco_event_is_listed_with_manifest_snapshot():
@@ -2124,6 +2154,12 @@ metadata:
     assert "kubectl wait --for=condition=Established crd" in body["fallback"]["combined_command"]
     assert "KUBEOWL_CONSTRAINT_EOF" in body["fallback"]["combined_command"]
     assert body["history"]["status"] == "not_configured"
+    summary_response = client.get("/dashboard-summary", cookies={"compliance_ai_session": session})
+    summary_body = summary_response.json()
+    assert summary_response.status_code == 200
+    assert summary_body["active_policies"] == 1
+    assert summary_body["active_policies_applied"] == 0
+    assert summary_body["active_policies_generated_guides"] == 1
 
 
 def test_policy_apply_requires_confirmation_for_system_namespace_blast_radius(monkeypatch):
