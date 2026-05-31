@@ -491,7 +491,158 @@ Gatekeeper는 Admission 단계에서 Kubernetes 리소스 생성/수정을 검�
 
 질문이 들어오면 답하면 되지만, 본 발표 시간에는 핵심 흐름을 먼저 보여주는 편이 좋습니다.
 
-## 15. 발표 전 체크리스트
+## 15. [Demo Guide] 화면 조작 순서
+
+발표자는 아래 순서대로 화면을 움직이면 됩니다. 코드를 설명하지 말고, "운영자가 실제로 어떤 흐름으로 쓰는지"를 보여주는 것이 목표입니다.
+
+### 데모 시작 전 준비
+
+- 브라우저에서 KubeOwl `/ui`를 열어 둔다.
+- 로그인 상태를 미리 확인한다. 데모 계정 또는 Google OAuth 중 하나를 사용한다.
+- Violation Detail에 보여줄 최근 Falco/Gatekeeper 이벤트가 최소 1개 이상 있도록 준비한다.
+- LLM API key를 사용할 경우 BYOK 영역에서 provider와 key를 미리 적용해 둔다.
+- `/admin`도 다른 탭에 열어 두고 admin token 입력 상태를 준비한다.
+- 네트워크가 불안정하면 Grafana 화면은 생략하고 KubeOwl UI 중심으로 진행한다.
+
+### Step 1. Cluster Setup: 클러스터 등록과 Falco Sidekick 설치 명령
+
+- `/ui`에서 Cluster Setup 또는 내 클러스터 영역으로 이동한다.
+- 등록된 클러스터 목록을 보여준다.
+- 새 클러스터 등록 또는 기존 클러스터의 설치 명령 영역을 보여준다.
+- Falco Sidekick Helm install command가 자동으로 생성된다는 점을 짚는다.
+- 토큰이 포함된 명령이므로 외부 공유하면 안 된다는 점을 한 문장으로 말한다.
+
+보여줄 핵심:
+
+- "KubeOwl은 중앙 서버가 사용자 클러스터를 구분할 수 있도록 cluster token을 발급한다."
+- "Falco Sidekick은 이 token을 이용해 `/ingest/falco-events`로 runtime event를 보낸다."
+
+### Step 2. Policy Generator: 배포 전 방어
+
+- Policy Generator 탭으로 이동한다.
+- Policy Type dropdown을 열어 6개 정책만 보여준다.
+- prompt 입력창이 없다는 것을 화면으로 보여준다.
+- 예시로 `latest 태그 금지` 또는 `non-root 강제`를 선택한다.
+- EnforcementAction은 `dryrun` 또는 `warn`을 먼저 보여준다.
+- `정책 생성` 버튼을 누른다.
+- ConstraintTemplate / Constraint YAML 결과를 보여준다.
+- LLM 검토를 켤 경우, "LLM은 YAML 생성자가 아니라 리뷰어"라고 설명한다.
+
+보여줄 핵심:
+
+- "정책은 자유 prompt가 아니라 선택식 template으로 생성된다."
+- "OPA Gatekeeper가 Admission 단계에서 잘못된 resource 배포를 막는다."
+- "잘못된 정책의 blast radius가 크기 때문에 UI를 일부러 제한했다."
+
+### Step 3. Violation Detail: 배포 후 런타임 탐지
+
+- Violation Detail 탭으로 이동한다.
+- Event JSON과 Resource Manifest가 처음에는 비어 있거나 선택 이벤트 기준으로 채워지는 구조라고 설명한다.
+- 최근 이벤트 목록에서 Falco runtime event 하나를 클릭한다.
+- Event JSON textarea가 자동으로 채워지는 것을 보여준다.
+- Resource Manifest가 있으면 함께 채워지는 것을 보여준다.
+- `LLM으로 원인/수정 YAML 생성`을 켤 수 있으면 켠다.
+- `상세 분석` 버튼을 누른다.
+- 분석 결과에서 severity, root cause, recommended fix, YAML snippet 영역을 보여준다.
+
+보여줄 핵심:
+
+- "복잡한 Falco/Gatekeeper 로그를 운영자가 읽을 수 있는 조치 문장으로 바꾼다."
+- "선택된 event_id를 기준으로 `/analyze-runtime-event/{event_id}`가 실행된다."
+- "LLM 사용 전 backend redaction pipeline으로 민감 정보가 마스킹된다."
+
+### Step 4. Admin Dashboard: 운영자 관점 확인
+
+- `/admin` 탭으로 이동한다.
+- 사용자 목록에서 데모 사용자를 선택한다.
+- 사용자 상세 영역에서 클러스터 목록과 이벤트 메트릭을 보여준다.
+- `Gatekeeper(Admission)`과 `Falco(Runtime)`이 분리되어 표시되는 것을 강조한다.
+
+보여줄 핵심:
+
+- "Admission 단계 문제와 Runtime 단계 문제를 하나의 total로 섞지 않는다."
+- "source 컬럼 기준으로 Gatekeeper와 Falco를 분리했다."
+
+### Step 5. 마무리 검증
+
+- 시간이 남으면 테스트 명령 또는 최근 commit을 보여준다.
+- 시간이 부족하면 테스트 화면은 말로만 언급한다.
+
+보여줄 핵심:
+
+- "기능은 화면만 만든 것이 아니라 pytest와 JS syntax check로 검증했다."
+
+## 16. [Spoken Script] 10분 발표 대본
+
+아래는 실제 발표에서 말할 수 있는 자연스러운 한국어 대본입니다. 시간은 약 10분 기준입니다.
+
+### 1. Goal: 무엇을 왜 만들었는가 (0:00-3:00)
+
+안녕하세요. 저는 Kubernetes 컴플라이언스 운영을 돕기 위한 ComplianceOps 플랫폼, KubeOwl을 발표하겠습니다.
+
+클라우드 네이티브 환경에서는 보안 도구 자체가 부족한 것은 아닙니다. CNCF 생태계에는 Falco, OPA Gatekeeper, Prometheus, Grafana처럼 좋은 도구들이 이미 많이 있습니다. 문제는 이 도구들을 실제 운영 환경에서 함께 적용하는 과정이 복잡하다는 점입니다.
+
+예를 들어 Gatekeeper는 배포 전에 잘못된 Kubernetes 리소스를 막아 주고, Falco는 배포 이후 컨테이너 내부에서 발생하는 runtime 이상행위를 탐지합니다. 그런데 운영자 입장에서는 정책 YAML은 따로 관리해야 하고, runtime log는 또 다른 화면에서 봐야 하고, Grafana metric은 별도로 확인해야 합니다. 이벤트가 많아지면 어떤 경고가 중요한지 판단하기 어렵고, 결국 alert fatigue가 생깁니다.
+
+KubeOwl은 이 문제를 해결하기 위해 만든 중앙형 ComplianceOps 플랫폼입니다. 단순히 보안 이벤트를 보여주는 도구가 아니라, 배포 전 Admission Control과 배포 후 Runtime Detection을 하나의 운영 흐름으로 묶는 것이 목표입니다.
+
+핵심 가치는 세 가지입니다.
+
+첫째, OPA Gatekeeper를 이용해 배포 전에 위험한 리소스를 막습니다. 둘째, Falco를 이용해 배포 이후 실행 중인 컨테이너의 이상행위를 탐지합니다. 셋째, 복잡한 위반 로그와 manifest를 LLM 보조 분석으로 운영자가 이해할 수 있는 원인과 수정 가이드로 바꿉니다.
+
+중요한 점은 LLM을 모든 것을 결정하는 자동화 엔진으로 쓰지 않았다는 것입니다. KubeOwl에서 LLM은 보조 분석자입니다. 정책 생성이나 보안 판단의 최종 책임은 서버의 제한된 템플릿, 사용자 선택, 그리고 운영자 검토 흐름 안에 둡니다.
+
+### 2. Demo & Implementation: 어떻게 동작하는가 (3:00-6:00)
+
+이제 실제 사용자 흐름 기준으로 보여드리겠습니다.
+
+먼저 클러스터 등록 단계입니다. 운영자는 KubeOwl 콘솔에서 자신의 Kubernetes 클러스터를 등록합니다. 등록이 되면 KubeOwl은 해당 클러스터를 식별하기 위한 token과 Falco Sidekick 설치 명령을 생성합니다.
+
+이 명령은 Helm 기반으로 Falco Sidekick을 설치하거나 설정하는 흐름에 사용됩니다. 여기서 중요한 점은, 사용자 클러스터의 runtime event가 중앙 KubeOwl 서버의 `/ingest/falco-events` endpoint로 들어오고, 서버는 cluster token을 통해 어느 사용자의 어느 클러스터에서 온 이벤트인지 구분한다는 점입니다.
+
+두 번째는 배포 전 방어입니다. Policy Generator 화면을 보시면, 사용자가 자유롭게 prompt를 입력하는 칸이 없습니다. 대신 정책 유형을 선택하는 dropdown이 있습니다. 현재 UI에서 노출하는 정책은 6개입니다. latest 태그 금지, non-root 강제, 레지스트리 제한, host namespace 금지, securityContext 자동 주입, resource limits 자동 주입입니다.
+
+제가 이 UX를 선택한 이유는 Kubernetes 정책의 blast radius가 크기 때문입니다. 잘못된 정책 YAML 하나가 정상 workload 배포를 막거나 시스템 namespace에 영향을 줄 수 있습니다. 그래서 LLM에게 자유롭게 정책 YAML을 만들게 하지 않고, 사용자는 사전 정의된 정책 유형을 선택하고, 서버가 검증된 template으로 Gatekeeper YAML을 생성하도록 했습니다.
+
+생성된 결과는 바로 클러스터에 무조건 적용되는 것이 아니라, 먼저 ConstraintTemplate과 Constraint YAML로 노출됩니다. 운영자는 YAML을 확인하고, dryrun이나 warn 같은 낮은 위험 단계부터 검토할 수 있습니다.
+
+세 번째는 배포 후 탐지입니다. Violation Detail 화면에서는 최근 runtime event 목록을 볼 수 있습니다. 처음부터 샘플 JSON이 들어가 있는 구조가 아니라, 운영자가 실제 이벤트를 클릭해야 Event JSON과 Resource Manifest가 채워집니다.
+
+이벤트를 클릭하면 프론트엔드는 `/runtime-events/{event_id}`를 호출해 저장된 이벤트 상세를 가져옵니다. 그리고 Analyze 버튼을 누르면 `/analyze-runtime-event/{event_id}` API를 호출합니다. 즉, 사용자가 화면에서 임의로 붙여 넣은 샘플이 아니라, 서버에 저장된 실제 event_id를 기준으로 분석합니다.
+
+분석 결과에는 severity, 원인 설명, 권장 조치, 그리고 적용 가능한 remediation YAML snippet이 표시됩니다. 운영자는 복잡한 Falco 로그나 Gatekeeper 위반 메시지를 직접 해석하지 않아도, 어떤 리소스에서 어떤 문제가 발생했고 어떻게 수정해야 하는지 한 화면에서 확인할 수 있습니다.
+
+### 3. Engineering Decisions & Troubleshooting: 왜 이렇게 설계했는가 (6:00-9:00)
+
+이 프로젝트에서 제가 가장 신경 쓴 부분은 단순히 기능을 붙이는 것이 아니라, AI를 어디까지 믿고 어디서 제한할지 결정하는 것이었습니다.
+
+첫 번째 경험은 UX와 보안 사이의 trade-off입니다. 처음에는 사용자가 자연어로 "이런 정책 만들어줘"라고 입력하고 LLM이 YAML을 만들어 주는 방식도 생각할 수 있었습니다. 하지만 저는 이 방향을 선택하지 않았습니다.
+
+Kubernetes 정책은 일반 웹 텍스트와 다르게 잘못 생성되었을 때 영향 범위가 큽니다. 예를 들어 root 금지 정책이 시스템 namespace까지 잘못 적용되면 CNI, storage driver, monitoring component 같은 필수 workload가 영향을 받을 수 있습니다. 그래서 저는 자유 prompt UX를 제거하고, 6개의 사전 정의 정책 template만 dropdown으로 노출했습니다.
+
+현재 backend schema에는 호환을 위해 `prompt` 필드가 남아 있지만, 사용자는 prompt를 직접 입력하지 않습니다. 프론트엔드가 선택된 policy type을 내부 canned prompt로 변환해 서버에 보내고, 서버는 `policy_kind` 기준으로 template YAML을 생성합니다. LLM은 생성된 결과를 검토하는 reviewer 역할로만 제한했습니다.
+
+두 번째 경험은 LLM으로 인한 데이터 유출 위험입니다. Runtime event를 분석하려면 Event JSON뿐 아니라 Resource Manifest도 같이 보는 것이 좋습니다. 그래야 어떤 namespace, pod, container, image에서 문제가 생겼는지 더 정확히 알 수 있습니다.
+
+하지만 manifest에는 민감한 정보가 들어갈 수 있습니다. private registry URL, internal IP, secret-like token, 환경변수 값 같은 정보가 포함될 수 있습니다. 이런 데이터를 그대로 public LLM API에 보내면 보안 분석 기능이 오히려 정보 유출 경로가 될 수 있습니다.
+
+그래서 backend에 redaction pipeline을 두었습니다. LLM으로 보내기 전에 token, password, secret, api key 같은 값은 `[REDACTED_SECRET]`으로 바꾸고, private IP나 private registry, 민감한 namespace 정보도 마스킹합니다. 이렇게 하면 LLM이 분석에 필요한 구조적 맥락은 볼 수 있지만, 민감한 원문 값은 외부로 나가지 않습니다.
+
+세 번째로, Admin Dashboard에서도 운영 판단을 쉽게 하기 위해 이벤트를 분리했습니다. 단순히 total event count만 보여주면, 문제가 Admission 단계의 정책 위반인지 Runtime 단계의 침해 탐지인지 알기 어렵습니다. 그래서 `events.source` 기준으로 Gatekeeper(Admission)과 Falco(Runtime)를 나누었습니다.
+
+여기서도 중요한 판단이 있었습니다. 저는 `action_taken`이 아니라 `source`를 기준으로 잡았습니다. `action_taken`은 deny나 alert 같은 대응 결과이고, `source`는 이벤트가 어디서 왔는지 나타냅니다. Gatekeeper와 Falco를 구분하려면 출처 기준인 `source`가 맞습니다.
+
+### 4. Conclusion: 마무리 (9:00-10:00)
+
+정리하면, KubeOwl은 CNCF 보안 도구들을 따로따로 쓰는 어려움을 줄이고, 정책 생성, runtime event 수집, AI 보조 분석, 관리자 관측을 하나의 ComplianceOps 흐름으로 연결하는 플랫폼입니다.
+
+제가 배운 점은 AI를 붙이는 것 자체보다, AI를 어디까지 제한할지 설계하는 것이 더 중요하다는 점입니다. 사용자 경험을 좋게 만들고 싶지만, Kubernetes 보안 정책은 잘못되면 영향 범위가 큽니다. 그래서 자유 prompt 대신 제한된 template을 선택했고, LLM 분석에는 redaction pipeline을 넣었습니다.
+
+또한 4-core 8GB 같은 제한된 환경에서는 모든 것을 대규모 분산 시스템처럼 만들 수 없습니다. 그래서 SQLite, 단일 FastAPI 서버, 정적 UI, 선택적 LLM 호출처럼 단순한 구조를 유지하면서도, 사용자 소유권 격리와 운영자 검토 흐름은 지키려고 했습니다.
+
+결국 KubeOwl의 핵심은 자동화와 통제 사이의 균형입니다. CNCF 도구의 강점을 활용하되, 운영자가 이해하고 검토할 수 있는 형태로 낮추는 것이 이 프로젝트의 목표입니다.
+
+## 17. 발표 전 체크리스트
 
 1. `/ui` 접속
 2. Policy Generator에 prompt 입력창이 없는지 확인
@@ -503,7 +654,7 @@ Gatekeeper는 Admission 단계에서 Kubernetes 리소스 생성/수정을 검�
 8. `/admin` 사용자 상세에서 Gatekeeper(Admission), Falco(Runtime)가 따로 보이는지 확인
 9. `pytest` 핵심 테스트 통과 확인
 
-## 16. 검증 명령
+## 18. 검증 명령
 
 ```bash
 .venv/bin/python -m pytest \
@@ -518,7 +669,7 @@ Gatekeeper는 Admission 단계에서 Kubernetes 리소스 생성/수정을 검�
 node --check ai-observability/ai-server/app/static/app.js
 ```
 
-## 17. 현재 한계와 개선 방향
+## 19. 현재 한계와 개선 방향
 
 발표에서 한계로 말하기 좋은 내용입니다.
 
