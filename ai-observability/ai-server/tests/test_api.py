@@ -2117,6 +2117,8 @@ metadata:
     assert "kubectl apply --dry-run=server" in body["fallback"]["combined_command"]
     assert "현재 kubeconfig 계정 권한 확인" in body["fallback"]["combined_command"]
     assert "kubectl auth can-i create constrainttemplates.templates.gatekeeper.sh" in body["fallback"]["combined_command"]
+    assert "kubectl auth can-i create '*.constraints.gatekeeper.sh'" in body["fallback"]["combined_command"]
+    assert "kubectl auth can-i patch '*.constraints.gatekeeper.sh'" in body["fallback"]["combined_command"]
     assert "kubeowl-policy-applier" in body["fallback"]["combined_command"]
     assert "KUBEOWL_TEMPLATE_EOF" in body["fallback"]["combined_command"]
     assert "kubectl wait --for=condition=Established crd" in body["fallback"]["combined_command"]

@@ -367,8 +367,8 @@ def _policy_permission_check_command(manifest: str) -> str:
         "kubectl auth can-i get constrainttemplates.templates.gatekeeper.sh",
         "kubectl auth can-i create constrainttemplates.templates.gatekeeper.sh",
         "kubectl auth can-i patch constrainttemplates.templates.gatekeeper.sh",
-        "kubectl auth can-i create '*' --api-group=constraints.gatekeeper.sh",
-        "kubectl auth can-i patch '*' --api-group=constraints.gatekeeper.sh",
+        "kubectl auth can-i create '*.constraints.gatekeeper.sh'",
+        "kubectl auth can-i patch '*.constraints.gatekeeper.sh'",
     ]
     if _manifest_has_kind(manifest, "NetworkPolicy"):
         commands.extend(
