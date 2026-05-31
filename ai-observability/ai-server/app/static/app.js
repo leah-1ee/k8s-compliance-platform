@@ -2867,13 +2867,15 @@ function lastAuthEmail() {
 
 function updateLoginLinks() {
   const hint = lastAuthEmail();
-  const href = hint ? `/auth/google/login?login_hint=${encodeURIComponent(hint)}` : "/auth/google/login";
-  ["#loginLink", "#landingLoginLink"].forEach((selector) => {
-    const link = $(selector);
-    if (link) {
-      link.href = href;
-    }
-  });
+  const quickHref = hint ? `/auth/google/login?login_hint=${encodeURIComponent(hint)}` : "/auth/google/login";
+  const loginLink = $("#loginLink");
+  const landingLoginLink = $("#landingLoginLink");
+  if (loginLink) {
+    loginLink.href = quickHref;
+  }
+  if (landingLoginLink) {
+    landingLoginLink.href = "/auth/google/login?select_account=true";
+  }
 }
 
 function renderAuthStatus() {

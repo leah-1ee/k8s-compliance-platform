@@ -329,6 +329,18 @@ def test_google_login_forwards_login_hint(monkeypatch):
 
     assert response.status_code == 302
     assert "login_hint=student%40example.test" in response.headers["location"]
+    assert "prompt=select_account" not in response.headers["location"]
+    assert "prompt=none" not in response.headers["location"]
+
+
+def test_google_login_can_force_account_selection(monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "google-client-id")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "google-client-secret")
+
+    response = client.get("/auth/google/login?select_account=true", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert "prompt=select_account" in response.headers["location"]
     assert "prompt=none" not in response.headers["location"]
 
 

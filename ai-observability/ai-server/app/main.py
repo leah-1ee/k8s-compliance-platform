@@ -415,7 +415,7 @@ def me(compliance_ai_session: str | None = Cookie(default=None)) -> dict:
 
 
 @app.get("/auth/google/login")
-def google_login(request: Request, login_hint: str = ""):
+def google_login(request: Request, login_hint: str = "", select_account: bool = False):
     # Google OAuth 시작
     client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
     if not auth_configured():
@@ -430,6 +430,8 @@ def google_login(request: Request, login_hint: str = ""):
         "state": state,
         "access_type": "online",
     }
+    if select_account:
+        params["prompt"] = "select_account"
     if normalized_hint and "@" in normalized_hint and len(normalized_hint) <= 320:
         params["login_hint"] = normalized_hint
     response = RedirectResponse(f"{GOOGLE_AUTH_URL}?{urlencode(params)}", status_code=302)
