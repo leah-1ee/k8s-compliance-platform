@@ -329,7 +329,28 @@ def test_google_login_forwards_login_hint(monkeypatch):
 
     assert response.status_code == 302
     assert "login_hint=student%40example.test" in response.headers["location"]
-    assert "prompt=none" in response.headers["location"]
+    assert "prompt=none" not in response.headers["location"]
+
+
+def test_google_callback_surfaces_google_error(monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "google-client-id")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "google-client-secret")
+
+    login_response = client.get("/auth/google/login", follow_redirects=False)
+    state = login_response.cookies.get("compliance_ai_oauth_state")
+    response = client.get(
+        "/auth/google/callback",
+        params={
+            "state": state,
+            "error": "login_required",
+            "error_description": "No active Google session",
+        },
+        cookies={"compliance_ai_oauth_state": state},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["reason"] == "login_required"
+    assert "No active Google session" in response.json()["error"]
 
 
 def test_dev_login_requires_explicit_enable():

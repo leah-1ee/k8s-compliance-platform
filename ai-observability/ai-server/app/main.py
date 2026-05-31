@@ -432,7 +432,6 @@ def google_login(request: Request, login_hint: str = ""):
     }
     if normalized_hint and "@" in normalized_hint and len(normalized_hint) <= 320:
         params["login_hint"] = normalized_hint
-        params["prompt"] = "none"
     response = RedirectResponse(f"{GOOGLE_AUTH_URL}?{urlencode(params)}", status_code=302)
     response.set_cookie(
         OAUTH_STATE_COOKIE_NAME,
@@ -451,6 +450,8 @@ def google_callback(
     request: Request,
     code: str = "",
     state: str = "",
+    error: str = "",
+    error_description: str = "",
     compliance_ai_oauth_state: str | None = Cookie(default=None),
 ):
     # Google OAuth 콜백
@@ -458,6 +459,15 @@ def google_callback(
         return JSONResponse(status_code=503, content={"error": "Google OAuth is not configured"})
     if not state or not compliance_ai_oauth_state or not secrets.compare_digest(state, compliance_ai_oauth_state):
         return JSONResponse(status_code=400, content={"error": "invalid oauth state"})
+    if error:
+        message = error_description or error
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": f"Google OAuth returned error: {message}",
+                "reason": error,
+            },
+        )
     if not code:
         return JSONResponse(status_code=400, content={"error": "missing oauth code"})
 
