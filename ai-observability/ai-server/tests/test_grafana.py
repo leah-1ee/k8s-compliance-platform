@@ -982,6 +982,42 @@ def test_dashboard_payloads_fall_back_to_bundled_dashboards(monkeypatch):
     assert "gatekeeper_violations" not in encoded
 
 
+def test_dashboard_payloads_prefer_bundled_dashboard_over_stale_master(monkeypatch):
+    class FakeClient:
+        def get(self, path, headers=None):
+            return httpx.Response(
+                200,
+                json={
+                    "dashboard": {
+                        "uid": "compliance-overview",
+                        "title": "Stale Master Dashboard",
+                        "panels": [
+                            {
+                                "datasource": {
+                                    "type": "prometheus",
+                                    "uid": "admin-datasource",
+                                },
+                                "targets": [{"expr": "gatekeeper_violations"}],
+                            }
+                        ],
+                    }
+                },
+            )
+
+    monkeypatch.setenv("GRAFANA_MASTER_DASHBOARD_UIDS", "compliance-overview")
+    monkeypatch.setenv("GRAFANA_INCLUDE_LOCAL_DASHBOARD", "false")
+
+    dashboards = provisioning._dashboard_payloads(FakeClient(), "user-datasource", master_client=FakeClient())
+    overview = next(dashboard for dashboard in dashboards if dashboard.get("uid") == "compliance-overview")
+    encoded = json.dumps(overview)
+
+    assert overview["title"] == "Gatekeeper Compliance Overview"
+    assert "kubeowl_gatekeeper_events_total" in encoded
+    assert "gatekeeper_violations" not in encoded
+    assert "admin-datasource" not in encoded
+    assert "user-datasource" in encoded
+
+
 def test_runtime_dashboard_surfaces_cluster_event_bursts():
     repo_root = Path(__file__).resolve().parents[3]
     dashboard_path = repo_root / "runtime-detection/manifests/grafana/runtime-dashboard.json"

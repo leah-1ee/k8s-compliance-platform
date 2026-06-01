@@ -216,8 +216,13 @@ def _dashboard_payloads(
     master_client: httpx.Client | None = None,
     admin_auth: tuple[str, str] | None = None,
 ) -> list[dict[str, Any]]:
-    dashboards = _load_master_dashboards(master_client, admin_auth)
-    if _include_bundled_dashboards():
+    dashboards: list[dict[str, Any]] = []
+    if _dashboard_source_precedence() == "bundled" and _include_bundled_dashboards():
+        dashboards = _load_bundled_dashboards()
+        _append_missing_dashboards(dashboards, _load_master_dashboards(master_client, admin_auth))
+    else:
+        dashboards = _load_master_dashboards(master_client, admin_auth)
+    if _dashboard_source_precedence() == "master" and _include_bundled_dashboards():
         _append_missing_dashboards(dashboards, _load_bundled_dashboards())
     local_dashboard = _load_local_dashboard_template()
     if _include_local_dashboard() and not any(
@@ -340,6 +345,11 @@ def _include_local_dashboard() -> bool:
 
 def _include_bundled_dashboards() -> bool:
     return os.getenv("GRAFANA_INCLUDE_BUNDLED_DASHBOARDS", "true").strip().lower() not in {"false", "0", "no"}
+
+
+def _dashboard_source_precedence() -> str:
+    raw = os.getenv("GRAFANA_DASHBOARD_SOURCE_PRECEDENCE", "bundled").strip().lower()
+    return "master" if raw in {"master", "grafana", "admin"} else "bundled"
 
 
 def _sanitize_dashboard_for_import(dashboard: dict[str, Any]) -> dict[str, Any]:
