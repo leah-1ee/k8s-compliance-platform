@@ -102,6 +102,8 @@ grafana:
         memory: 128Mi
     dashboards:
       folderAnnotation: grafana_folder
+      provider:
+        foldersFromFilesStructure: true
       # dashboard sidecar 리소스
       resources:
         requests:
