@@ -560,9 +560,14 @@ def _policy_permission_check_command(manifest: str) -> str:
         "kubectl auth can-i get constrainttemplates.templates.gatekeeper.sh",
         "kubectl auth can-i create constrainttemplates.templates.gatekeeper.sh",
         "kubectl auth can-i patch constrainttemplates.templates.gatekeeper.sh",
-        "kubectl auth can-i create '*.constraints.gatekeeper.sh'",
-        "kubectl auth can-i patch '*.constraints.gatekeeper.sh'",
     ]
+    for resource_name in _gatekeeper_constraint_resource_names(manifest):
+        commands.extend(
+            [
+                f"kubectl auth can-i create {resource_name}.constraints.gatekeeper.sh",
+                f"kubectl auth can-i patch {resource_name}.constraints.gatekeeper.sh",
+            ]
+        )
     if _manifest_has_kind(manifest, "NetworkPolicy"):
         commands.extend(
             [
@@ -589,7 +594,7 @@ def _policy_admin_rbac_command(manifest: str) -> str:
       - create
       - update
       - patch"""
-    return f"""kubectl apply -f - <<'KUBEOWL_RBAC_EOF'
+    return f"""cat <<'KUBEOWL_RBAC_EOF' | kubectl auth reconcile -f -
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -621,21 +626,43 @@ KUBEOWL_RBAC_EOF
 
 CURRENT_KUBE_USER="$(kubectl config view --minify -o jsonpath='{{.contexts[0].context.user}}')"
 if [ -n "${{CURRENT_KUBE_USER}}" ]; then
-  kubectl create clusterrolebinding kubeowl-policy-applier-current-user \\
-    --clusterrole=kubeowl-policy-applier \\
-    --user="${{CURRENT_KUBE_USER}}" \\
-    --dry-run=client -o yaml | kubectl apply -f -
+  cat <<KUBEOWL_USER_RBAC_EOF | kubectl auth reconcile -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubeowl-policy-applier-current-user
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubeowl-policy-applier
+subjects:
+  - kind: User
+    name: "${{CURRENT_KUBE_USER}}"
+KUBEOWL_USER_RBAC_EOF
 else
   echo "현재 kubeconfig user를 찾지 못해 사용자 ClusterRoleBinding을 건너뜁니다."
 fi
 
-kubectl create serviceaccount kubeowl-policy-applier -n default \\
-  --dry-run=client -o yaml | kubectl apply -f -
+if kubectl get serviceaccount kubeowl-policy-applier -n default >/dev/null 2>&1; then
+  echo "serviceaccount/kubeowl-policy-applier ready"
+else
+  kubectl create serviceaccount kubeowl-policy-applier -n default
+fi
 
-kubectl create clusterrolebinding kubeowl-policy-applier-sa \\
-  --clusterrole=kubeowl-policy-applier \\
-  --serviceaccount=default:kubeowl-policy-applier \\
-  --dry-run=client -o yaml | kubectl apply -f -"""
+cat <<'KUBEOWL_SA_RBAC_EOF' | kubectl auth reconcile -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubeowl-policy-applier-sa
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubeowl-policy-applier
+subjects:
+  - kind: ServiceAccount
+    name: kubeowl-policy-applier
+    namespace: default
+KUBEOWL_SA_RBAC_EOF"""
 
 
 def _manifest_has_kind(manifest: str, kind: str) -> bool:
@@ -650,6 +677,38 @@ def _manifest_has_gatekeeper_resource(manifest: str) -> bool:
         return _has_gatekeeper_resources(_parse_policy_manifest(manifest))
     except ValueError:
         return False
+
+
+def _gatekeeper_constraint_resource_names(manifest: str) -> list[str]:
+    try:
+        resources = _parse_policy_manifest(manifest)
+    except ValueError:
+        return []
+    names = {
+        _gatekeeper_constraint_resource_name(str(resource.get("kind", "")).strip())
+        for resource in resources
+        if _is_gatekeeper_constraint(resource) and str(resource.get("kind", "")).strip()
+    }
+    return sorted(names)
+
+
+def _gatekeeper_constraint_wait_commands(resources: list[dict[str, Any]]) -> list[str]:
+    names = {
+        f"{_gatekeeper_constraint_resource_name(str(resource.get('kind', '')).strip())}.constraints.gatekeeper.sh"
+        for resource in resources
+        if _is_gatekeeper_constraint(resource) and str(resource.get("kind", "")).strip()
+    }
+    return [
+        f"kubectl wait --for=condition=Established crd/{name} --timeout=60s"
+        for name in sorted(names)
+    ]
+
+
+def _gatekeeper_constraint_resource_name(kind: str) -> str:
+    normalized = str(kind or "").strip().lower()
+    if not normalized or normalized.endswith("s"):
+        return normalized
+    return f"{normalized}s"
 
 
 def _manifest_namespaces(manifest: str) -> set[str]:
@@ -686,6 +745,7 @@ def _fallback_commands(manifest: str, dry_run: bool) -> str:
 
     template_manifest = _dump_manifest_docs(templates)
     other_manifest = _dump_manifest_docs(others)
+    wait_commands = _gatekeeper_constraint_wait_commands(others)
     if dry_run:
         commands = [
             (
@@ -695,14 +755,14 @@ def _fallback_commands(manifest: str, dry_run: bool) -> str:
             _heredoc_command("kubectl apply --dry-run=server -f -", template_manifest, "KUBEOWL_TEMPLATE_DRY_RUN_EOF"),
             "# Constraint kind 검증을 위해 ConstraintTemplate은 실제 적용합니다.",
             _heredoc_command("kubectl apply -f -", template_manifest, "KUBEOWL_TEMPLATE_EOF"),
-            "kubectl wait --for=condition=Established crd -l gatekeeper.sh/constraint=true --timeout=60s",
+            *wait_commands,
             _heredoc_command("kubectl apply --dry-run=server -f -", other_manifest, "KUBEOWL_CONSTRAINT_DRY_RUN_EOF"),
         ]
         return "\n\n".join(commands)
 
     commands = [
         _heredoc_command(verb, template_manifest, "KUBEOWL_TEMPLATE_EOF"),
-        "kubectl wait --for=condition=Established crd -l gatekeeper.sh/constraint=true --timeout=60s",
+        *wait_commands,
         _heredoc_command(verb, other_manifest, "KUBEOWL_CONSTRAINT_EOF"),
     ]
     return "\n\n".join(commands)
