@@ -27,7 +27,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "선택 범위 AI Classification 요청 수.",
+      "description": "KubeOwl에 수집된 사용자 클러스터 Gatekeeper 이벤트 수.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -79,14 +79,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(compliance_ai_requests_total{service=\"response-server\"}[$__range])) or vector(0)",
+          "expr": "sum(kubeowl_gatekeeper_events_total) or vector(0)",
           "instant": true,
-          "legendFormat": "requests",
+          "legendFormat": "events",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "AI Classification Requests",
+      "title": "Gatekeeper Events",
       "type": "stat"
     },
     {
@@ -94,7 +94,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "선택 범위 AI Classification 오류 수.",
+      "description": "Gatekeeper 이벤트가 수집된 namespace 수.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -146,14 +146,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(compliance_ai_errors_total{service=\"response-server\"}[$__range])) or vector(0)",
+          "expr": "count(sum by (namespace) (kubeowl_gatekeeper_events_by_namespace_total)) or vector(0)",
           "instant": true,
-          "legendFormat": "errors",
+          "legendFormat": "namespaces",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "AI Classification Errors",
+      "title": "Gatekeeper Namespaces",
       "type": "stat"
     },
     {
@@ -424,7 +424,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "AI 요청, 오류, fallback 비율 추이.",
+      "description": "KubeOwl에 수집된 Gatekeeper 이벤트의 5분 평균 변화율.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -470,35 +470,13 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(compliance_ai_requests_total{service=\"response-server\"}[5m]) or vector(0)",
-          "legendFormat": "requests/sec",
+          "expr": "rate(kubeowl_gatekeeper_events_total[5m]) or vector(0)",
+          "legendFormat": "events/sec",
           "range": true,
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "rate(compliance_ai_errors_total{service=\"response-server\"}[5m]) or vector(0)",
-          "legendFormat": "errors/sec",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "rate(compliance_ai_fallbacks_total{service=\"response-server\"}[5m]) or vector(0)",
-          "legendFormat": "fallbacks/sec",
-          "range": true,
-          "refId": "C"
         }
       ],
-      "title": "AI Classification Reliability",
+      "title": "Gatekeeper Event Trend",
       "type": "timeseries"
     }
   ],
