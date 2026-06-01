@@ -978,6 +978,8 @@ def test_dashboard_payloads_fall_back_to_bundled_dashboards(monkeypatch):
     encoded = json.dumps(dashboards)
     assert "admin-datasource" not in encoded
     assert "user-datasource" in encoded
+    assert "kubeowl_gatekeeper_events_total" in encoded
+    assert "gatekeeper_violations" not in encoded
 
 
 def test_runtime_dashboard_surfaces_cluster_event_bursts():

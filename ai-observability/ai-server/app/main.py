@@ -703,6 +703,42 @@ def prometheus_metrics() -> Response:
         )
     lines.extend(
         [
+            "# HELP kubeowl_gatekeeper_events_total SQLite-backed Gatekeeper events grouped by trusted cluster and enforcement action.",
+            "# TYPE kubeowl_gatekeeper_events_total gauge",
+        ]
+    )
+    for row in snapshot["gatekeeper_events_total"]:
+        lines.append(
+            "kubeowl_gatekeeper_events_total"
+            f"{{{_metric_labels(row, ('cluster_id', 'cluster_name', 'enforcement_action'))}}} {int(row['value'])}"
+        )
+    lines.extend(
+        [
+            "# HELP kubeowl_gatekeeper_events_by_namespace_total SQLite-backed Gatekeeper events grouped by trusted cluster and namespace.",
+            "# TYPE kubeowl_gatekeeper_events_by_namespace_total gauge",
+        ]
+    )
+    for row in snapshot["gatekeeper_events_by_namespace"]:
+        lines.append(
+            "kubeowl_gatekeeper_events_by_namespace_total"
+            f"{{{_metric_labels(row, ('cluster_id', 'cluster_name', 'namespace'))}}} {int(row['value'])}"
+        )
+    lines.extend(
+        [
+            "# HELP kubeowl_gatekeeper_last_seen_timestamp_seconds Last trusted Gatekeeper event timestamp in Unix seconds.",
+            "# TYPE kubeowl_gatekeeper_last_seen_timestamp_seconds gauge",
+        ]
+    )
+    for row in snapshot["gatekeeper_last_seen"]:
+        timestamp = _metric_timestamp_seconds(row.get("last_seen_at"))
+        if timestamp is None:
+            continue
+        lines.append(
+            "kubeowl_gatekeeper_last_seen_timestamp_seconds"
+            f"{{{_metric_labels(row, ('cluster_id', 'cluster_name'))}}} {timestamp}"
+        )
+    lines.extend(
+        [
             "# HELP kubeowl_cluster_last_seen_timestamp_seconds Last trusted cluster ingest timestamp in Unix seconds.",
             "# TYPE kubeowl_cluster_last_seen_timestamp_seconds gauge",
         ]

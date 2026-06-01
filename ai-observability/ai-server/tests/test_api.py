@@ -2634,6 +2634,17 @@ def test_metrics_exports_trusted_sqlite_event_aggregates_without_raw_labels():
             },
         },
     )
+    client.post(
+        "/gatekeeper-events",
+        headers={"Authorization": f"Bearer {cluster['token']}"},
+        json={
+            "timestamp": event_time.isoformat().replace("+00:00", "Z"),
+            "constraint": "non-root",
+            "message": "container <nginx> must set securityContext.runAsNonRoot to true",
+            "namespace": "default",
+            "pod_name": "non-root-violation-demo",
+        },
+    )
 
     response = client.get("/metrics")
     text = response.text
@@ -2650,6 +2661,18 @@ def test_metrics_exports_trusted_sqlite_event_aggregates_without_raw_labels():
     ) in text
     assert (
         f'kubeowl_cluster_last_seen_timestamp_seconds{{cluster_id="{cluster["id"]}",'
+        'cluster_name="metrics-cluster"} '
+    ) in text
+    assert (
+        f'kubeowl_gatekeeper_events_total{{cluster_id="{cluster["id"]}",cluster_name="metrics-cluster",'
+        'enforcement_action="deny"} 1'
+    ) in text
+    assert (
+        f'kubeowl_gatekeeper_events_by_namespace_total{{cluster_id="{cluster["id"]}",'
+        'cluster_name="metrics-cluster",namespace="default"} 1'
+    ) in text
+    assert (
+        f'kubeowl_gatekeeper_last_seen_timestamp_seconds{{cluster_id="{cluster["id"]}",'
         'cluster_name="metrics-cluster"} '
     ) in text
     assert 'kubeowl_clusters_active_total{cluster_kind="customer"}' in text

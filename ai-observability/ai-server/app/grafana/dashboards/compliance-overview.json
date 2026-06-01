@@ -161,7 +161,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "마지막 Gatekeeper audit 후 경과 시간(초).",
+      "description": "마지막으로 KubeOwl에 수집된 Gatekeeper 이벤트 이후 경과 시간(초).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -217,14 +217,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(time() - gatekeeper_audit_last_run_time) or vector(0)",
+          "expr": "(time() - kubeowl_gatekeeper_last_seen_timestamp_seconds) or vector(0)",
           "instant": true,
           "legendFormat": "seconds",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "Seconds Since Last Gatekeeper Audit",
+      "title": "Seconds Since Last Gatekeeper Event",
       "type": "stat"
     },
     {
@@ -232,7 +232,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Gatekeeper 위반을 enforcement action별로 집계.",
+      "description": "KubeOwl에 수집된 Gatekeeper 이벤트를 enforcement action별로 집계.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -279,7 +279,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (enforcement_action) (gatekeeper_violations) or vector(0)",
+          "expr": "sum by (enforcement_action) (kubeowl_gatekeeper_events_total) or vector(0)",
           "instant": true,
           "legendFormat": "{{enforcement_action}}",
           "range": false,
@@ -294,7 +294,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Gatekeeper audit에서 수집된 전체 위반 수.",
+      "description": "KubeOwl에 수집된 사용자 클러스터 Gatekeeper 이벤트 전체 수.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -348,14 +348,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(gatekeeper_violations) or vector(0)",
+          "expr": "sum(kubeowl_gatekeeper_events_total) or vector(0)",
           "instant": true,
           "legendFormat": "total",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "Gatekeeper Violations Total",
+      "title": "Gatekeeper Events Total",
       "type": "barchart"
     },
     {
@@ -363,7 +363,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Gatekeeper audit controller 처리 시간.",
+      "description": "KubeOwl에 수집된 Gatekeeper 이벤트를 namespace별로 집계.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -409,14 +409,15 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(gatekeeper_audit_duration_seconds_sum[5m]) / rate(gatekeeper_audit_duration_seconds_count[5m])",
-          "legendFormat": "audit duration",
-          "range": true,
+          "expr": "sum by (namespace) (kubeowl_gatekeeper_events_by_namespace_total) or vector(0)",
+          "instant": true,
+          "legendFormat": "{{namespace}}",
+          "range": false,
           "refId": "A"
         }
       ],
-      "title": "Gatekeeper Audit Duration",
-      "type": "timeseries"
+      "title": "Gatekeeper Events by Namespace",
+      "type": "barchart"
     },
     {
       "datasource": {

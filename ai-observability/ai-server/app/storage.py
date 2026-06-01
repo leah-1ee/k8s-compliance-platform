@@ -1754,6 +1754,47 @@ def prometheus_metrics_snapshot() -> dict[str, Any]:
             ORDER BY clusters.name, severity
             """
         ).fetchall()
+        gatekeeper_events_total = conn.execute(
+            """
+            SELECT events.cluster_id AS cluster_id,
+                   clusters.name AS cluster_name,
+                   COALESCE(NULLIF(events.action_taken, ''), 'unknown') AS enforcement_action,
+                   COUNT(*) AS value
+            FROM events
+            JOIN clusters ON clusters.id = events.cluster_id
+            WHERE clusters.status != 'deleted'
+              AND events.source = 'gatekeeper'
+            GROUP BY events.cluster_id, clusters.name, enforcement_action
+            ORDER BY clusters.name, enforcement_action
+            """
+        ).fetchall()
+        gatekeeper_events_by_namespace = conn.execute(
+            """
+            SELECT events.cluster_id AS cluster_id,
+                   clusters.name AS cluster_name,
+                   COALESCE(NULLIF(events.namespace, ''), 'unknown') AS namespace,
+                   COUNT(*) AS value
+            FROM events
+            JOIN clusters ON clusters.id = events.cluster_id
+            WHERE clusters.status != 'deleted'
+              AND events.source = 'gatekeeper'
+            GROUP BY events.cluster_id, clusters.name, namespace
+            ORDER BY clusters.name, namespace
+            """
+        ).fetchall()
+        gatekeeper_last_seen = conn.execute(
+            """
+            SELECT events.cluster_id AS cluster_id,
+                   clusters.name AS cluster_name,
+                   MAX(COALESCE(NULLIF(events.timestamp, ''), events.created_at)) AS last_seen_at
+            FROM events
+            JOIN clusters ON clusters.id = events.cluster_id
+            WHERE clusters.status != 'deleted'
+              AND events.source = 'gatekeeper'
+            GROUP BY events.cluster_id, clusters.name
+            ORDER BY clusters.name
+            """
+        ).fetchall()
         cluster_last_seen = conn.execute(
             """
             SELECT id AS cluster_id, name AS cluster_name, last_seen_at
@@ -1776,6 +1817,9 @@ def prometheus_metrics_snapshot() -> dict[str, Any]:
     return {
         "runtime_events_total": [dict(row) for row in runtime_events_total],
         "runtime_events_recent_24h": [dict(row) for row in runtime_events_recent_24h],
+        "gatekeeper_events_total": [dict(row) for row in gatekeeper_events_total],
+        "gatekeeper_events_by_namespace": [dict(row) for row in gatekeeper_events_by_namespace],
+        "gatekeeper_last_seen": [dict(row) for row in gatekeeper_last_seen],
         "cluster_last_seen": [dict(row) for row in cluster_last_seen],
         "active_clusters": [dict(row) for row in active_clusters],
     }
