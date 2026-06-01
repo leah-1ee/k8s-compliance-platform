@@ -2020,6 +2020,21 @@ def generate(
             llm_provider=sanitize_llm_provider(x_llm_provider),
             llm_api_key=sanitize_llm_api_key(x_llm_api_key),
         )
+        if audit_user:
+            generated_manifest = "\n---\n".join(
+                item
+                for item in [
+                    str(response.constraint_template or "").strip(),
+                    str(response.constraint or "").strip(),
+                ]
+                if item
+            )
+            storage.save_generated_policy_history(
+                user_id=actor_user_id,
+                policy_kind=str(getattr(payload, "policy_kind", "") or response.policy_kind or "unknown"),
+                policy_name=str(getattr(payload, "constraint_name", "") or "unknown"),
+                manifest=generated_manifest,
+            )
         record_audit_action(
             request,
             "policy.generate",

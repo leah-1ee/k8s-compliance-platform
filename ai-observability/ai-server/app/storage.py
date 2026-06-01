@@ -119,6 +119,16 @@ def init_db() -> None:
                     FOREIGN KEY(cluster_id) REFERENCES clusters(id)
                 );
 
+                CREATE TABLE IF NOT EXISTS generated_policy_history (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    policy_kind TEXT NOT NULL,
+                    policy_name TEXT NOT NULL,
+                    manifest_hash TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(user_id) REFERENCES users(id)
+                );
+
                 CREATE TABLE IF NOT EXISTS grafana_provisioning (
                     cluster_id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
@@ -179,6 +189,7 @@ def init_db() -> None:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_policy_apply_history_user ON policy_apply_history(user_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_policy_apply_history_cluster ON policy_apply_history(cluster_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_generated_policy_history_user ON generated_policy_history(user_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_grafana_provisioning_user ON grafana_provisioning(user_id)")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_slack_notification_state_last_seen "
@@ -1136,6 +1147,65 @@ def list_policy_apply_history(user_id: str = "", cluster_id: str = "", limit: in
             params,
         ).fetchall()
     return [_row_to_policy_apply_history(row) for row in rows]
+
+
+def save_generated_policy_history(
+    user_id: str,
+    policy_kind: str,
+    policy_name: str,
+    manifest: str,
+) -> dict[str, Any]:
+    init_db()
+    row = {
+        "id": f"generated-policy-{uuid.uuid4().hex[:12]}",
+        "user_id": str(user_id or "").strip(),
+        "policy_kind": str(policy_kind or "unknown").strip()[:120] or "unknown",
+        "policy_name": str(policy_name or "unknown").strip()[:240] or "unknown",
+        "manifest_hash": hashlib.sha256(str(manifest or "").encode("utf-8")).hexdigest(),
+    }
+    if not row["user_id"]:
+        raise ValueError("user_id is required")
+    with _LOCK, _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO generated_policy_history (
+                id, user_id, policy_kind, policy_name, manifest_hash
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                row["id"],
+                row["user_id"],
+                row["policy_kind"],
+                row["policy_name"],
+                row["manifest_hash"],
+            ),
+        )
+    return row
+
+
+def count_generated_policy_history(user_id: str = "") -> int:
+    init_db()
+    filters: list[str] = []
+    params: list[Any] = []
+    if user_id:
+        filters.append("user_id = ?")
+        params.append(user_id)
+    where = f"WHERE {' AND '.join(filters)}" if filters else ""
+    with _connect() as conn:
+        row = conn.execute(
+            f"""
+            SELECT COUNT(*) AS count
+            FROM (
+                SELECT 1
+                FROM generated_policy_history
+                {where}
+                GROUP BY user_id, policy_kind, policy_name
+            )
+            """,
+            params,
+        ).fetchone()
+    return int(row["count"] or 0)
 
 
 def count_policy_apply_history(user_id: str = "", statuses: set[str] | None = None) -> int:

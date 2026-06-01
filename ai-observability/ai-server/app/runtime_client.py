@@ -866,18 +866,19 @@ def build_dashboard_summary(user_id: str = "") -> dict[str, Any]:
     summary = get_runtime_summary(user_id=user_id)
     last_sync = summary.get("last_seen_at") or summary.get("latest_event_at") or ""
     if user_id:
-        active_policy_count = storage.count_policy_apply_history(
+        generated_policy_count = storage.count_generated_policy_history(user_id=user_id)
+        guide_policy_count = storage.count_policy_apply_history(
             user_id=user_id,
-            statuses={"applied", "not_configured"},
+            statuses={"not_configured"},
         )
         applied_policy_count = storage.count_policy_apply_history(user_id=user_id, statuses={"applied"})
-        guided_policy_count = storage.count_policy_apply_history(user_id=user_id, statuses={"not_configured"})
         active_policies = {
-            "count": active_policy_count,
-            "source": "user_policy_apply_history",
+            "count": generated_policy_count,
+            "source": "user_generated_policy_history",
             "error": "",
             "applied": applied_policy_count,
-            "generated_guides": guided_policy_count,
+            "generated": generated_policy_count,
+            "generated_guides": guide_policy_count,
         }
     else:
         active_policies = _count_gatekeeper_constraints()
@@ -886,6 +887,7 @@ def build_dashboard_summary(user_id: str = "") -> dict[str, Any]:
         "active_policies_source": active_policies.get("source", "unknown"),
         "active_policies_error": active_policies.get("error", ""),
         "active_policies_applied": active_policies.get("applied"),
+        "active_policies_generated": active_policies.get("generated"),
         "active_policies_generated_guides": active_policies.get("generated_guides"),
         "recent_violations": int(summary.get("recent_24h", 0) or 0),
         "runtime_events": int(summary.get("total_events", 0) or 0),
@@ -942,6 +944,7 @@ def build_user_observability_summary(user_id: str) -> dict[str, Any]:
             for event in recent_events
         ],
         "policy_counts": {
+            "generated": storage.count_generated_policy_history(user_id=user_id),
             "applied": storage.count_policy_apply_history(user_id=user_id, statuses={"applied"}),
             "generated_guides": storage.count_policy_apply_history(user_id=user_id, statuses={"not_configured"}),
         },

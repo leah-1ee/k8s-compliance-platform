@@ -74,6 +74,8 @@ def test_ui_is_served():
     assert "회원 탈퇴" in response.text
     assert "PDF 다운로드" in response.text
     assert "Your API key is used only for requests in this session" in response.text
+    assert "Generated Policies" in response.text
+    assert "Apply guides: 0" in response.text
     assert "Cluster Setup" in response.text
     assert "로그인 후 런타임 위반을 확인할 수 있습니다." in response.text
     assert "로그인 후 AI 리포트를 생성할 수 있습니다." in response.text
@@ -900,6 +902,33 @@ def test_generate_policy_default_exclusions():
     assert response.status_code == 200
     assert '- "kube-flannel"' in body["constraint"]
     assert '- "monitoring"' in body["constraint"]
+
+
+def test_generate_policy_records_user_generated_policy_count():
+    owner = storage.upsert_user(
+        provider="dev",
+        provider_subject="policy-generate-count@example.test",
+        email="policy-generate-count@example.test",
+    )
+    session = storage.create_session(owner["id"])
+
+    for _ in range(2):
+        response = client.post(
+            "/generate-policy",
+            cookies={"compliance_ai_session": session},
+            headers={"X-LLM-API-Key": "test-key"},
+            json={
+                "prompt": "non-root 정책을 만들어줘",
+                "constraint_name": "require-non-root",
+            },
+        )
+        assert response.status_code == 200
+
+    summary = client.get("/dashboard-summary", cookies={"compliance_ai_session": session}).json()
+
+    assert summary["active_policies"] == 1
+    assert summary["active_policies_generated"] == 1
+    assert summary["active_policies_generated_guides"] == 0
 
 
 def test_generate_mutation_policy_contract():
@@ -1970,6 +1999,18 @@ def test_dashboard_summary_uses_user_scoped_policy_and_event_counts():
     )
     session = storage.create_session(owner["id"])
     cluster = storage.create_cluster("dashboard-summary-cluster", user_id=owner["id"])
+    storage.save_generated_policy_history(
+        user_id=owner["id"],
+        policy_kind="non-root",
+        policy_name="require-owner",
+        manifest="generated require-owner",
+    )
+    storage.save_generated_policy_history(
+        user_id=owner["id"],
+        policy_kind="non-root",
+        policy_name="require-owner",
+        manifest="generated require-owner with updated namespaces",
+    )
     storage.save_policy_apply_history(
         user_id=owner["id"],
         cluster_id=cluster["id"],
@@ -2009,7 +2050,9 @@ def test_dashboard_summary_uses_user_scoped_policy_and_event_counts():
 
     assert response.status_code == 200
     assert body["active_policies"] == 1
-    assert body["active_policies_source"] == "user_policy_apply_history"
+    assert body["active_policies_source"] == "user_generated_policy_history"
+    assert body["active_policies_generated"] == 1
+    assert body["active_policies_generated_guides"] == 1
     assert body["runtime_events"] >= 1
     assert body["recent_violations"] >= 1
     assert body["last_sync"] == event_time
@@ -2180,7 +2223,7 @@ metadata:
     summary_response = client.get("/dashboard-summary", cookies={"compliance_ai_session": session})
     summary_body = summary_response.json()
     assert summary_response.status_code == 200
-    assert summary_body["active_policies"] == 1
+    assert summary_body["active_policies"] == 0
     assert summary_body["active_policies_applied"] == 0
     assert summary_body["active_policies_generated_guides"] == 1
 
