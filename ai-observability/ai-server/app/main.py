@@ -1911,6 +1911,7 @@ def _sidekick_install_command(request: Request, token: str) -> str:
             '  --set falcosidekick.config.webhook.minimumpriority="warning"',
             "",
             "# 2) Gatekeeper audit collector",
+            "kubectl delete cronjob -n kubeowl-system kubeowl-gatekeeper-collector --ignore-not-found >/dev/null 2>&1 || true",
             f"cat <<'KUBEOWL_GATEKEEPER_COLLECTOR_EOF' | kubectl apply -f -\n{_gatekeeper_collector_manifest(gatekeeper_url, token)}\nKUBEOWL_GATEKEEPER_COLLECTOR_EOF",
         ]
     )
@@ -1963,98 +1964,109 @@ subjects:
     name: kubeowl-gatekeeper-collector
     namespace: kubeowl-system
 ---
-apiVersion: batch/v1
-kind: CronJob
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: kubeowl-gatekeeper-collector
   namespace: kubeowl-system
 spec:
-  schedule: "*/2 * * * *"
-  concurrencyPolicy: Forbid
-  successfulJobsHistoryLimit: 1
-  failedJobsHistoryLimit: 2
-  jobTemplate:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kubeowl-gatekeeper-collector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kubeowl-gatekeeper-collector
     spec:
-      backoffLimit: 1
-      template:
-        spec:
-          serviceAccountName: kubeowl-gatekeeper-collector
-          restartPolicy: OnFailure
-          containers:
-            - name: collector
-              image: python:3.12-alpine
-              imagePullPolicy: IfNotPresent
-              env:
-                - name: KUBEOWL_GATEKEEPER_URL
-                  value: "{gatekeeper_url}"
-                - name: KUBEOWL_TOKEN
-                  valueFrom:
-                    secretKeyRef:
-                      name: kubeowl-gatekeeper-collector
-                      key: token
-              securityContext:
-                allowPrivilegeEscalation: false
-                capabilities:
-                  drop:
-                    - ALL
-                runAsNonRoot: true
-                runAsUser: 65532
-                runAsGroup: 65532
-                seccompProfile:
-                  type: RuntimeDefault
-              command:
-                - /bin/sh
-                - -c
-                - |
-                  python - <<'PY'
-                  import datetime
-                  import hashlib
-                  import json
-                  import os
-                  import ssl
-                  import urllib.error
-                  import urllib.request
+      serviceAccountName: kubeowl-gatekeeper-collector
+      containers:
+        - name: collector
+          image: python:3.12-alpine
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KUBEOWL_GATEKEEPER_URL
+              value: "{gatekeeper_url}"
+            - name: KUBEOWL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: kubeowl-gatekeeper-collector
+                  key: token
+            - name: KUBEOWL_COLLECT_INTERVAL_SECONDS
+              value: "15"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          command:
+            - /bin/sh
+            - -c
+            - |
+              python - <<'PY'
+              import datetime
+              import hashlib
+              import json
+              import os
+              import ssl
+              import time
+              import urllib.error
+              import urllib.request
 
-                  API = "https://kubernetes.default.svc"
-                  SA = "/var/run/secrets/kubernetes.io/serviceaccount"
-                  with open(f"{{SA}}/token", encoding="utf-8") as handle:
-                      K8S_TOKEN = handle.read().strip()
-                  CA_FILE = f"{{SA}}/ca.crt"
-                  SSL_CONTEXT = ssl.create_default_context(cafile=CA_FILE)
-                  KUBEOWL_URL = os.environ["KUBEOWL_GATEKEEPER_URL"].rstrip("/")
-                  KUBEOWL_TOKEN = os.environ["KUBEOWL_TOKEN"]
+              API = "https://kubernetes.default.svc"
+              SA = "/var/run/secrets/kubernetes.io/serviceaccount"
+              with open(f"{{SA}}/token", encoding="utf-8") as handle:
+                  K8S_TOKEN = handle.read().strip()
+              CA_FILE = f"{{SA}}/ca.crt"
+              SSL_CONTEXT = ssl.create_default_context(cafile=CA_FILE)
+              KUBEOWL_URL = os.environ["KUBEOWL_GATEKEEPER_URL"].rstrip("/")
+              KUBEOWL_TOKEN = os.environ["KUBEOWL_TOKEN"]
+              INTERVAL_SECONDS = max(5, int(os.getenv("KUBEOWL_COLLECT_INTERVAL_SECONDS", "15")))
 
-                  def k8s_get(path):
-                      request = urllib.request.Request(
-                          f"{{API}}{{path}}",
-                          headers={{"Authorization": f"Bearer {{K8S_TOKEN}}"}},
-                      )
-                      try:
-                          with urllib.request.urlopen(request, context=SSL_CONTEXT, timeout=15) as response:
-                              return json.loads(response.read().decode("utf-8"))
-                      except urllib.error.HTTPError as error:
-                          if error.code == 404:
-                              return None
-                          raise
+              def k8s_get(path):
+                  request = urllib.request.Request(
+                      f"{{API}}{{path}}",
+                      headers={{"Authorization": f"Bearer {{K8S_TOKEN}}"}},
+                  )
+                  try:
+                      with urllib.request.urlopen(request, context=SSL_CONTEXT, timeout=15) as response:
+                          return json.loads(response.read().decode("utf-8"))
+                  except urllib.error.HTTPError as error:
+                      if error.code == 404:
+                          return None
+                      raise
 
-                  def post_event(payload):
-                      data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-                      request = urllib.request.Request(
-                          KUBEOWL_URL,
-                          data=data,
-                          method="POST",
-                          headers={{
-                              "Authorization": f"Bearer {{KUBEOWL_TOKEN}}",
-                              "Content-Type": "application/json",
-                          }},
-                      )
-                      with urllib.request.urlopen(request, timeout=15) as response:
-                          response.read()
+              def post_event(payload):
+                  data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+                  request = urllib.request.Request(
+                      KUBEOWL_URL,
+                      data=data,
+                      method="POST",
+                      headers={{
+                          "Authorization": f"Bearer {{KUBEOWL_TOKEN}}",
+                          "Content-Type": "application/json",
+                      }},
+                  )
+                  with urllib.request.urlopen(request, timeout=15) as response:
+                      response.read()
 
+              def collect_once():
                   discovery = k8s_get("/apis/constraints.gatekeeper.sh/v1beta1")
                   if not discovery:
-                      print("Gatekeeper constraints API not found; skipping.")
-                      raise SystemExit(0)
+                      print("Gatekeeper constraints API not found; skipping.", flush=True)
+                      return 0
 
                   sent = 0
                   now = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -2087,8 +2099,16 @@ spec:
                               }}
                               post_event(payload)
                               sent += 1
-                  print(f"Sent {{sent}} Gatekeeper violation events to KubeOwl.")
-                  PY"""
+                  return sent
+
+              while True:
+                  try:
+                      sent = collect_once()
+                      print(f"Sent {{sent}} Gatekeeper violation events to KubeOwl.", flush=True)
+                  except Exception as error:
+                      print(f"Gatekeeper collector failed: {{error}}", flush=True)
+                  time.sleep(INTERVAL_SECONDS)
+              PY"""
 
 
 def _public_user(user: dict | None) -> dict | None:

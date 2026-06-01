@@ -451,6 +451,9 @@ def test_user_cluster_registration_returns_install_command():
     assert create_body["cluster"]["token"]
     assert "falcosidekick.enabled=true" in create_body["cluster"]["install_command"]
     assert "kubeowl-gatekeeper-collector" in create_body["cluster"]["install_command"]
+    assert "kubectl delete cronjob -n kubeowl-system kubeowl-gatekeeper-collector" in create_body["cluster"]["install_command"]
+    assert "kind: Deployment" in create_body["cluster"]["install_command"]
+    assert "KUBEOWL_COLLECT_INTERVAL_SECONDS" in create_body["cluster"]["install_command"]
     assert "constraints.gatekeeper.sh" in create_body["cluster"]["install_command"]
     assert "https://console.example.test/gatekeeper-events" in create_body["cluster"]["install_command"]
 
