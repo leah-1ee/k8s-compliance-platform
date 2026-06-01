@@ -237,7 +237,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "time() - gatekeeper_audit_last_run_time",
+                        "expr": "(time() - gatekeeper_audit_last_run_time) or vector(0)",
                         "legendFormat": "__auto",
                         "range": true
                       }
@@ -321,7 +321,7 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (enforcement_action) (gatekeeper_violations)",
+                        "expr": "sum by (enforcement_action) (gatekeeper_violations) or vector(0)",
                         "legendFormat": "__auto",
                         "range": true
                       }
@@ -412,8 +412,8 @@
         "kind": "Panel",
         "spec": {
           "id": 5,
-          "title": "Policy Violations by Policy",
-          "description": "위반 수 상위 Gatekeeper 정책.",
+          "title": "Gatekeeper Violations Total",
+          "description": "Gatekeeper audit에서 수집된 전체 위반 수.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -431,8 +431,8 @@
                       },
                       "spec": {
                         "editorMode": "code",
-                        "expr": "sum by (name) (gatekeeper_violations)",
-                        "legendFormat": "__auto",
+                        "expr": "sum(gatekeeper_violations) or vector(0)",
+                        "legendFormat": "total",
                         "range": true
                       }
                     },
