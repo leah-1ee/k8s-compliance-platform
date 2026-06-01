@@ -1031,7 +1031,7 @@ def record_gatekeeper_event(
         "image": raw_event.get("image", ""),
         "user": raw_event.get("user", ""),
         "command": raw_event.get("command", ""),
-        "action_taken": "deny",
+        "action_taken": raw_event.get("enforcementAction") or raw_event.get("action_taken") or "deny",
         "raw_event": raw_event,
     }
     return storage.save_event(event)

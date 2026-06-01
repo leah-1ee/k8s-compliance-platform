@@ -450,6 +450,9 @@ def test_user_cluster_registration_returns_install_command():
     assert create_body["cluster"]["kind"] == "customer"
     assert create_body["cluster"]["token"]
     assert "falcosidekick.enabled=true" in create_body["cluster"]["install_command"]
+    assert "kubeowl-gatekeeper-collector" in create_body["cluster"]["install_command"]
+    assert "constraints.gatekeeper.sh" in create_body["cluster"]["install_command"]
+    assert "https://console.example.test/gatekeeper-events" in create_body["cluster"]["install_command"]
 
     list_response = client.get("/api/clusters", cookies={"compliance_ai_session": token})
     list_body = list_response.json()
@@ -467,6 +470,7 @@ def test_user_cluster_registration_returns_install_command():
     assert rotate_response.status_code == 200
     assert rotate_body["cluster"]["token"] != create_body["cluster"]["token"]
     assert "https://console.example.test/ingest/falco-events" in rotate_body["cluster"]["install_command"]
+    assert "https://console.example.test/gatekeeper-events" in rotate_body["cluster"]["install_command"]
 
 
 def test_user_cluster_install_command_can_use_internal_ingest_url(monkeypatch):
@@ -487,6 +491,10 @@ def test_user_cluster_install_command_can_use_internal_ingest_url(monkeypatch):
     assert response.status_code == 200
     assert (
         "http://ai-server.compliance-system.svc.cluster.local:8000/ingest/falco-events"
+        in response.json()["cluster"]["install_command"]
+    )
+    assert (
+        "http://ai-server.compliance-system.svc.cluster.local:8000/gatekeeper-events"
         in response.json()["cluster"]["install_command"]
     )
 

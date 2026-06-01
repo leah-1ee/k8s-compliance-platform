@@ -1896,8 +1896,10 @@ def _sidekick_install_command(request: Request, token: str) -> str:
         or str(request.base_url).rstrip("/")
     ).rstrip("/")
     ingest_url = f"{ingest_base_url}/ingest/falco-events"
+    gatekeeper_url = f"{ingest_base_url}/gatekeeper-events"
     return "\n".join(
         [
+            "# 1) Falco runtime event collector",
             "helm repo add falcosecurity https://falcosecurity.github.io/charts",
             "helm repo update",
             "helm upgrade --install falco falcosecurity/falco \\",
@@ -1907,8 +1909,186 @@ def _sidekick_install_command(request: Request, token: str) -> str:
             f'  --set falcosidekick.config.webhook.address="{ingest_url}" \\',
             f'  --set falcosidekick.config.webhook.customHeaders="Authorization:Bearer {token}" \\',
             '  --set falcosidekick.config.webhook.minimumpriority="warning"',
+            "",
+            "# 2) Gatekeeper audit collector",
+            f"cat <<'KUBEOWL_GATEKEEPER_COLLECTOR_EOF' | kubectl apply -f -\n{_gatekeeper_collector_manifest(gatekeeper_url, token)}\nKUBEOWL_GATEKEEPER_COLLECTOR_EOF",
         ]
     )
+
+
+def _gatekeeper_collector_manifest(gatekeeper_url: str, token: str) -> str:
+    return f"""apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubeowl-system
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kubeowl-gatekeeper-collector
+  namespace: kubeowl-system
+type: Opaque
+stringData:
+  token: "{token}"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubeowl-gatekeeper-collector
+  namespace: kubeowl-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubeowl-gatekeeper-collector
+rules:
+  - apiGroups:
+      - constraints.gatekeeper.sh
+    resources:
+      - "*"
+    verbs:
+      - get
+      - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubeowl-gatekeeper-collector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubeowl-gatekeeper-collector
+subjects:
+  - kind: ServiceAccount
+    name: kubeowl-gatekeeper-collector
+    namespace: kubeowl-system
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kubeowl-gatekeeper-collector
+  namespace: kubeowl-system
+spec:
+  schedule: "*/2 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          serviceAccountName: kubeowl-gatekeeper-collector
+          restartPolicy: OnFailure
+          containers:
+            - name: collector
+              image: python:3.12-alpine
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: KUBEOWL_GATEKEEPER_URL
+                  value: "{gatekeeper_url}"
+                - name: KUBEOWL_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: kubeowl-gatekeeper-collector
+                      key: token
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                runAsNonRoot: true
+                runAsUser: 65532
+                runAsGroup: 65532
+                seccompProfile:
+                  type: RuntimeDefault
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  python - <<'PY'
+                  import datetime
+                  import hashlib
+                  import json
+                  import os
+                  import ssl
+                  import urllib.error
+                  import urllib.request
+
+                  API = "https://kubernetes.default.svc"
+                  SA = "/var/run/secrets/kubernetes.io/serviceaccount"
+                  with open(f"{{SA}}/token", encoding="utf-8") as handle:
+                      K8S_TOKEN = handle.read().strip()
+                  CA_FILE = f"{{SA}}/ca.crt"
+                  SSL_CONTEXT = ssl.create_default_context(cafile=CA_FILE)
+                  KUBEOWL_URL = os.environ["KUBEOWL_GATEKEEPER_URL"].rstrip("/")
+                  KUBEOWL_TOKEN = os.environ["KUBEOWL_TOKEN"]
+
+                  def k8s_get(path):
+                      request = urllib.request.Request(
+                          f"{{API}}{{path}}",
+                          headers={{"Authorization": f"Bearer {{K8S_TOKEN}}"}},
+                      )
+                      try:
+                          with urllib.request.urlopen(request, context=SSL_CONTEXT, timeout=15) as response:
+                              return json.loads(response.read().decode("utf-8"))
+                      except urllib.error.HTTPError as error:
+                          if error.code == 404:
+                              return None
+                          raise
+
+                  def post_event(payload):
+                      data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+                      request = urllib.request.Request(
+                          KUBEOWL_URL,
+                          data=data,
+                          method="POST",
+                          headers={{
+                              "Authorization": f"Bearer {{KUBEOWL_TOKEN}}",
+                              "Content-Type": "application/json",
+                          }},
+                      )
+                      with urllib.request.urlopen(request, timeout=15) as response:
+                          response.read()
+
+                  discovery = k8s_get("/apis/constraints.gatekeeper.sh/v1beta1")
+                  if not discovery:
+                      print("Gatekeeper constraints API not found; skipping.")
+                      raise SystemExit(0)
+
+                  sent = 0
+                  now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                  for resource in discovery.get("resources", []):
+                      name = resource.get("name", "")
+                      if "/" in name or "list" not in resource.get("verbs", []):
+                          continue
+                      constraints = k8s_get(f"/apis/constraints.gatekeeper.sh/v1beta1/{{name}}") or {{}}
+                      for item in constraints.get("items", []):
+                          metadata = item.get("metadata", {{}})
+                          constraint_name = metadata.get("name", "unknown")
+                          constraint_uid = metadata.get("uid", constraint_name)
+                          kind = item.get("kind", "GatekeeperConstraint")
+                          for violation in item.get("status", {{}}).get("violations", []):
+                              namespace = violation.get("namespace", "")
+                              object_name = violation.get("name", "")
+                              message = violation.get("message", "")
+                              action = violation.get("enforcementAction") or item.get("spec", {{}}).get("enforcementAction") or "deny"
+                              identity = "|".join([str(constraint_uid), namespace, object_name, message])
+                              payload = {{
+                                  "id": "gatekeeper-" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:24],
+                                  "timestamp": now,
+                                  "constraint": constraint_name,
+                                  "constraint_kind": kind,
+                                  "namespace": namespace,
+                                  "pod_name": object_name,
+                                  "message": message,
+                                  "enforcementAction": action,
+                                  "severity": "medium",
+                              }}
+                              post_event(payload)
+                              sent += 1
+                  print(f"Sent {{sent}} Gatekeeper violation events to KubeOwl.")
+                  PY"""
 
 
 def _public_user(user: dict | None) -> dict | None:
