@@ -2459,6 +2459,14 @@ label {
   min-width: 0;
 }
 
+.field-hint {
+  margin-top: -4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
 textarea,
 input,
 select {

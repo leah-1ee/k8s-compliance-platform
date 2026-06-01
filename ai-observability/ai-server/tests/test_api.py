@@ -68,6 +68,7 @@ def test_ui_is_served():
     assert "Anthropic (Claude)" in response.text
     assert "Google (Gemini)" in response.text
     assert "xAI (Grok)" in response.text
+    assert "같은 이름으로 다시 적용하면 기존 정책의 설정을 업데이트합니다." in response.text
     assert "Use my own API key" in response.text
     assert "accountDeleteButton" in response.text
     assert "회원 탈퇴" in response.text
