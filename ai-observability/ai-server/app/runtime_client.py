@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlencode
@@ -93,8 +94,109 @@ def apply_policy_manifest(manifest: str, cluster: dict[str, Any]) -> dict[str, A
             "fallback": _policy_apply_fallback(manifest),
         }
 
+    if _has_gatekeeper_resources(ordered):
+        gatekeeper_error = _gatekeeper_installation_error()
+        if gatekeeper_error:
+            for result in resource_results:
+                if _is_gatekeeper_result(result):
+                    result["dry_run_status"] = "skipped"
+                    result["apply_status"] = "skipped"
+                    result["error"] = gatekeeper_error
+            return {
+                "status": "not_configured",
+                "error": gatekeeper_error,
+                "cluster_id": cluster.get("id", ""),
+                "cluster_name": cluster.get("name", ""),
+                "policy_type": policy_type,
+                "policy_name": policy_name,
+                "resources": resource_results,
+                "fallback": _policy_apply_fallback(manifest),
+            }
+
+    gatekeeper_constraints = [resource for resource in ordered if _is_gatekeeper_constraint(resource)]
+    constraint_template_indexes = [
+        index
+        for index, resource in enumerate(ordered)
+        if _is_constraint_template(resource)
+    ]
+    preflight_template_indexes: set[int] = set()
+    if constraint_template_indexes and gatekeeper_constraints:
+        dry_run_failed = False
+        for index in constraint_template_indexes:
+            resource = ordered[index]
+            result = resource_results[index]
+            error = _server_side_apply(resource, dry_run=True)
+            if error:
+                result["dry_run_status"] = "failed"
+                result["apply_status"] = "skipped"
+                result["error"] = error
+                dry_run_failed = True
+            else:
+                result["dry_run_status"] = "success"
+                result["apply_status"] = "pending"
+        if dry_run_failed:
+            return {
+                "status": "dry_run_failed",
+                "error": "dry-run 검증 실패로 실제 apply를 실행하지 않았습니다.",
+                "cluster_id": cluster.get("id", ""),
+                "cluster_name": cluster.get("name", ""),
+                "policy_type": policy_type,
+                "policy_name": policy_name,
+                "resources": resource_results,
+                "fallback": _policy_apply_fallback(manifest),
+            }
+
+        template_apply_failed = False
+        for index in constraint_template_indexes:
+            resource = ordered[index]
+            result = resource_results[index]
+            error = _server_side_apply(resource, dry_run=False)
+            if error:
+                result["apply_status"] = "failed"
+                result["error"] = error
+                template_apply_failed = True
+            else:
+                result["apply_status"] = "success"
+                preflight_template_indexes.add(index)
+        if template_apply_failed:
+            for index, result in enumerate(resource_results):
+                if index not in preflight_template_indexes and result["apply_status"] == "skipped":
+                    result["error"] = (
+                        "ConstraintTemplate 적용 실패로 Constraint 검증을 진행하지 않았습니다."
+                    )
+            return {
+                "status": "apply_failed",
+                "error": "ConstraintTemplate 적용 실패로 Constraint 검증을 진행하지 않았습니다.",
+                "cluster_id": cluster.get("id", ""),
+                "cluster_name": cluster.get("name", ""),
+                "policy_type": policy_type,
+                "policy_name": policy_name,
+                "resources": resource_results,
+                "fallback": _policy_apply_fallback(manifest),
+            }
+
+        wait_error = _wait_for_gatekeeper_constraint_discovery(gatekeeper_constraints)
+        if wait_error:
+            for index, resource in enumerate(ordered):
+                if _is_gatekeeper_constraint(resource):
+                    resource_results[index]["dry_run_status"] = "failed"
+                    resource_results[index]["apply_status"] = "skipped"
+                    resource_results[index]["error"] = wait_error
+            return {
+                "status": "dry_run_failed",
+                "error": wait_error,
+                "cluster_id": cluster.get("id", ""),
+                "cluster_name": cluster.get("name", ""),
+                "policy_type": policy_type,
+                "policy_name": policy_name,
+                "resources": resource_results,
+                "fallback": _policy_apply_fallback(manifest),
+            }
+
     dry_run_failed = False
-    for resource, result in zip(ordered, resource_results, strict=True):
+    for index, (resource, result) in enumerate(zip(ordered, resource_results, strict=True)):
+        if index in preflight_template_indexes:
+            continue
         error = _server_side_apply(resource, dry_run=True)
         if error:
             result["dry_run_status"] = "failed"
@@ -120,7 +222,9 @@ def apply_policy_manifest(manifest: str, cluster: dict[str, Any]) -> dict[str, A
         }
 
     apply_failed = False
-    for resource, result in zip(ordered, resource_results, strict=True):
+    for index, (resource, result) in enumerate(zip(ordered, resource_results, strict=True)):
+        if index in preflight_template_indexes:
+            continue
         error = _server_side_apply(resource, dry_run=False)
         if error:
             result["apply_status"] = "failed"
@@ -203,6 +307,75 @@ def _resource_result(resource: dict[str, Any], order: int) -> dict[str, Any]:
         "apply_status": "skipped",
         "error": "",
     }
+
+
+def _is_constraint_template(resource: dict[str, Any]) -> bool:
+    return str(resource.get("kind", "")) == "ConstraintTemplate" and str(
+        resource.get("apiVersion", "")
+    ).startswith("templates.gatekeeper.sh/")
+
+
+def _is_gatekeeper_constraint(resource: dict[str, Any]) -> bool:
+    return str(resource.get("apiVersion", "")).startswith("constraints.gatekeeper.sh/")
+
+
+def _is_gatekeeper_mutation(resource: dict[str, Any]) -> bool:
+    return str(resource.get("apiVersion", "")).startswith("mutations.gatekeeper.sh/")
+
+
+def _has_gatekeeper_resources(resources: list[dict[str, Any]]) -> bool:
+    return any(
+        _is_constraint_template(resource)
+        or _is_gatekeeper_constraint(resource)
+        or _is_gatekeeper_mutation(resource)
+        for resource in resources
+    )
+
+
+def _is_gatekeeper_result(result: dict[str, Any]) -> bool:
+    api_version = str(result.get("api_version", ""))
+    return (
+        str(result.get("kind", "")) == "ConstraintTemplate"
+        or api_version.startswith("constraints.gatekeeper.sh/")
+        or api_version.startswith("mutations.gatekeeper.sh/")
+    )
+
+
+def _gatekeeper_installation_error() -> str:
+    for version in ("v1", "v1beta1"):
+        discovery = _kube_get(f"/apis/templates.gatekeeper.sh/{version}")
+        if not discovery.get("error"):
+            return ""
+    return (
+        "Gatekeeper가 설치되어 있지 않거나 templates.gatekeeper.sh API를 찾을 수 없습니다. "
+        "클러스터 관리자가 Gatekeeper를 먼저 설치한 뒤 다시 실행하세요."
+    )
+
+
+def _wait_for_gatekeeper_constraint_discovery(
+    resources: list[dict[str, Any]],
+    timeout: float = 30,
+    interval: float = 1,
+) -> str:
+    pending = {str(resource.get("kind", "")).strip() for resource in resources if resource.get("kind")}
+    if not pending:
+        return ""
+    deadline = time.monotonic() + timeout
+    while pending:
+        discovery = _kube_get("/apis/constraints.gatekeeper.sh/v1beta1")
+        if not discovery.get("error"):
+            for api_resource in discovery.get("body", {}).get("resources", []):
+                if not isinstance(api_resource, dict) or "/" in str(api_resource.get("name", "")):
+                    continue
+                if "patch" in api_resource.get("verbs", []):
+                    pending.discard(str(api_resource.get("kind", "")))
+        if not pending:
+            return ""
+        if time.monotonic() >= deadline:
+            missing = ", ".join(sorted(pending))
+            return f"Gatekeeper Constraint CRD 등록 대기 시간이 초과되었습니다: {missing}"
+        time.sleep(interval)
+    return ""
 
 
 def _policy_identity(resource_results: list[dict[str, Any]]) -> tuple[str, str]:
@@ -292,7 +465,7 @@ def _lookup_api_resource(api_version: str, kind: str) -> dict[str, Any]:
 
 
 def _fallback_api_resource(api_version: str, kind: str) -> dict[str, Any]:
-    if api_version == "templates.gatekeeper.sh/v1beta1" and kind == "ConstraintTemplate":
+    if api_version.startswith("templates.gatekeeper.sh/") and kind == "ConstraintTemplate":
         return {"name": "constrainttemplates", "namespaced": False}
     if api_version.startswith("constraints.gatekeeper.sh/"):
         return {"name": kind.lower(), "namespaced": False}
@@ -336,28 +509,48 @@ def _kube_patch(path: str, yaml_body: str, timeout: float = 10) -> dict[str, Any
 
 def _policy_apply_fallback(manifest: str) -> dict[str, str]:
     clean_manifest = str(manifest or "").strip()
+    gatekeeper_check = _gatekeeper_install_check_command(clean_manifest)
     dry_run = _fallback_commands(clean_manifest, dry_run=True)
     apply = _fallback_commands(clean_manifest, dry_run=False)
     permission_check = _policy_permission_check_command(clean_manifest)
     admin_rbac = _policy_admin_rbac_command(clean_manifest)
     return {
+        "gatekeeper_check_command": gatekeeper_check,
         "permission_check_command": permission_check,
         "admin_rbac_command": admin_rbac,
         "dry_run_command": dry_run,
         "apply_command": apply,
         "combined_command": "\n\n".join(
             [
-                "# 1) 현재 kubeconfig 계정 권한 확인",
+                "# 1) Gatekeeper 설치 확인",
+                gatekeeper_check,
+                "# 2) 현재 kubeconfig 계정 권한 확인",
                 permission_check,
-                "# 2) 권한이 부족하면 클러스터 관리자가 먼저 실행",
+                "# 3) 권한이 부족하면 클러스터 관리자가 먼저 실행",
                 admin_rbac,
-                "# 3) dry-run 검증",
+                "# 4) dry-run 검증",
                 dry_run,
-                "# 4) 실제 적용",
+                "# 5) 실제 적용",
                 apply,
             ]
         ),
     }
+
+
+def _gatekeeper_install_check_command(manifest: str) -> str:
+    if not _manifest_has_gatekeeper_resource(manifest):
+        return "echo 'Gatekeeper 리소스가 없어 설치 확인을 건너뜁니다.'"
+    return "\n".join(
+        [
+            "kubectl get crd constrainttemplates.templates.gatekeeper.sh",
+            "kubectl api-resources --api-group=templates.gatekeeper.sh",
+            "kubectl get pods -n gatekeeper-system",
+            (
+                "# 위 명령이 실패하면 클러스터 관리자가 Gatekeeper를 먼저 설치한 뒤 "
+                "정책 적용을 다시 실행하세요."
+            ),
+        ]
+    )
 
 
 def _policy_permission_check_command(manifest: str) -> str:
@@ -441,6 +634,13 @@ def _manifest_has_kind(manifest: str, kind: str) -> bool:
         return False
 
 
+def _manifest_has_gatekeeper_resource(manifest: str) -> bool:
+    try:
+        return _has_gatekeeper_resources(_parse_policy_manifest(manifest))
+    except ValueError:
+        return False
+
+
 def _manifest_namespaces(manifest: str) -> set[str]:
     namespaces = set()
     try:
@@ -473,10 +673,26 @@ def _fallback_commands(manifest: str, dry_run: bool) -> str:
             "KUBEOWL_POLICY_EOF",
         )
 
+    template_manifest = _dump_manifest_docs(templates)
+    other_manifest = _dump_manifest_docs(others)
+    if dry_run:
+        commands = [
+            (
+                "# ConstraintTemplate dry-run은 Constraint CRD를 실제 등록하지 않으므로 "
+                "템플릿을 먼저 검증합니다."
+            ),
+            _heredoc_command("kubectl apply --dry-run=server -f -", template_manifest, "KUBEOWL_TEMPLATE_DRY_RUN_EOF"),
+            "# Constraint kind 검증을 위해 ConstraintTemplate은 실제 적용합니다.",
+            _heredoc_command("kubectl apply -f -", template_manifest, "KUBEOWL_TEMPLATE_EOF"),
+            "kubectl wait --for=condition=Established crd -l gatekeeper.sh/constraint=true --timeout=60s",
+            _heredoc_command("kubectl apply --dry-run=server -f -", other_manifest, "KUBEOWL_CONSTRAINT_DRY_RUN_EOF"),
+        ]
+        return "\n\n".join(commands)
+
     commands = [
-        _heredoc_command(verb, _dump_manifest_docs(templates), "KUBEOWL_TEMPLATE_EOF"),
+        _heredoc_command(verb, template_manifest, "KUBEOWL_TEMPLATE_EOF"),
         "kubectl wait --for=condition=Established crd -l gatekeeper.sh/constraint=true --timeout=60s",
-        _heredoc_command(verb, _dump_manifest_docs(others), "KUBEOWL_CONSTRAINT_EOF"),
+        _heredoc_command(verb, other_manifest, "KUBEOWL_CONSTRAINT_EOF"),
     ]
     return "\n\n".join(commands)
 

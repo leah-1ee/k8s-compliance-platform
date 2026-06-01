@@ -9,6 +9,7 @@ from app.main import app
 from app.analyzer import _parse_llm_incident_json
 from app.policy_generator import _complete_review, _format_llm_http_error
 from app import storage
+from app import runtime_client
 
 
 client = TestClient(app)
@@ -2144,6 +2145,8 @@ metadata:
         "K8sRequiredLabels",
         "NetworkPolicy",
     ]
+    assert "Gatekeeper 설치 확인" in body["fallback"]["combined_command"]
+    assert "kubectl get crd constrainttemplates.templates.gatekeeper.sh" in body["fallback"]["combined_command"]
     assert "kubectl apply --dry-run=server" in body["fallback"]["combined_command"]
     assert "현재 kubeconfig 계정 권한 확인" in body["fallback"]["combined_command"]
     assert "kubectl auth can-i create constrainttemplates.templates.gatekeeper.sh" in body["fallback"]["combined_command"]
@@ -2160,6 +2163,76 @@ metadata:
     assert summary_body["active_policies"] == 1
     assert summary_body["active_policies_applied"] == 0
     assert summary_body["active_policies_generated_guides"] == 1
+
+
+def test_direct_gatekeeper_apply_registers_template_before_constraint_dry_run(monkeypatch):
+    monkeypatch.setattr(runtime_client, "_policy_apply_enabled", lambda: True)
+    monkeypatch.setattr(runtime_client, "_kube_apply_configured", lambda: True)
+    monkeypatch.setattr(runtime_client, "_gatekeeper_installation_error", lambda: "")
+    monkeypatch.setattr(runtime_client, "_wait_for_gatekeeper_constraint_discovery", lambda resources: "")
+    calls = []
+
+    def fake_server_side_apply(resource, dry_run):
+        calls.append((resource["kind"], dry_run))
+        return ""
+
+    monkeypatch.setattr(runtime_client, "_server_side_apply", fake_server_side_apply)
+    manifest = """
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequireNonRoot
+metadata:
+  name: require-non-root
+---
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequirenonroot
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequireNonRoot
+"""
+
+    result = runtime_client.apply_policy_manifest(manifest, {"id": "cluster-1", "name": "demo"})
+
+    assert result["status"] == "applied"
+    assert calls == [
+        ("ConstraintTemplate", True),
+        ("ConstraintTemplate", False),
+        ("K8sRequireNonRoot", True),
+        ("K8sRequireNonRoot", False),
+    ]
+    assert result["resources"][0]["apply_status"] == "success"
+    assert result["resources"][1]["dry_run_status"] == "success"
+
+
+def test_direct_gatekeeper_apply_reports_missing_gatekeeper(monkeypatch):
+    monkeypatch.setattr(runtime_client, "_policy_apply_enabled", lambda: True)
+    monkeypatch.setattr(runtime_client, "_kube_apply_configured", lambda: True)
+    monkeypatch.setattr(
+        runtime_client,
+        "_gatekeeper_installation_error",
+        lambda: "Gatekeeper가 설치되어 있지 않습니다.",
+    )
+    manifest = """
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequirenonroot
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequireNonRoot
+metadata:
+  name: require-non-root
+"""
+
+    result = runtime_client.apply_policy_manifest(manifest, {"id": "cluster-1", "name": "demo"})
+
+    assert result["status"] == "not_configured"
+    assert "Gatekeeper가 설치" in result["error"]
+    assert result["resources"][0]["apply_status"] == "skipped"
+    assert result["resources"][1]["dry_run_status"] == "skipped"
 
 
 def test_policy_apply_requires_confirmation_for_system_namespace_blast_radius(monkeypatch):
