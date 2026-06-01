@@ -369,16 +369,7 @@ function renderDashboardSummary(summary = {}) {
     summary.active_policies === null || summary.active_policies === undefined
       ? "-"
       : String(summary.active_policies);
-  const appliedCount = Number(summary.active_policies_applied || 0);
-  const guideCount = Number(summary.active_policies_generated_guides || 0);
-  $("#activePoliciesMetricDetail").textContent =
-    summary.active_policies_error
-      ? `Policy history error: ${summary.active_policies_error}`
-    : summary.active_policies_source === "user_policy_apply_history"
-      ? guideCount > 0
-        ? `${appliedCount} server-applied / ${guideCount} kubectl guides`
-        : "Applied in your clusters"
-      : "Your applied policies";
+  $("#activePoliciesMetricDetail").textContent = "";
   $("#recentViolationsMetric").textContent = String(summary.recent_violations ?? 0);
   $("#runtimeEventsMetric").textContent = String(summary.runtime_events ?? 0);
   $("#lastSyncMetric").textContent = formatRelativeTime(summary.last_sync || "");
