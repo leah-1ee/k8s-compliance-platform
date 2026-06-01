@@ -2242,6 +2242,25 @@ metadata:
     assert result["resources"][1]["dry_run_status"] == "skipped"
 
 
+def test_gatekeeper_wait_uses_gatekeeper_generated_crd_name():
+    manifest = """
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequirenonroot
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequireNonRoot
+metadata:
+  name: non-root
+"""
+
+    fallback = runtime_client._policy_apply_fallback(manifest)
+
+    assert "k8srequirenonroot.constraints.gatekeeper.sh" in fallback["dry_run_command"]
+    assert "k8srequirenonroots.constraints.gatekeeper.sh" not in fallback["dry_run_command"]
+
+
 def test_policy_apply_requires_confirmation_for_system_namespace_blast_radius(monkeypatch):
     monkeypatch.delenv("POLICY_APPLY_ENABLED", raising=False)
     owner = storage.upsert_user(

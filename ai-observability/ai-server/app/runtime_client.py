@@ -705,10 +705,7 @@ def _gatekeeper_constraint_wait_commands(resources: list[dict[str, Any]]) -> lis
 
 
 def _gatekeeper_constraint_resource_name(kind: str) -> str:
-    normalized = str(kind or "").strip().lower()
-    if not normalized or normalized.endswith("s"):
-        return normalized
-    return f"{normalized}s"
+    return str(kind or "").strip().lower()
 
 
 def _manifest_namespaces(manifest: str) -> set[str]:
