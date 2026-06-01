@@ -764,6 +764,14 @@
                 <span class="kicker">Grafana Auth Proxy</span>
                 <h3>Grafana는 직접 열지 않고 KubeOwl 프록시 뒤에서 사용자별로 분리합니다.</h3>
                 <p>사용자 Grafana는 <code>/grafana-ui/</code> 인증 프록시 뒤에 두고, 사용자별 org와 datasource를 프로비저닝합니다. Prometheus 쿼리는 사용자 클러스터 범위로 주입해 다른 사용자의 메트릭이 섞이지 않도록 합니다.</p>
+                <p>대시보드는 중앙 Grafana에서 열리지만, 사용자 화면은 관리자 클러스터의 raw Gatekeeper 지표를 직접 보지 않습니다. Runtime/Falco는 이벤트 발생 순간 Falco Sidekick이 <code>/ingest/falco-events</code>로 바로 HTTP push하고, Gatekeeper는 admission deny 이벤트를 외부 webhook으로 계속 보내는 구조가 아니므로 사용자 클러스터 안 collector가 <code>Constraint.status.violations</code>를 읽어 <code>/gatekeeper-events</code>로 push합니다.</p>
+                <ul>
+                  <li><strong>KubeOwl Observability</strong>: 사용자 org와 datasource에서 <code>cluster_id</code> 범위가 주입된 KubeOwl export metrics를 조회합니다.</li>
+                  <li><strong>Runtime Detection</strong>: Falco Sidekick이 runtime 이벤트를 즉시 ingest하므로 webhook push 기반 근실시간 대시보드로 동작합니다.</li>
+                  <li><strong>Gatekeeper Compliance Overview</strong>: Gatekeeper audit controller가 갱신한 <code>Constraint.status.violations</code>를 collector <code>Deployment</code>가 15초마다 읽어 KubeOwl로 전송합니다. CronJob이 아니며, 사용자 대시보드는 <code>kubeowl_gatekeeper_*</code> 메트릭만 사용합니다.</li>
+                  <li><strong>Admin Grafana</strong>: <code>/admin-grafana/</code> 경로의 별도 관리자 Grafana에서 플랫폼 운영 지표와 전체 수집 상태를 확인합니다.</li>
+                </ul>
+                <p>Gatekeeper를 사용자 클러스터 기준으로 보려면 Prometheus remote write/federation을 구성하거나, 현재 구현처럼 사용자 클러스터 collector가 상태를 읽어 KubeOwl로 보내야 합니다. 데모와 설치 UX에서는 별도 Prometheus 연동보다 collector 방식이 단순하고, 최종 지연은 collector 간격뿐 아니라 Gatekeeper audit 갱신 주기의 영향을 받습니다.</p>
                 <div class="topic-chips"><span>/grafana-ui/</span><span>org per user</span><span>query injection</span></div>
               </article>
               <article class="topic-detail" data-docs-panel="arch-flow">
