@@ -2156,6 +2156,8 @@ metadata:
     assert "kubectl auth can-i create '*.constraints.gatekeeper.sh'" in body["fallback"]["combined_command"]
     assert "kubectl auth can-i patch '*.constraints.gatekeeper.sh'" in body["fallback"]["combined_command"]
     assert "kubeowl-policy-applier" in body["fallback"]["combined_command"]
+    assert "--dry-run=client -o yaml | kubectl apply -f -" in body["fallback"]["admin_rbac_command"]
+    assert "kubeowl-policy-applier-current-user" in body["fallback"]["admin_rbac_command"]
     assert "KUBEOWL_TEMPLATE_DRY_RUN_EOF" in body["fallback"]["dry_run_command"]
     assert "kubectl apply -f - <<'KUBEOWL_TEMPLATE_EOF'" in body["fallback"]["dry_run_command"]
     assert "KUBEOWL_TEMPLATE_EOF" in body["fallback"]["combined_command"]

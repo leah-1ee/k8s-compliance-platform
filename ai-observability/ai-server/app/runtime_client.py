@@ -619,12 +619,23 @@ rules:
       - patch{network_rule}
 KUBEOWL_RBAC_EOF
 
-# 예시: 현재 kubeconfig 사용자가 alice@example.com 이라면
-kubectl create clusterrolebinding kubeowl-policy-applier-alice --clusterrole=kubeowl-policy-applier --user=alice@example.com
+CURRENT_KUBE_USER="$(kubectl config view --minify -o jsonpath='{{.contexts[0].context.user}}')"
+if [ -n "${{CURRENT_KUBE_USER}}" ]; then
+  kubectl create clusterrolebinding kubeowl-policy-applier-current-user \\
+    --clusterrole=kubeowl-policy-applier \\
+    --user="${{CURRENT_KUBE_USER}}" \\
+    --dry-run=client -o yaml | kubectl apply -f -
+else
+  echo "현재 kubeconfig user를 찾지 못해 사용자 ClusterRoleBinding을 건너뜁니다."
+fi
 
-# 예시: ServiceAccount로 적용한다면
-kubectl create serviceaccount kubeowl-policy-applier -n default
-kubectl create clusterrolebinding kubeowl-policy-applier-sa --clusterrole=kubeowl-policy-applier --serviceaccount=default:kubeowl-policy-applier"""
+kubectl create serviceaccount kubeowl-policy-applier -n default \\
+  --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl create clusterrolebinding kubeowl-policy-applier-sa \\
+  --clusterrole=kubeowl-policy-applier \\
+  --serviceaccount=default:kubeowl-policy-applier \\
+  --dry-run=client -o yaml | kubectl apply -f -"""
 
 
 def _manifest_has_kind(manifest: str, kind: str) -> bool:
