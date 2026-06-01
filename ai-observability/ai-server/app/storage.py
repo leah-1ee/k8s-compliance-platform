@@ -1153,7 +1153,15 @@ def count_policy_apply_history(user_id: str = "", statuses: set[str] | None = No
     where = f"WHERE {' AND '.join(filters)}" if filters else ""
     with _connect() as conn:
         row = conn.execute(
-            f"SELECT COUNT(DISTINCT manifest_hash) AS count FROM policy_apply_history {where}",
+            f"""
+            SELECT COUNT(*) AS count
+            FROM (
+                SELECT 1
+                FROM policy_apply_history
+                {where}
+                GROUP BY cluster_id, policy_type, policy_name
+            )
+            """,
             params,
         ).fetchone()
     return int(row["count"] or 0)

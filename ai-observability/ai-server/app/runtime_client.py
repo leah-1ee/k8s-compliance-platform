@@ -866,10 +866,14 @@ def build_dashboard_summary(user_id: str = "") -> dict[str, Any]:
     summary = get_runtime_summary(user_id=user_id)
     last_sync = summary.get("last_seen_at") or summary.get("latest_event_at") or ""
     if user_id:
+        active_policy_count = storage.count_policy_apply_history(
+            user_id=user_id,
+            statuses={"applied", "not_configured"},
+        )
         applied_policy_count = storage.count_policy_apply_history(user_id=user_id, statuses={"applied"})
         guided_policy_count = storage.count_policy_apply_history(user_id=user_id, statuses={"not_configured"})
         active_policies = {
-            "count": applied_policy_count + guided_policy_count,
+            "count": active_policy_count,
             "source": "user_policy_apply_history",
             "error": "",
             "applied": applied_policy_count,

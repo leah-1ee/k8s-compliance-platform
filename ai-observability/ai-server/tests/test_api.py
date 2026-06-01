@@ -1977,6 +1977,18 @@ def test_dashboard_summary_uses_user_scoped_policy_and_event_counts():
         manifest="apiVersion: constraints.gatekeeper.sh/v1beta1\nkind: K8sRequiredLabels\nmetadata:\n  name: require-owner\n",
         status="applied",
     )
+    storage.save_policy_apply_history(
+        user_id=owner["id"],
+        cluster_id=cluster["id"],
+        policy_type="gatekeeper_constraint",
+        policy_name="require-owner",
+        manifest=(
+            "apiVersion: constraints.gatekeeper.sh/v1beta1\n"
+            "kind: K8sRequiredLabels\nmetadata:\n  name: require-owner\n"
+            "spec:\n  enforcementAction: deny\n"
+        ),
+        status="not_configured",
+    )
     event_time = datetime.now(timezone.utc).isoformat()
     storage.mark_cluster_seen(cluster["id"], event_time)
     client.post(
