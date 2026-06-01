@@ -449,6 +449,14 @@ def test_user_cluster_registration_returns_install_command():
     assert create_body["cluster"]["user_id"] == user["id"]
     assert create_body["cluster"]["kind"] == "customer"
     assert create_body["cluster"]["token"]
+    install_commands = create_body["cluster"]["install_commands"]
+    assert set(install_commands) == {"falco", "gatekeeper_rbac", "gatekeeper_deployment"}
+    assert "falcosidekick.enabled=true" in install_commands["falco"]
+    assert "kind: Secret" in install_commands["gatekeeper_rbac"]
+    assert "constraints.gatekeeper.sh" in install_commands["gatekeeper_rbac"]
+    assert "kind: Deployment" in install_commands["gatekeeper_deployment"]
+    assert "KUBEOWL_COLLECT_INTERVAL_SECONDS" in install_commands["gatekeeper_deployment"]
+    assert "https://console.example.test/gatekeeper-events" in install_commands["gatekeeper_deployment"]
     assert "falcosidekick.enabled=true" in create_body["cluster"]["install_command"]
     assert "kubeowl-gatekeeper-collector" in create_body["cluster"]["install_command"]
     assert "kubectl delete cronjob -n kubeowl-system kubeowl-gatekeeper-collector" in create_body["cluster"]["install_command"]
@@ -472,6 +480,7 @@ def test_user_cluster_registration_returns_install_command():
 
     assert rotate_response.status_code == 200
     assert rotate_body["cluster"]["token"] != create_body["cluster"]["token"]
+    assert "falcosidekick.enabled=true" in rotate_body["cluster"]["install_commands"]["falco"]
     assert "https://console.example.test/ingest/falco-events" in rotate_body["cluster"]["install_command"]
     assert "https://console.example.test/gatekeeper-events" in rotate_body["cluster"]["install_command"]
 
@@ -494,11 +503,11 @@ def test_user_cluster_install_command_can_use_internal_ingest_url(monkeypatch):
     assert response.status_code == 200
     assert (
         "http://ai-server.compliance-system.svc.cluster.local:8000/ingest/falco-events"
-        in response.json()["cluster"]["install_command"]
+        in response.json()["cluster"]["install_commands"]["falco"]
     )
     assert (
         "http://ai-server.compliance-system.svc.cluster.local:8000/gatekeeper-events"
-        in response.json()["cluster"]["install_command"]
+        in response.json()["cluster"]["install_commands"]["gatekeeper_deployment"]
     )
 
 

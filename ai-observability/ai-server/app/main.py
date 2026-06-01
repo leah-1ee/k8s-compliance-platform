@@ -852,7 +852,7 @@ def user_create_cluster(
         if "UNIQUE" in str(error).upper():
             return JSONResponse(status_code=409, content={"error": "cluster name already exists"})
         raise
-    cluster["install_command"] = _sidekick_install_command(request, cluster["token"])
+    _attach_install_commands(request, cluster)
     record_audit_action(
         request,
         "cluster.create",
@@ -884,7 +884,7 @@ def user_rotate_cluster_token(
     rotated = storage.rotate_cluster_token(cluster_id)
     if rotated is None:
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
-    rotated["install_command"] = _sidekick_install_command(request, rotated["token"])
+    _attach_install_commands(request, rotated)
     record_audit_action(
         request,
         "cluster.rotate_token",
@@ -1512,7 +1512,7 @@ def admin_create_cluster(
         if "UNIQUE" in str(error).upper():
             return JSONResponse(status_code=409, content={"error": "cluster name already exists"})
         raise
-    cluster["install_command"] = _sidekick_install_command(request, cluster["token"])
+    _attach_install_commands(request, cluster)
     record_audit_action(
         request,
         "cluster.create",
@@ -1583,7 +1583,7 @@ def admin_rotate_cluster_token(
     cluster = storage.rotate_cluster_token(cluster_id)
     if cluster is None:
         return JSONResponse(status_code=404, content={"error": "cluster not found"})
-    cluster["install_command"] = _sidekick_install_command(request, cluster["token"])
+    _attach_install_commands(request, cluster)
     record_audit_action(
         request,
         "cluster.rotate_token",
@@ -1889,7 +1889,13 @@ def compliance_report(
     )
 
 
-def _sidekick_install_command(request: Request, token: str) -> str:
+def _attach_install_commands(request: Request, cluster: dict) -> None:
+    commands = _sidekick_install_commands(request, str(cluster.get("token", "")))
+    cluster["install_commands"] = commands
+    cluster["install_command"] = "\n\n".join(commands.values())
+
+
+def _sidekick_install_commands(request: Request, token: str) -> dict[str, str]:
     ingest_base_url = (
         os.getenv("FALCO_INGEST_BASE_URL", "").strip()
         or os.getenv("PUBLIC_BASE_URL", "").strip()
@@ -1897,24 +1903,54 @@ def _sidekick_install_command(request: Request, token: str) -> str:
     ).rstrip("/")
     ingest_url = f"{ingest_base_url}/ingest/falco-events"
     gatekeeper_url = f"{ingest_base_url}/gatekeeper-events"
-    return "\n".join(
-        [
-            "# 1) Falco runtime event collector",
-            "helm repo add falcosecurity https://falcosecurity.github.io/charts",
-            "helm repo update",
-            "helm upgrade --install falco falcosecurity/falco \\",
-            "  -n falco \\",
-            "  --create-namespace \\",
-            "  --set falcosidekick.enabled=true \\",
-            f'  --set falcosidekick.config.webhook.address="{ingest_url}" \\',
-            f'  --set falcosidekick.config.webhook.customHeaders="Authorization:Bearer {token}" \\',
-            '  --set falcosidekick.config.webhook.minimumpriority="warning"',
-            "",
-            "# 2) Gatekeeper audit collector",
-            "kubectl delete cronjob -n kubeowl-system kubeowl-gatekeeper-collector --ignore-not-found >/dev/null 2>&1 || true",
-            f"cat <<'KUBEOWL_GATEKEEPER_COLLECTOR_EOF' | kubectl apply -f -\n{_gatekeeper_collector_manifest(gatekeeper_url, token)}\nKUBEOWL_GATEKEEPER_COLLECTOR_EOF",
-        ]
-    )
+    return {
+        "falco": "\n".join(
+            [
+                "# 1) Falco runtime event collector",
+                "helm repo add falcosecurity https://falcosecurity.github.io/charts",
+                "helm repo update",
+                "helm upgrade --install falco falcosecurity/falco \\",
+                "  -n falco \\",
+                "  --create-namespace \\",
+                "  --set falcosidekick.enabled=true \\",
+                f'  --set falcosidekick.config.webhook.address="{ingest_url}" \\',
+                f'  --set falcosidekick.config.webhook.customHeaders="Authorization:Bearer {token}" \\',
+                '  --set falcosidekick.config.webhook.minimumpriority="warning"',
+            ]
+        ),
+        "gatekeeper_rbac": "\n".join(
+            [
+                "# 2) Gatekeeper collector namespace, token, and RBAC",
+                "kubectl delete cronjob -n kubeowl-system kubeowl-gatekeeper-collector --ignore-not-found >/dev/null 2>&1 || true",
+                "cat > /tmp/kubeowl-gatekeeper-rbac.yaml <<'KUBEOWL_GATEKEEPER_RBAC_EOF'",
+                _gatekeeper_collector_rbac_manifest(token),
+                "KUBEOWL_GATEKEEPER_RBAC_EOF",
+                "kubectl apply -f /tmp/kubeowl-gatekeeper-rbac.yaml",
+            ]
+        ),
+        "gatekeeper_deployment": "\n".join(
+            [
+                "# 3) Gatekeeper audit collector deployment",
+                "cat > /tmp/kubeowl-gatekeeper-deployment.yaml <<'KUBEOWL_GATEKEEPER_DEPLOYMENT_EOF'",
+                _gatekeeper_collector_deployment_manifest(gatekeeper_url),
+                "KUBEOWL_GATEKEEPER_DEPLOYMENT_EOF",
+                "kubectl apply -f /tmp/kubeowl-gatekeeper-deployment.yaml",
+            ]
+        ),
+    }
+
+
+def _sidekick_install_command(request: Request, token: str) -> str:
+    return "\n\n".join(_sidekick_install_commands(request, token).values())
+
+
+def _gatekeeper_collector_rbac_manifest(token: str) -> str:
+    return _gatekeeper_collector_manifest("", token).split("\n---\napiVersion: apps/v1", 1)[0]
+
+
+def _gatekeeper_collector_deployment_manifest(gatekeeper_url: str) -> str:
+    deployment = _gatekeeper_collector_manifest(gatekeeper_url, "").split("\n---\napiVersion: apps/v1", 1)[1]
+    return f"apiVersion: apps/v1{deployment}"
 
 
 def _gatekeeper_collector_manifest(gatekeeper_url: str, token: str) -> str:

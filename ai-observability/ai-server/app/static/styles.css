@@ -3592,6 +3592,8 @@ pre[data-empty="true"] {
 
 .setup-cluster-card {
   position: relative;
+  grid-column: 2;
+  grid-row: 1 / span 3;
   overflow: hidden;
   border: 1px solid var(--control-glass-border);
   border-radius: 18px;
@@ -5043,6 +5045,11 @@ button.event-row:focus-visible {
   .query-list,
   .setup-grid {
     grid-template-columns: 1fr;
+  }
+
+  .setup-cluster-card {
+    grid-column: auto;
+    grid-row: auto;
   }
 
   .analysis-context-grid {

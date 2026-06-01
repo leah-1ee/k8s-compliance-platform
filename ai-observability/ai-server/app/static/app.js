@@ -476,6 +476,25 @@ function setOutput(selector, value) {
   element.removeAttribute("data-empty");
 }
 
+function setInstallOutput(selector, value) {
+  const element = $(selector);
+  const command = String(value || "").trim();
+  if (!command) {
+    element.textContent = "클러스터를 등록하거나 토큰을 재발급하면 여기에 설치 명령이 표시됩니다.";
+    element.setAttribute("data-empty", "true");
+    return;
+  }
+  element.textContent = command;
+  element.removeAttribute("data-empty");
+}
+
+function renderClusterInstallCommands(cluster = {}) {
+  const commands = cluster.install_commands || {};
+  setInstallOutput("#setupFalcoInstallCommand", commands.falco || cluster.install_command || "");
+  setInstallOutput("#setupGatekeeperRbacCommand", commands.gatekeeper_rbac || "");
+  setInstallOutput("#setupGatekeeperDeploymentCommand", commands.gatekeeper_deployment || "");
+}
+
 function resourceManifestCommand(event = selectedRuntimeEvent) {
   const namespace = event?.namespace || event?.output_fields?.["k8s.ns.name"] || "default";
   const pod = event?.pod_name || event?.output_fields?.["k8s.pod.name"] || "<pod-name>";
@@ -1962,7 +1981,7 @@ async function registerUserCluster() {
     body: JSON.stringify({ name }),
   });
   $("#setupClusterName").value = "";
-  setOutput("#setupInstallCommand", body.cluster.install_command || "");
+  renderClusterInstallCommands(body.cluster || {});
   await loadUserClusters();
   showToast("클러스터 등록 완료");
 }
@@ -1971,7 +1990,7 @@ async function rotateUserClusterToken(clusterId) {
   const body = await apiJson(`/api/clusters/${encodeURIComponent(clusterId)}/rotate-token`, {
     method: "POST",
   });
-  setOutput("#setupInstallCommand", body.cluster.install_command || "");
+  renderClusterInstallCommands(body.cluster || {});
   await loadUserClusters();
   showToast("토큰 재발급 완료");
 }
