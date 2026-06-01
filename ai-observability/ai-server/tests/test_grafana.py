@@ -878,6 +878,7 @@ def test_dashboard_payload_fetches_master_dashboard_and_rewrites_datasource(monk
 
     monkeypatch.setenv("GRAFANA_MASTER_DASHBOARD_UID", "admin-master")
     monkeypatch.setenv("GRAFANA_MASTER_ORG_ID", "1")
+    monkeypatch.setenv("GRAFANA_INCLUDE_BUNDLED_DASHBOARDS", "false")
 
     dashboards = provisioning._dashboard_payloads(FakeClient(), "user-datasource", master_client=FakeClient())
     dashboard = dashboards[0]
@@ -922,6 +923,7 @@ def test_dashboard_payloads_support_multiple_master_uids(monkeypatch):
         "compliance-overview,runtime-detection,grafana-overview",
     )
     monkeypatch.setenv("GRAFANA_MASTER_ORG_ID", "1")
+    monkeypatch.setenv("GRAFANA_INCLUDE_BUNDLED_DASHBOARDS", "false")
 
     dashboards = provisioning._dashboard_payloads(FakeClient(), "user-datasource", master_client=FakeClient())
 
@@ -950,10 +952,32 @@ def test_dashboard_payloads_can_disable_local_dashboard(monkeypatch):
 
     monkeypatch.setenv("GRAFANA_MASTER_DASHBOARD_UIDS", "compliance-overview")
     monkeypatch.setenv("GRAFANA_INCLUDE_LOCAL_DASHBOARD", "false")
+    monkeypatch.setenv("GRAFANA_INCLUDE_BUNDLED_DASHBOARDS", "false")
 
     dashboards = provisioning._dashboard_payloads(FakeClient(), "user-datasource", master_client=FakeClient())
 
     assert [dashboard["uid"] for dashboard in dashboards] == ["compliance-overview"]
+
+
+def test_dashboard_payloads_fall_back_to_bundled_dashboards(monkeypatch):
+    class FakeClient:
+        def get(self, path, headers=None):
+            return httpx.Response(404)
+
+    monkeypatch.setenv("GRAFANA_MASTER_DASHBOARD_UIDS", "missing-dashboard")
+    monkeypatch.setenv("GRAFANA_INCLUDE_LOCAL_DASHBOARD", "false")
+
+    dashboards = provisioning._dashboard_payloads(FakeClient(), "user-datasource", master_client=FakeClient())
+
+    assert [dashboard["uid"] for dashboard in dashboards] == [
+        "compliance-overview",
+        "compliance-runtime-detection",
+    ]
+    assert any(dashboard.get("title") == "Gatekeeper Compliance Overview" for dashboard in dashboards)
+    assert any(dashboard.get("title") == "Runtime Detection" for dashboard in dashboards)
+    encoded = json.dumps(dashboards)
+    assert "admin-datasource" not in encoded
+    assert "user-datasource" in encoded
 
 
 def test_runtime_dashboard_surfaces_cluster_event_bursts():

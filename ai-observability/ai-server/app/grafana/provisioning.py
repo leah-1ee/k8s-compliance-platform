@@ -24,6 +24,11 @@ AI_SERVER_PROXY_BASE_URL = os.getenv(
     "http://ai-server.compliance-system.svc.cluster.local:8000",
 ).rstrip("/")
 DASHBOARD_TEMPLATE_PATH = Path(__file__).resolve().parent / "dashboard_template.json"
+BUNDLED_DASHBOARD_DIR = Path(__file__).resolve().parent / "dashboards"
+BUNDLED_DASHBOARD_PATHS = (
+    BUNDLED_DASHBOARD_DIR / "compliance-overview.json",
+    BUNDLED_DASHBOARD_DIR / "runtime-dashboard.json",
+)
 
 
 class ProvisioningError(RuntimeError):
@@ -212,6 +217,8 @@ def _dashboard_payloads(
     admin_auth: tuple[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     dashboards = _load_master_dashboards(master_client, admin_auth)
+    if _include_bundled_dashboards():
+        _append_missing_dashboards(dashboards, _load_bundled_dashboards())
     local_dashboard = _load_local_dashboard_template()
     if _include_local_dashboard() and not any(
         dashboard.get("uid") == local_dashboard.get("uid") for dashboard in dashboards
@@ -223,6 +230,33 @@ def _dashboard_payloads(
         _replace_datasource_uid(_sanitize_dashboard_for_import(dashboard), datasource_uid)
         for dashboard in dashboards
     ]
+
+
+def _append_missing_dashboards(dashboards: list[dict[str, Any]], candidates: list[dict[str, Any]]) -> None:
+    seen = {str(dashboard.get("uid") or "").strip() for dashboard in dashboards}
+    for dashboard in candidates:
+        uid = str(dashboard.get("uid") or "").strip()
+        if uid and uid in seen:
+            continue
+        dashboards.append(dashboard)
+        if uid:
+            seen.add(uid)
+
+
+def _load_bundled_dashboards() -> list[dict[str, Any]]:
+    dashboards: list[dict[str, Any]] = []
+    for path in BUNDLED_DASHBOARD_PATHS:
+        if not path.exists():
+            logger.warning("Skipping missing bundled Grafana dashboard %s", path)
+            continue
+        try:
+            dashboard = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            logger.warning("Skipping invalid bundled Grafana dashboard %s: %s", path, error)
+            continue
+        if isinstance(dashboard, dict):
+            dashboards.append(dashboard)
+    return dashboards
 
 
 def _load_master_dashboards(
@@ -302,6 +336,10 @@ def _load_local_dashboard_template() -> dict[str, Any]:
 
 def _include_local_dashboard() -> bool:
     return os.getenv("GRAFANA_INCLUDE_LOCAL_DASHBOARD", "true").strip().lower() not in {"false", "0", "no"}
+
+
+def _include_bundled_dashboards() -> bool:
+    return os.getenv("GRAFANA_INCLUDE_BUNDLED_DASHBOARDS", "true").strip().lower() not in {"false", "0", "no"}
 
 
 def _sanitize_dashboard_for_import(dashboard: dict[str, Any]) -> dict[str, Any]:
