@@ -1007,6 +1007,7 @@ def record_gatekeeper_event(
         or "Gatekeeper admission denied the request."
     )
     event = {
+        "id": raw_event.get("id", ""),
         "timestamp": (
             raw_event.get("timestamp")
             or raw_event.get("eventTime")

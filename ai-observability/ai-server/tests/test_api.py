@@ -2638,6 +2638,19 @@ def test_metrics_exports_trusted_sqlite_event_aggregates_without_raw_labels():
         "/gatekeeper-events",
         headers={"Authorization": f"Bearer {cluster['token']}"},
         json={
+            "id": "gatekeeper-metrics-cluster-default-non-root-violation-demo",
+            "timestamp": event_time.isoformat().replace("+00:00", "Z"),
+            "constraint": "non-root",
+            "message": "container <nginx> must set securityContext.runAsNonRoot to true",
+            "namespace": "default",
+            "pod_name": "non-root-violation-demo",
+        },
+    )
+    client.post(
+        "/gatekeeper-events",
+        headers={"Authorization": f"Bearer {cluster['token']}"},
+        json={
+            "id": "gatekeeper-metrics-cluster-default-non-root-violation-demo",
             "timestamp": event_time.isoformat().replace("+00:00", "Z"),
             "constraint": "non-root",
             "message": "container <nginx> must set securityContext.runAsNonRoot to true",
