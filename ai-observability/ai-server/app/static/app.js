@@ -369,9 +369,7 @@ function renderDashboardSummary(summary = {}) {
     summary.active_policies === null || summary.active_policies === undefined
       ? "-"
       : String(summary.active_policies);
-  $("#activePoliciesMetricDetail").textContent = `Apply guides: ${Number(
-    summary.active_policies_generated_guides || 0,
-  )}`;
+  $("#activePoliciesMetricDetail").textContent = "Total generated policies";
   $("#recentViolationsMetric").textContent = String(summary.recent_violations ?? 0);
   $("#runtimeEventsMetric").textContent = String(summary.runtime_events ?? 0);
   $("#lastSyncMetric").textContent = formatRelativeTime(summary.last_sync || "");

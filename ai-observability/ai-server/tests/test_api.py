@@ -75,7 +75,7 @@ def test_ui_is_served():
     assert "PDF 다운로드" in response.text
     assert "Your API key is used only for requests in this session" in response.text
     assert "Generated Policies" in response.text
-    assert "Apply guides: 0" in response.text
+    assert "Total generated policies" in response.text
     assert "Cluster Setup" in response.text
     assert "로그인 후 런타임 위반을 확인할 수 있습니다." in response.text
     assert "로그인 후 AI 리포트를 생성할 수 있습니다." in response.text
