@@ -822,7 +822,7 @@ function ensurePolicyApplyPanel() {
     <div class="policy-apply-notice">
       <strong>사용자 클러스터 적용 안내</strong>
       <p>현재 AI 서버는 사용자 클러스터에 직접 Kubernetes API apply 권한을 갖지 않습니다. 아래에서 생성되는 단계별 명령을 대상 클러스터 context에서 실행하세요.</p>
-      <p>터미널에서 <code>kubectl config current-context</code>로 대상 클러스터를 확인한 뒤 권한 확인, 필요 시 RBAC, dry-run, apply 순서로 진행합니다.</p>
+      <p>터미널에서 <code>kubectl config current-context</code>로 대상 클러스터를 확인한 뒤 Gatekeeper 설치 확인, 권한 확인, 필요 시 RBAC, dry-run, apply 순서로 진행합니다.</p>
     </div>
     <div class="policy-apply-controls">
       <label>
@@ -874,29 +874,36 @@ function renderPolicyApplyPanel() {
 function fallbackCommandSteps(fallback = {}) {
   const steps = [
     {
+      key: "gatekeeper",
+      label: "1. Gatekeeper 설치 확인",
+      description: "대상 클러스터에 Gatekeeper API와 controller pod가 준비되어 있는지 확인합니다.",
+      command: fallback.gatekeeper_check_command,
+      open: true,
+    },
+    {
       key: "permission",
-      label: "1. 권한 확인",
+      label: "2. 권한 확인",
       description: "현재 kubeconfig 계정이 Gatekeeper 리소스를 읽고 생성/수정할 수 있는지 확인합니다.",
       command: fallback.permission_check_command,
       open: true,
     },
     {
       key: "rbac",
-      label: "2. 필요 시 RBAC",
+      label: "3. 필요 시 RBAC",
       description: "권한 확인이 실패하면 클러스터 관리자가 먼저 실행하는 예시 권한 부여 명령입니다.",
       command: fallback.admin_rbac_command,
       open: true,
     },
     {
       key: "dry-run",
-      label: "3. dry-run 검증",
-      description: "실제 리소스를 만들기 전에 API 서버 검증만 수행합니다.",
+      label: "4. dry-run 검증",
+      description: "ConstraintTemplate을 검증/등록한 뒤 Constraint를 API 서버 dry-run으로 확인합니다.",
       command: fallback.dry_run_command,
       open: true,
     },
     {
       key: "apply",
-      label: "4. 실제 apply",
+      label: "5. 실제 apply",
       description: "dry-run이 성공한 뒤 같은 클러스터 context에서 실행합니다.",
       command: fallback.apply_command,
       open: true,
