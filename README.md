@@ -1,5 +1,7 @@
 # KubeOwl
 
+![KubeOwl 랜딩 화면](assets/kubeowl-landing.png)
+
 KubeOwl은 Policy-as-Code 기반 Kubernetes 컴플라이언스 자동화 플랫폼입니다.
 Gatekeeper 정책 생성, Falco 런타임 탐지, AI 분석, 대시보드, 관리자 검토 흐름을 한 번에 다룹니다.
 
