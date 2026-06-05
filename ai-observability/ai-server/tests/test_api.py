@@ -79,7 +79,7 @@ def test_ui_is_served():
     assert "Cluster Setup" in response.text
     assert "로그인 후 런타임 위반을 확인할 수 있습니다." in response.text
     assert "로그인 후 AI 리포트를 생성할 수 있습니다." in response.text
-    assert "Falco Sidekick 설치 명령" in response.text
+    assert "setupFalcoInstallCommand" in response.text
     assert "내 클러스터" in response.text
     assert "Policy Generation Request" not in response.text
     assert 'id="policyPromptField"' not in response.text

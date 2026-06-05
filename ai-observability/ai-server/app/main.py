@@ -1794,6 +1794,7 @@ def resource_manifest(
 def analyze_runtime_event(
     request: Request,
     event_id: str,
+    payload_override: ViolationAnalysisRequest | None = None,
     x_llm_provider: str | None = Header(default=None),
     x_llm_api_key: str | None = Header(default=None),
     compliance_ai_session: str | None = Cookie(default=None),
@@ -1808,12 +1809,17 @@ def analyze_runtime_event(
     if event is None:
         return JSONResponse(status_code=404, content={"error": f"event {event_id} not found"})
     resource_manifest = event.get("resource_manifest", "")
+    override_manifest = (
+        payload_override.resource_manifest.strip()
+        if payload_override and payload_override.resource_manifest
+        else ""
+    )
     manifest_result = _manifest_guidance(
         namespace=event.get("namespace", ""),
         pod=event.get("pod_name", ""),
         cluster=event.get("cluster", ""),
         container=event.get("container_name", ""),
-        manifest=resource_manifest,
+        manifest=override_manifest or resource_manifest,
     )
     payload = ViolationAnalysisRequest(
         cluster=event.get("cluster") or os.getenv("CLUSTER_NAME", "current-cluster"),
@@ -1831,7 +1837,7 @@ def analyze_runtime_event(
         tags=[event.get("source", "runtime")],
         time=event.get("timestamp", ""),
         resource_manifest=manifest_result.get("manifest", ""),
-        use_llm=has_user_llm_key(),
+        use_llm=payload_override.use_llm if payload_override else has_user_llm_key(),
     )
     result = analyze_violation(
         payload,

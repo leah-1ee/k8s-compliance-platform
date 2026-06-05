@@ -1136,9 +1136,12 @@ async function analyzeViolation() {
     const manualManifest = $("#resourceManifest").value.trim();
     if (hasSelectedEvent) {
       payload = eventToAnalysisPayload(selectedRuntimeEvent);
+      payload.resource_manifest = manualManifest || selectedRuntimeEvent.resource_manifest || "";
+      payload.use_llm = useLlm;
       const response = await fetch(`/analyze-runtime-event/${encodeURIComponent(selectedRuntimeEvent.id)}`, {
         method: "POST",
         headers: llmHeaders(),
+        body: JSON.stringify(payload),
       });
       const body = await response.json();
       if (!response.ok) {

@@ -1,15 +1,19 @@
 # ai-observability
 
-이 폴더는 KubeOwl의 AI 서버, 시각화 대시보드, 공개 문서, 배포용 Kubernetes 예시를 모아둔 상위 작업 영역이다.
+이 폴더는 KubeOwl의 중앙 AI 콘솔, 시각화 대시보드, 운영 문서와 배포 파일을 모아둔 작업 영역이다.
 
 ## 하위 폴더 역할
 
 - `ai-server/` - FastAPI 기반 AI 분류 서버와 웹 UI 정적 자산
 - `dashboards/` - Grafana 대시보드 JSON/ConfigMap 소스
-- `docs/` - 테스트 증빙, 스크린샷, 문서형 산출물
-- `k8s/` - 현재는 제거됨. 예전에는 로컬 배포 예시가 있었지만 지금은 `cloud-deploy/`를 사용한다.
+- `deploy/` - AI 서버, Ingress, 정리 작업, Prometheus/Grafana 배포 설정
+- `docs/` - 현재 구현을 재현하는 API 및 운영 문서
 
 ## 배포 기준
 
-- 개발/검증 원본은 `ai-server/`, `dashboards/`, `docs/`에 둔다.
-- 학교 클라우드 VM에 올리는 사본은 `cloud-deploy/`를 기준으로 본다.
+- AI 서버 배포: `kubectl apply -f ai-observability/deploy/ai-server.yaml`
+- Ingress와 정리 CronJob: `ai-observability/deploy/ai-server-ingress.yaml`,
+  `ai-observability/deploy/ai-server-cleanup-cronjob.yaml`
+- 모니터링 Helm values와 ServiceMonitor: `ai-observability/deploy/monitoring/`
+
+배포 파일은 이 디렉터리를 원본으로 사용하며 별도 VM용 사본을 만들지 않는다.

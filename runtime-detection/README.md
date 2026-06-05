@@ -376,7 +376,7 @@ X-Watchdog-Token: <HEARTBEAT_TOKEN>
 |------|--------|------|
 | `SERVER_PORT` | `5000` | HTTP 리슨 포트 |
 | `LOG_LEVEL` | `INFO` | 로그 레벨 (DEBUG/INFO/WARNING/ERROR/CRITICAL) |
-| `AI_ENDPOINT` | `` | AI 분류 모듈 URL (미설정 시 fallback) |
+| `AI_ENDPOINT` | `http://ai-classifier.compliance-system.svc.cluster.local:8000/classify` | AI 분류 모듈 URL (연결 실패 시 fallback) |
 | `AI_TIMEOUT` | `5` | AI 요청 타임아웃(초) |
 | `AI_CONFIDENCE_THRESHOLD` | `0.6` | 이 미만이면 fallback 재분류 |
 | `FALLBACK_CONFIDENCE_THRESHOLD` | `0.35` | Fallback 이 미만이면 severity 하향 |

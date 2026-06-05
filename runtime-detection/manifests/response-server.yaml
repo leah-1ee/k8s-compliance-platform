@@ -82,9 +82,8 @@ data:
   EVENT_STORE_SIZE: "2000"
 
   # ── [2] AI 분류기 설정 ────────────────────────────────
-  # AI_ENDPOINT: AI 모듈 준비 후 아래 주석 해제
-  # AI_ENDPOINT: "http://ai-classifier.compliance-system.svc.cluster.local:8000/classify"
-  AI_ENDPOINT: ""
+  # 클러스터 내부 AI 분류 서버 엔드포인트
+  AI_ENDPOINT: "http://ai-classifier.compliance-system.svc.cluster.local:8000/classify"
   AI_TIMEOUT: "5"
   AI_CONFIDENCE_THRESHOLD: "0.6"
   FALLBACK_CONFIDENCE_THRESHOLD: "0.35"
@@ -159,7 +158,7 @@ spec:
       serviceAccountName: response-server
       containers:
         - name: response-server
-          image: compliance-response-server:latest
+          image: docker.io/leeon3345/compliance-response-server:0.1.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

@@ -1,29 +1,32 @@
 # KubeOwl
 
-KubeOwl은 Policy-as-Code 기반 Kubernetes 컴플라이언스 자동화 플랫폼입니다.  
+KubeOwl은 Policy-as-Code 기반 Kubernetes 컴플라이언스 자동화 플랫폼입니다.
 Gatekeeper 정책 생성, Falco 런타임 탐지, AI 분석, 대시보드, 관리자 검토 흐름을 한 번에 다룹니다.
 
-## 공개 진입점
+## 저장소 구조
 
-- `/` - 랜딩 페이지
-- `/docs` - 공개 문서
-- `/ui` - 사용자 콘솔
-- `/admin` - 관리자 콘솔
+- `k8s-policy-engine/` - Gatekeeper 정책, Helm values, 정책 테스트
+- `runtime-detection/` - Falco 규칙, Response Server, 런타임 배포 매니페스트
+- `ai-observability/` - FastAPI 기반 중앙 콘솔, Grafana 대시보드, AI/모니터링 배포 파일
+- `compliance-agent/` - 사용자 클러스터의 Falco 이벤트 수집 에이전트
 
-## 핵심 구성
+각 배포 파일은 소유 모듈 안에만 두며 중복 배포 사본은 유지하지 않습니다.
 
-- OPA / Gatekeeper
-- Falco / Falco Sidekick
-- FastAPI
-- Prometheus / Grafana
-- LLM 기반 정책 생성과 이벤트 분석
+## 빠른 검증
 
-## 현재 작업 기준
+```bash
+.venv/bin/python -m pytest ai-observability/ai-server/tests/
+python3 runtime-detection/response-server/tests/test_all.py
+python3 runtime-detection/response-server/tests/test_integration.py
+make -C k8s-policy-engine test
+```
 
-- 현재 이미지 기준은 `docker.io/leeon3345/compliance-ai-server:0.2.17` 입니다.
-- 로컬 테스트는 프로젝트 루트에서 `.venv/bin/python -m pytest ai-observability/ai-server/tests/` 로 실행합니다.
-- 문서와 demo 흐름은 현재 구현된 `/docs`, `/ui`, `/admin` 동작과 맞춰 유지합니다.
+OPA CLI나 Kubernetes 클러스터가 필요한 검증은 각 모듈 README를 따릅니다.
 
-## 개발 기간
+## 배포 진입점
 
-2026.04 ~ 2026.06 (12주)
+- AI 서버와 모니터링: `ai-observability/deploy/`
+- Response Server와 Falco: `runtime-detection/manifests/`, `runtime-detection/scripts/`
+- Gatekeeper: `k8s-policy-engine/helm/`, `k8s-policy-engine/scripts/`
+
+현재 AI 서버 배포 이미지 기준은 `docker.io/leeon3345/compliance-ai-server:0.2.48`입니다.

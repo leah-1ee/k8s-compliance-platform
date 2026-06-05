@@ -43,3 +43,13 @@ Thumbs.db
 *.log
 coverage/
 .pytest_cache/
+
+# 로컬 작업 컨텍스트와 제출 제외 산출물
+.codexignore
+.context/
+outputs/
+screenshots/
+*.pdf
+ai-observability/docs/*presentation*.md
+ai-observability/docs/kubeowl-final-report.md
+ai-observability/docs/ai-server-test/task*/

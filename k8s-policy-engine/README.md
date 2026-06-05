@@ -38,12 +38,16 @@ ping 같은 네트워크 확인은 CNI 플러그인별 처리 차이가 있으�
 `k8s-policy-engine/`은 Gatekeeper 정책의 개발/검증 기준 트리입니다. Rego 테스트,
 Mutation E2E, 적용 스크립트가 이 디렉터리를 기준으로 동작합니다.
 
-학교 클라우드 VM에서 바로 적용하는 배포 사본은 `cloud-deploy/policies/`입니다.
-배포 전에는 두 트리의 `templates/`, `constraints/`, `mutations/`가 동기화되어야 합니다.
+별도 배포 사본을 두지 않습니다. 로컬과 클라우드 환경 모두 이 디렉터리의 정책을
+직접 적용합니다.
 
 ```bash
-diff -rq -x README.md -x Makefile -x scripts -x tests -x helm -x .gitkeep \
-  cloud-deploy/policies k8s-policy-engine
+helm upgrade --install gatekeeper gatekeeper/gatekeeper \
+  -n gatekeeper-system \
+  --create-namespace \
+  -f k8s-policy-engine/helm/gatekeeper-values.yaml
+
+bash k8s-policy-engine/scripts/apply-all.sh
 ```
 
 현재 demo/ops 요구사항으로 유지하는 예외는 다음과 같습니다.

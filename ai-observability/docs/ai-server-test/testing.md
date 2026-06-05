@@ -33,7 +33,7 @@ curl http://127.0.0.1:8000/healthz
 
 ```bash
 docker buildx build --platform linux/amd64 \
-  -t [DOCKER_ID]/compliance-ai-server:0.2.17 \
+  -t [DOCKER_ID]/compliance-ai-server:0.2.48 \
   ai-observability/ai-server \
   --push
 ```
@@ -46,7 +46,7 @@ docker buildx build --platform linux/amd64 \
 ```
 
 ```bash
-kubectl apply -f cloud-deploy/ai-server.yaml
+kubectl apply -f ai-observability/deploy/ai-server.yaml
 ```
 
 ```bash
@@ -76,10 +76,10 @@ curl -s -X POST "https://<vm-host>/api/clusters/<cluster-id>/policy-applies" \
 
 ## response-server 연동
 
-`cloud-deploy/response-server.yaml`은 학교 클라우드 VM 배포 사본이다.
+Response Server 배포 원본은 `runtime-detection/manifests/response-server.yaml`이다.
 
 ```bash
-kubectl apply -f cloud-deploy/response-server.yaml
+kubectl apply -f runtime-detection/manifests/response-server.yaml
 kubectl rollout status deployment/response-server -n compliance-system
 ```
 
