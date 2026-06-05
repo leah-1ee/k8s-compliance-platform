@@ -13,6 +13,11 @@ Gatekeeper 정책 생성, Falco 런타임 탐지, AI 분석, 대시보드, 관�
 관리자 콘솔은 관리자 토큰이 있어야 기능을 사용할 수 있습니다. zrok public share가
 실행 중일 때만 외부에서 접속할 수 있습니다.
 
+## 데모 영상
+
+- 전체 데모 영상: [https://youtu.be/eSDcPgLNEcg](https://youtu.be/eSDcPgLNEcg)
+- 발표용 데모 영상: [https://youtu.be/OPL8BBas2Ms](https://youtu.be/OPL8BBas2Ms)
+
 ## 저장소 구조
 
 - `k8s-policy-engine/` - Gatekeeper 정책, Helm values, 정책 테스트
