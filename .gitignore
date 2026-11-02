@@ -4,25 +4,29 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
-.env
-*.env.local
 
-# 환경변수 / API 키
+# Environment variables
 .env
 .env.*
+!.env.example
+
+# Kubernetes Secret manifests
+**/secret.yaml
+**/secret.yml
+**/*secret*.yaml
+**/*secret*.yml
 *.secret
-secrets.yaml
-*-secret.yaml
 
-# Kubernetes 시크릿 매니페스트
-*-secret.yaml
-*-secret.yml
-secret-*.yaml
-secret-*.yml
-
-# LLM API 키
+# Credential files
+*.pem
+*.key
+*.p12
+*.pfx
 openai_key.txt
 anthropic_key.txt
+
+# Local configuration
+*.local
 
 # Node.js (대시보드 프론트엔드)
 node_modules/
