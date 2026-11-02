@@ -1,0 +1,1353 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KubeOwl Docs</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #e4f5ff;
+        --panel: rgba(243, 250, 255, 0.8);
+        --line: rgba(56, 132, 216, 0.22);
+        --line-strong: rgba(56, 132, 216, 0.38);
+        --text: #1f2937;
+        --muted: #64748b;
+        --brand: #0877f2;
+        --brand-2: #56ccf2;
+        --glass-bg:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.84), rgba(220, 238, 253, 0.64));
+        --glass-bg-soft:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(230, 243, 255, 0.78));
+        --code: #08111f;
+        --shadow: 0 22px 60px rgba(8, 119, 242, 0.11);
+        --glass-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.74),
+          0 18px 48px rgba(14, 165, 255, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        font-family: SUIT, Pretendard, "Noto Sans KR", ui-sans-serif, system-ui, sans-serif;
+        background:
+          radial-gradient(circle at 16% -10%, rgba(86, 204, 242, 0.42), transparent 34%),
+          radial-gradient(circle at 84% 2%, rgba(125, 211, 252, 0.3), transparent 36%),
+          linear-gradient(135deg, #f8fdff 0%, #e7f7ff 44%, #d8f0ff 100%);
+        color: var(--text);
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .docs-shell {
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 24px 0 56px;
+      }
+
+      .docs-hero {
+        position: relative;
+        overflow: hidden;
+        display: grid;
+        gap: 22px;
+        min-height: 340px;
+        padding: clamp(28px, 5vw, 48px);
+        border: 1px solid rgba(255, 255, 255, 0.42);
+        border-radius: 22px;
+        background:
+          radial-gradient(circle at 80% 10%, rgba(86, 204, 242, 0.45), transparent 30%),
+          linear-gradient(135deg, #07306f, #0877f2 58%, #08aeea);
+        color: #ffffff;
+        box-shadow: 0 28px 80px rgba(8, 119, 242, 0.24);
+      }
+
+      .docs-hero::after {
+        content: "";
+        position: absolute;
+        inset: auto -90px -130px auto;
+        width: 320px;
+        height: 320px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+      }
+
+      .docs-nav {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .brand-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 900;
+      }
+
+      .brand-link img {
+        width: 46px;
+        height: 46px;
+        border-radius: 12px;
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+      }
+
+      .nav-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .glass-button {
+        display: inline-flex;
+        align-items: center;
+        min-height: 42px;
+        padding: 0 16px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.14);
+        color: #ffffff;
+        font-weight: 850;
+        backdrop-filter: blur(16px);
+      }
+
+      .docs-copy {
+        position: relative;
+        z-index: 1;
+        max-width: 760px;
+      }
+
+      .eyebrow {
+        margin: 0 0 12px;
+        color: rgba(255, 255, 255, 0.74);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(38px, 6vw, 72px);
+        line-height: 0.95;
+        letter-spacing: -0.06em;
+      }
+
+      .docs-copy > p:not(.eyebrow) {
+        max-width: 680px;
+        margin: 18px 0 0;
+        color: rgba(255, 255, 255, 0.82);
+        font-size: clamp(16px, 2vw, 20px);
+        line-height: 1.65;
+        font-weight: 720;
+      }
+
+      .category-tabs {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin: 24px 0;
+      }
+
+      .category-tabs a,
+      .docs-card {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--glass-bg);
+        box-shadow: var(--glass-shadow);
+        backdrop-filter: blur(18px) saturate(140%);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .category-tabs a {
+        display: grid;
+        gap: 8px;
+        min-height: 118px;
+        padding: 20px;
+        transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+      }
+
+      .category-tabs a:hover {
+        transform: translateY(-4px);
+        border-color: rgba(56, 132, 216, 0.42);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.86),
+          0 24px 60px rgba(14, 165, 255, 0.16);
+      }
+
+      .category-tabs strong {
+        color: var(--brand);
+        font-size: 20px;
+      }
+
+      .category-tabs span {
+        color: var(--muted);
+        line-height: 1.45;
+      }
+
+      .docs-grid {
+        display: grid;
+        gap: 20px;
+      }
+
+      .docs-card {
+        padding: clamp(22px, 4vw, 32px);
+      }
+
+      .section-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+
+      .section-heading h2 {
+        margin: 0;
+        font-size: clamp(26px, 4vw, 36px);
+        letter-spacing: -0.04em;
+      }
+
+      .section-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 0 12px;
+        border: 1px solid rgba(56, 132, 216, 0.22);
+        border-radius: 999px;
+        background:
+          linear-gradient(135deg, rgba(240, 249, 255, 0.9), rgba(209, 234, 255, 0.66));
+        color: var(--brand);
+        font-size: 12px;
+        font-weight: 900;
+        white-space: nowrap;
+      }
+
+      .info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .guide-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);
+        gap: 16px;
+        align-items: start;
+        margin-top: 16px;
+      }
+
+      .docs-split {
+        display: grid;
+        grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.2fr);
+        gap: 20px;
+        align-items: stretch;
+      }
+
+      .topic-list {
+        position: relative;
+        display: grid;
+        align-content: start;
+        gap: 14px;
+        max-height: 526px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding-right: 8px;
+        scrollbar-color: rgba(8, 119, 242, 0.38) rgba(8, 119, 242, 0.08);
+        scrollbar-width: thin;
+      }
+
+      .topic-list::-webkit-scrollbar {
+        width: 9px;
+      }
+
+      .topic-list::-webkit-scrollbar-track {
+        border-radius: 999px;
+        background: rgba(8, 119, 242, 0.08);
+      }
+
+      .topic-list::-webkit-scrollbar-thumb {
+        border: 2px solid rgba(248, 253, 255, 0.9);
+        border-radius: 999px;
+        background: rgba(8, 119, 242, 0.38);
+      }
+
+      .topic-list::before {
+        content: "";
+        position: absolute;
+        left: 26px;
+        top: 38px;
+        bottom: 38px;
+        width: 1px;
+        background: linear-gradient(180deg, rgba(8, 119, 242, 0.34), rgba(8, 119, 242, 0.04));
+      }
+
+      .topic-button {
+        position: relative;
+        display: grid;
+        grid-template-columns: 54px 1fr auto;
+        gap: 14px;
+        align-items: center;
+        width: 100%;
+        min-height: 92px;
+        border: 1px solid rgba(56, 132, 216, 0.18);
+        border-radius: 16px;
+        background:
+          radial-gradient(circle at 0% 0%, rgba(86, 204, 242, 0.16), transparent 30%),
+          linear-gradient(145deg, rgba(255, 255, 255, 0.84), rgba(223, 238, 253, 0.66));
+        color: var(--text);
+        padding: 16px 18px;
+        text-align: left;
+        cursor: pointer;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.7),
+          0 12px 28px rgba(14, 165, 255, 0.08);
+        transition:
+          transform 0.18s ease,
+          border-color 0.18s ease,
+          box-shadow 0.18s ease,
+          background 0.18s ease;
+      }
+
+      .topic-button:hover,
+      .topic-button:focus-visible,
+      .topic-button.is-active {
+        transform: translateY(-3px);
+        border-color: rgba(56, 132, 216, 0.44);
+        background:
+          radial-gradient(circle at 0% 0%, rgba(86, 204, 242, 0.22), transparent 32%),
+          linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(230, 243, 255, 0.76));
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.82),
+          0 20px 54px rgba(14, 165, 255, 0.14);
+        outline: none;
+      }
+
+      .topic-number {
+        display: inline-grid;
+        place-items: center;
+        width: 46px;
+        height: 46px;
+        border: 1px solid rgba(56, 132, 216, 0.24);
+        border-radius: 12px;
+        background: linear-gradient(135deg, rgba(240, 249, 255, 0.88), rgba(209, 234, 255, 0.68));
+        color: var(--brand);
+        font-weight: 950;
+      }
+
+      .topic-main {
+        min-width: 0;
+      }
+
+      .topic-main strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 18px;
+        letter-spacing: -0.02em;
+      }
+
+      .topic-main span {
+        color: var(--brand);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .topic-arrow {
+        color: rgba(8, 119, 242, 0.46);
+        font-size: 26px;
+        font-weight: 300;
+      }
+
+      .topic-detail-wrap {
+        position: relative;
+        min-height: 520px;
+        border: 1px solid rgba(56, 132, 216, 0.18);
+        border-radius: 18px;
+        background:
+          radial-gradient(circle at 8% 0%, rgba(86, 204, 242, 0.12), transparent 32%),
+          linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(226, 241, 255, 0.66));
+        padding: clamp(22px, 4vw, 32px);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.78),
+          0 18px 48px rgba(14, 165, 255, 0.1);
+      }
+
+      .topic-detail {
+        display: none;
+        animation: detailFade 0.22s ease both;
+      }
+
+      .topic-detail.is-active {
+        display: grid;
+        gap: 16px;
+      }
+
+      .topic-detail h3 {
+        margin: 0;
+        font-size: clamp(22px, 3.2vw, 34px);
+        line-height: 1.18;
+        letter-spacing: -0.04em;
+      }
+
+      .topic-detail .kicker {
+        color: var(--brand);
+        font-size: 13px;
+        font-weight: 950;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .topic-detail p,
+      .topic-detail li {
+        color: var(--muted);
+        line-height: 1.72;
+      }
+
+      .topic-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .topic-chips span {
+        display: inline-flex;
+        align-items: center;
+        min-height: 32px;
+        padding: 0 12px;
+        border: 1px solid rgba(56, 132, 216, 0.18);
+        border-radius: 999px;
+        background: linear-gradient(135deg, rgba(240, 249, 255, 0.88), rgba(209, 234, 255, 0.68));
+        color: #075bb8;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .policy-mapping-wrap {
+        overflow-x: auto;
+        border: 1px solid rgba(56, 132, 216, 0.18);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.54);
+      }
+
+      .policy-mapping-table {
+        width: 100%;
+        min-width: 760px;
+        border-collapse: collapse;
+      }
+
+      .policy-mapping-table th,
+      .policy-mapping-table td {
+        padding: 14px 16px;
+        border-bottom: 1px solid rgba(56, 132, 216, 0.16);
+        color: var(--muted);
+        line-height: 1.55;
+        text-align: left;
+        vertical-align: middle;
+      }
+
+      .policy-mapping-table th {
+        color: var(--text);
+        font-size: 13px;
+        font-weight: 950;
+      }
+
+      .policy-mapping-table td:first-child {
+        color: var(--text);
+        font-weight: 900;
+      }
+
+      .policy-mapping-table tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .info-box {
+        border: 1px solid rgba(56, 132, 216, 0.16);
+        border-radius: 13px;
+        background: linear-gradient(145deg, rgba(255, 255, 255, 0.8), rgba(227, 242, 255, 0.62));
+        padding: 18px;
+      }
+
+      .info-box h3 {
+        margin: 0 0 10px;
+        font-size: 18px;
+      }
+
+      .info-box p,
+      .info-box li {
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
+      .info-box p {
+        margin: 0;
+      }
+
+      ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 14px;
+      }
+
+      .flow-step {
+        position: relative;
+        min-height: 112px;
+        padding: 16px;
+        border: 1px solid rgba(56, 132, 216, 0.16);
+        border-radius: 13px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(239, 247, 255, 0.72));
+      }
+
+      .flow-step span {
+        display: inline-grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        margin-bottom: 12px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, var(--brand), var(--brand-2));
+        color: #ffffff;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .flow-step strong {
+        display: block;
+        margin-bottom: 6px;
+      }
+
+      .flow-step p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      code {
+        border-radius: 6px;
+        background: rgba(8, 119, 242, 0.08);
+        color: #075bb8;
+        padding: 2px 6px;
+        font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 0.92em;
+      }
+
+      pre {
+        overflow: auto;
+        margin: 14px 0 0;
+        border: 1px solid rgba(125, 211, 252, 0.22);
+        border-radius: 13px;
+        background: var(--code);
+        color: #dbeafe;
+        padding: 18px;
+        line-height: 1.55;
+      }
+
+      pre code {
+        background: transparent;
+        color: inherit;
+        padding: 0;
+      }
+
+      .terminal-window {
+        overflow: hidden;
+        border: 1px solid rgba(125, 211, 252, 0.24);
+        border-radius: 14px;
+        background: #08111f;
+        box-shadow: 0 18px 44px rgba(8, 17, 31, 0.18);
+      }
+
+      .terminal-bar {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-height: 38px;
+        padding: 0 14px;
+        border-bottom: 1px solid rgba(125, 211, 252, 0.16);
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .terminal-bar span {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.22);
+      }
+
+      .terminal-title {
+        margin-left: 8px;
+        color: rgba(219, 234, 254, 0.72);
+        font-size: 12px;
+        font-weight: 850;
+      }
+
+      .terminal-body {
+        margin: 0;
+        min-height: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        color: #dbeafe;
+        font-size: 13px;
+      }
+
+      .terminal-body .prompt {
+        color: #7dd3fc;
+      }
+
+      .terminal-body .ok {
+        color: #86efac;
+      }
+
+      .terminal-body .warn {
+        color: #fde68a;
+      }
+
+      @keyframes detailFade {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @media (max-width: 860px) {
+        .category-tabs,
+        .info-grid,
+        .flow,
+        .guide-grid,
+        .docs-split {
+          grid-template-columns: 1fr;
+        }
+
+        .topic-detail-wrap {
+          min-height: 0;
+        }
+
+        .topic-list {
+          max-height: 480px;
+        }
+
+        .docs-nav,
+        .section-heading {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="docs-shell">
+      <section class="docs-hero">
+        <nav class="docs-nav" aria-label="Docs navigation">
+          <a class="brand-link" href="/ui">
+            <img src="/static/assets/main-logo.png?v=task17" alt="KubeOwl logo" />
+            <span>KubeOwl</span>
+          </a>
+          <div class="nav-actions">
+            <a class="glass-button" href="/ui">Console</a>
+          </div>
+        </nav>
+        <div class="docs-copy">
+          <p class="eyebrow">KubeOwl Docs</p>
+          <h1>Documentation</h1>
+          <p>정책 생성, 런타임 이벤트 수집, Grafana 관측, zrok 공개 접근까지 데모와 운영에 필요한 큰 그림을 빠르게 확인합니다. 로그인 없이도 열람할 수 있는 공개 문서입니다.</p>
+        </div>
+      </section>
+
+      <nav class="category-tabs" aria-label="Docs categories">
+        <a href="#architecture">
+          <strong>설계</strong>
+          <span>관리자 클러스터, 사용자 클러스터, zrok, Grafana 연결 구조</span>
+        </a>
+        <a href="#features">
+          <strong>기능</strong>
+          <span>Policy Generator, Cluster Setup, 위반 분석, AI Report</span>
+        </a>
+        <a href="#security">
+          <strong>보안</strong>
+          <span>인증, 토큰, Grafana 프록시, 데이터 격리 기준</span>
+        </a>
+        <a href="#operations">
+          <strong>Q&A</strong>
+          <span>AI 검증, 데이터 보호, CI/CD, 자동 복구 답변</span>
+        </a>
+      </nav>
+
+      <div class="docs-grid">
+        <section class="docs-card" id="architecture">
+          <div class="section-heading">
+            <h2>설계</h2>
+            <span class="section-pill">Architecture</span>
+          </div>
+          <div class="docs-split" data-docs-group>
+            <div class="topic-list" aria-label="설계 목록">
+              <button class="topic-button is-active" type="button" data-docs-topic="arch-cluster">
+                <span class="topic-number">1</span>
+                <span class="topic-main"><strong>Cluster Boundary</strong><span>admin / user cluster</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="arch-network">
+                <span class="topic-number">2</span>
+                <span class="topic-main"><strong>Network Entry</strong><span>zrok public access</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="arch-grafana">
+                <span class="topic-number">3</span>
+                <span class="topic-main"><strong>Grafana Proxy</strong><span>scoped observability</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="arch-flow">
+                <span class="topic-number">4</span>
+                <span class="topic-main"><strong>Event Flow</strong><span>policy + runtime</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="arch-pattern">
+                <span class="topic-number">5</span>
+                <span class="topic-main"><strong>Service Pattern</strong><span>lightweight BFF</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="arch-stack">
+                <span class="topic-number">6</span>
+                <span class="topic-main"><strong>Frontend / Backend / DB</strong><span>static ui / fastapi / sqlite pvc</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="arch-isms-p">
+                <span class="topic-number">7</span>
+                <span class="topic-main"><strong>ISMS-P 검증</strong><span>policy evidence</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="arch-slack">
+                <span class="topic-number">8</span>
+                <span class="topic-main"><strong>Slack Alert Flow</strong><span>dedupe / cooldown</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+            </div>
+            <div class="topic-detail-wrap">
+              <article class="topic-detail is-active" data-docs-panel="arch-cluster">
+                <span class="kicker">Admin / User Cluster</span>
+                <h3>관리자 영역은 토큰을 만들고, 사용자 클러스터는 이벤트를 보냅니다.</h3>
+                <p>KubeOwl 서버는 중앙 관리자 영역에서 사용자별 클러스터 토큰을 발급합니다. 각 사용자 클러스터는 Falco Sidekick 이벤트를 중앙 ingest API로 전송하고, UI와 API는 로그인한 사용자의 클러스터 범위로 결과를 제한합니다.</p>
+                <div class="topic-chips"><span>cluster token</span><span>user_id scope</span><span>Falco ingest</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="arch-network">
+                <span class="kicker">zrok Public Access</span>
+                <h3>Public IP가 없어도 Console과 Grafana 진입점을 공개할 수 있습니다.</h3>
+                <p>학교 클라우드 VM처럼 Public IP가 제한된 환경에서는 zrok public share로 AI Console과 Grafana 진입점을 외부에 공개합니다. 공유 주소는 <code>shares.zrok.io</code> 형태를 사용하고, zrok 프로세스가 살아 있어야 접근할 수 있습니다.</p>
+                <div class="topic-chips"><span>AI Console</span><span>Grafana</span><span>shares.zrok.io</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="arch-grafana">
+                <span class="kicker">Grafana Auth Proxy</span>
+                <h3>Grafana는 직접 열지 않고 KubeOwl 프록시 뒤에서 사용자별로 분리합니다.</h3>
+                <p>사용자 Grafana는 <code>/grafana-ui/</code> 인증 프록시 뒤에 두고, 사용자별 org와 datasource를 프로비저닝합니다. Prometheus 쿼리는 사용자 클러스터 범위로 주입해 다른 사용자의 메트릭이 섞이지 않도록 합니다.</p>
+                <p>대시보드는 중앙 Grafana에서 열리지만, 사용자 화면은 관리자 클러스터의 raw Gatekeeper 지표를 직접 보지 않습니다. Runtime/Falco는 이벤트 발생 순간 Falco Sidekick이 <code>/ingest/falco-events</code>로 바로 HTTP push하고, Gatekeeper는 admission deny 이벤트를 외부 webhook으로 계속 보내는 구조가 아니므로 사용자 클러스터 안 collector가 <code>Constraint.status.violations</code>를 읽어 <code>/gatekeeper-events</code>로 push합니다.</p>
+                <ul>
+                  <li><strong>KubeOwl Observability</strong>: 사용자 org와 datasource에서 <code>cluster_id</code> 범위가 주입된 KubeOwl export metrics를 조회합니다.</li>
+                  <li><strong>Runtime Detection</strong>: Falco Sidekick이 runtime 이벤트를 즉시 ingest하므로 webhook push 기반 근실시간 대시보드로 동작합니다.</li>
+                  <li><strong>Gatekeeper Compliance Overview</strong>: Gatekeeper audit controller가 갱신한 <code>Constraint.status.violations</code>를 collector <code>Deployment</code>가 15초마다 읽어 KubeOwl로 전송합니다. CronJob이 아니며, 사용자 대시보드는 <code>kubeowl_gatekeeper_*</code> 메트릭만 사용합니다.</li>
+                  <li><strong>Admin Grafana</strong>: <code>/admin-grafana/</code> 경로의 별도 관리자 Grafana에서 플랫폼 운영 지표와 전체 수집 상태를 확인합니다.</li>
+                </ul>
+                <p>Gatekeeper를 사용자 클러스터 기준으로 보려면 Prometheus remote write/federation을 구성하거나, 현재 구현처럼 사용자 클러스터 collector가 상태를 읽어 KubeOwl로 보내야 합니다. 데모와 설치 UX에서는 별도 Prometheus 연동보다 collector 방식이 단순하고, 최종 지연은 collector 간격뿐 아니라 Gatekeeper audit 갱신 주기의 영향을 받습니다.</p>
+                <div class="topic-chips"><span>/grafana-ui/</span><span>org per user</span><span>query injection</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="arch-flow">
+                <span class="kicker">Operational Flow</span>
+                <h3>정책 생성과 런타임 탐지를 하나의 운영 화면으로 연결합니다.</h3>
+                <p>Gatekeeper 정책 생성과 Falco 런타임 이벤트는 UI에서 같은 운영 흐름으로 묶입니다. 정책은 적용 전 YAML로 확인하고, 이벤트는 저장 후 상세 분석과 리포트 생성에 사용됩니다.</p>
+                <div class="flow" aria-label="KubeOwl request flow">
+                  <div class="flow-step"><span>1</span><strong>Cluster Token</strong><p>사용자별 클러스터 토큰을 발급합니다.</p></div>
+                  <div class="flow-step"><span>2</span><strong>Event Ingest</strong><p>Falco Sidekick과 Gatekeeper 이벤트를 저장합니다.</p></div>
+                  <div class="flow-step"><span>3</span><strong>Source Metrics</strong><p>Gatekeeper와 Falco 이벤트를 source 기준으로 분리 집계합니다.</p></div>
+                  <div class="flow-step"><span>4</span><strong>Grafana Proxy</strong><p>인증 프록시로 대시보드를 엽니다.</p></div>
+                </div>
+              </article>
+              <article class="topic-detail" data-docs-panel="arch-pattern">
+                <span class="kicker">Service Architecture Pattern</span>
+                <h3>이 서비스는 경량 BFF + 모듈형 백엔드 + 프록시된 관측 도구 패턴으로 구성합니다.</h3>
+                <p>KubeOwl은 프론트, 정책 생성, 런타임 분석, 관리자 기능을 하나의 FastAPI 백엔드에서 통합하는 경량 BFF 형태에 가깝습니다. 사용자-facing 경로는 <code>/ui</code>의 랜딩/콘솔, public docs, 관리자 콘솔로 나뉘고, 데이터가 민감한 경로는 user_id와 admin token으로 다시 한 번 좁힙니다. Grafana와 외부 LLM은 직접 노출하지 않고 프록시 또는 세션 단위 경계 안에 둡니다.</p>
+                <div class="topic-chips"><span>lightweight BFF</span><span>modular backend</span><span>proxy boundary</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="arch-stack">
+                <span class="kicker">Frontend / Backend / DB</span>
+                <h3>프론트, 백엔드, DB는 하나의 AI 서버 배포 안에서 동작하고, DB는 SQLite 파일을 PVC에 저장합니다.</h3>
+                <p>프론트엔드는 별도 SPA 빌드 서버나 별도 프론트 Pod가 아니라 FastAPI가 제공하는 정적 HTML/CSS/JavaScript입니다. 현재 코드 기준 주요 화면은 <code>/ui</code>, <code>/admin</code>, <code>/docs</code>에서 같은 AI 서버가 서빙하고, 브라우저는 API 호출만 FastAPI 엔드포인트로 보냅니다.</p>
+                <p>백엔드는 <code>ai-classifier</code> FastAPI 배포가 담당합니다. Google OAuth 콜백, 세션 쿠키, 정책 생성, 클러스터 토큰 발급, Falco 이벤트 ingest, 감사 로그, Grafana 프록시, LLM 호출 경계를 모두 이 계층에서 통제합니다.</p>
+                <p>DB는 별도 PostgreSQL/MySQL 서버가 아니라 SQLite만 사용합니다. Kubernetes에서는 <code>SQLITE_PATH=/data/compliance-ai-server.sqlite3</code>로 설정하고, <code>ai-classifier-data</code> PVC를 <code>/data</code>에 마운트해 Pod 재시작 후에도 사용자, 클러스터, 세션, 감사 로그, 이벤트 메타데이터가 유지되도록 합니다.</p>
+                <p>SQLite는 WAL 모드로 열고, 동시 쓰기 충돌을 줄이기 위해 배포는 <code>replicas: 1</code>과 <code>strategy.type: Recreate</code>를 유지합니다. 즉, PVC는 앱 DB 파일을 보존하기 위한 저장소이고, Grafana/Prometheus는 관측용 서비스일 뿐 KubeOwl의 주 DB가 아닙니다.</p>
+                <p>Google Auth는 비밀번호와 계정 신원 확인을 Google에 위임합니다. KubeOwl DB에는 Google provider subject와 내부 <code>user_id</code>, 이메일, 표시 이름, 세션 토큰 해시, 사용자별 클러스터/설정처럼 서비스 운영에 필요한 최소 정보만 저장합니다.</p>
+                <div class="topic-chips"><span>static frontend</span><span>FastAPI BFF</span><span>SQLite WAL</span><span>PVC persisted</span><span>Google OAuth delegated</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="arch-isms-p">
+                <span class="kicker">ISMS-P Mapping</span>
+                <h3>Policy Generator에서 생성하는 6개 정책은 ISMS-P 2.9.1에 매핑합니다.</h3>
+                <p>현재 Policy Generator의 사전 정의 정책은 Gatekeeper Validate 4종과 Mutation 2종입니다. 이 정책들은 컨테이너 실행 조건, 이미지 출처, host namespace 사용, 기본 securityContext와 resource limit을 통제하므로 ISMS-P <code>2.9.1 시스템 및 서비스 운영관리</code> 증적으로 분류합니다.</p>
+                <div class="policy-mapping-wrap" aria-label="Policy Generator ISMS-P mapping">
+                  <table class="policy-mapping-table">
+                    <thead>
+                      <tr>
+                        <th>정책명</th>
+                        <th>종류</th>
+                        <th>적용 대상</th>
+                        <th>enforcement</th>
+                        <th>ISMS-P 매핑</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>require-non-root</td>
+                        <td>Validate</td>
+                        <td>Pod containers / initContainers</td>
+                        <td>deny</td>
+                        <td>2.9.1 시스템 및 서비스 운영관리</td>
+                      </tr>
+                      <tr>
+                        <td>allow-registries</td>
+                        <td>Validate</td>
+                        <td>Pod containers</td>
+                        <td>deny</td>
+                        <td>2.9.1 시스템 및 서비스 운영관리</td>
+                      </tr>
+                      <tr>
+                        <td>block-host-namespaces</td>
+                        <td>Validate</td>
+                        <td>Pod</td>
+                        <td>deny</td>
+                        <td>2.9.1 시스템 및 서비스 운영관리</td>
+                      </tr>
+                      <tr>
+                        <td>block-latest-tag</td>
+                        <td>Validate</td>
+                        <td>Pod containers / initContainers / ephemeralContainers</td>
+                        <td>deny</td>
+                        <td>2.9.1 시스템 및 서비스 운영관리</td>
+                      </tr>
+                      <tr>
+                        <td>assign-security-context</td>
+                        <td>Mutation</td>
+                        <td>Pod containers / initContainers</td>
+                        <td>-</td>
+                        <td>2.9.1 시스템 및 서비스 운영관리</td>
+                      </tr>
+                      <tr>
+                        <td>assign-resource-limits</td>
+                        <td>Mutation</td>
+                        <td>Pod containers / initContainers</td>
+                        <td>-</td>
+                        <td>2.9.1 시스템 및 서비스 운영관리</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p>런타임 Falco 이벤트와 자동 격리 같은 네트워크 접근 통제 증적은 별도 운영 증적으로 다루며, 필요한 경우 ISMS-P <code>2.6.7 인터넷 접속 통제</code>에 분리 매핑합니다.</p>
+                <div class="topic-chips"><span>Validate 4</span><span>Mutation 2</span><span>ISMS-P 2.9.1</span><span>policy evidence</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="arch-slack">
+                <span class="kicker">Slack Notification Flow</span>
+                <h3>High/Critical 런타임 이벤트는 클러스터별 설정과 cooldown을 통과하면 알립니다.</h3>
+                <p>현재 자동 Slack 알림은 Falco Sidekick으로 들어온 런타임 이벤트를 기준으로 동작합니다. 이벤트가 저장되면 클러스터별 Slack 설정, webhook 등록 여부, severity/priority 조건을 확인하고 High 또는 Critical만 발송 후보로 올립니다.</p>
+                <p><code>_notify_slack_for_event()</code>는 클러스터, rule, namespace, pod, container 기준 fingerprint를 만들고 <code>slack_notification_state</code>에 count, last_seen_at, last_notified_at을 갱신합니다. 기본 cooldown은 600초이며 <code>SLACK_NOTIFICATION_COOLDOWN_SECONDS</code>로 조정할 수 있습니다.</p>
+                <p>같은 원인의 이벤트가 cooldown 안에 반복되면 즉시 재발송하지 않고 count만 누적합니다. cooldown 이후 다시 조건을 만족하면 반복 발생 건수를 포함한 Slack 메시지를 전송합니다.</p>
+                <div class="topic-chips"><span>High/Critical only</span><span>cluster toggle</span><span>600s cooldown</span><span>fingerprint dedupe</span></div>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="docs-card" id="features">
+          <div class="section-heading">
+            <h2>기능</h2>
+            <span class="section-pill">Features</span>
+          </div>
+          <div class="docs-split" data-docs-group>
+            <div class="topic-list" aria-label="기능 목록">
+              <button class="topic-button is-active" type="button" data-docs-topic="feature-policy">
+                <span class="topic-number">1</span>
+                <span class="topic-main"><strong>Policy Generator</strong><span>policy-as-code</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="feature-apply">
+                <span class="topic-number">2</span>
+                <span class="topic-main"><strong>Cluster Apply Guide</strong><span>safe rollout</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="feature-sidekick">
+                <span class="topic-number">3</span>
+                <span class="topic-main"><strong>Cluster Setup</strong><span>falco sidekick</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="feature-analysis">
+                <span class="topic-number">4</span>
+                <span class="topic-main"><strong>Violation & Report</strong><span>analysis / export</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="feature-byok">
+                <span class="topic-number">5</span>
+                <span class="topic-main"><strong>Use my own API key</strong><span>personal llm key</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+            </div>
+            <div class="topic-detail-wrap">
+              <article class="topic-detail is-active" data-docs-panel="feature-policy">
+                <span class="kicker">Policy Generator</span>
+                <h3>입력값을 좁힐수록 바로 적용 가능한 정책이 나옵니다.</h3>
+                <ul>
+                  <li><strong>Policy Type</strong>: Validate는 위반 탐지/차단, Mutation은 누락된 securityContext나 resource limit 자동 주입에 사용합니다.</li>
+                  <li><strong>EnforcementAction</strong>: <code>dryrun</code>은 검증, <code>warn</code>은 전환, <code>deny</code>는 실제 차단 단계에 적합합니다.</li>
+                  <li><strong>disallow-latest-tag</strong>: <code>:latest</code> 또는 태그가 없는 이미지를 제한해 재현 가능한 배포를 강제합니다.</li>
+                  <li><strong>Allowed Registries</strong>: <code>ghcr.io/org/</code>, <code>registry.example.com/team/</code>처럼 prefix 기준을 좁게 적습니다.</li>
+                  <li><strong>Excluded Namespaces</strong>: 시스템 네임스페이스는 제외하되, 앱 네임스페이스를 제외해 정책 사각지대를 만들지 않습니다.</li>
+                  <li><strong>ISMS-P 매핑</strong>: Policy Generator 화면에서 선택하는 기본 정책 6종은 ISMS-P 2.9.1 시스템 및 서비스 운영관리에 매핑합니다.</li>
+                </ul>
+                <div class="topic-chips"><span>Validate</span><span>Mutation</span><span>ISMS-P 2.9.1</span><span>dryrun</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="feature-apply">
+                <span class="kicker">Safe Rollout</span>
+                <h3>적용 가이드는 “예정 리소스 확인 → 권한 확인 → dry-run → 순차 apply → 상태 확인” 순서로 읽습니다.</h3>
+                <ul>
+                  <li><code>kubectl 단계에서 실행 예정</code>은 아직 클러스터에 반영된 상태가 아니라, 사용자가 자신의 kubeconfig context에서 순서대로 실행해야 한다는 뜻입니다.</li>
+                  <li>Mutation 정책은 일반적으로 여러 <code>Assign</code> 리소스로 나뉩니다. 예를 들어 app container와 init container에 각각 <code>runAsNonRoot</code>, <code>readOnlyRootFilesystem</code>을 주입하므로 4개 항목이 보일 수 있습니다.</li>
+                  <li>Validate 정책은 <code>ConstraintTemplate</code>을 먼저 적용하고 CRD가 준비된 뒤 <code>Constraint</code>를 적용해야 합니다. 순서를 바꾸면 kind를 찾지 못하는 오류가 납니다.</li>
+                  <li>문제가 생기면 <code>deny</code>로 밀어붙이지 말고 <code>dryrun</code> 또는 <code>warn</code>으로 되돌린 뒤, 테스트 네임스페이스에서 먼저 재확인합니다.</li>
+                </ul>
+                <div class="terminal-window" aria-label="Policy apply terminal example">
+                  <div class="terminal-bar"><span></span><span></span><span></span><strong class="terminal-title">policy-apply-demo</strong></div>
+                  <pre class="terminal-body"><code><span class="prompt">$</span> # 1. 현재 context가 적용 대상 클러스터인지 먼저 확인
+kubectl config current-context
+3345_test
+
+<span class="prompt">$</span> # 2. Gatekeeper mutation 리소스 권한 확인
+kubectl auth can-i create assign.mutations.gatekeeper.sh
+kubectl auth can-i patch assign.mutations.gatekeeper.sh
+<span class="ok">yes</span>
+<span class="ok">yes</span>
+
+<span class="prompt">$</span> # 3. UI에 보이는 예정 리소스는 아직 적용 전 상태
+Assign/assign-run-as-non-root                  kubectl 단계에서 실행 예정
+Assign/assign-read-only-root-filesystem        kubectl 단계에서 실행 예정
+Assign/assign-run-as-non-root-init             kubectl 단계에서 실행 예정
+Assign/assign-read-only-root-filesystem-init   kubectl 단계에서 실행 예정
+
+<span class="prompt">$</span> # 4. 서버 dry-run으로 API group, schema, 권한을 먼저 검증
+kubectl apply --dry-run=server -f mutation-generated.yaml
+<span class="ok">assign.mutations.gatekeeper.sh/assign-run-as-non-root configured (server dry run)</span>
+<span class="ok">assign.mutations.gatekeeper.sh/assign-read-only-root-filesystem configured (server dry run)</span>
+
+<span class="prompt">$</span> # 5. 실제 적용 후 Gatekeeper가 리소스를 받았는지 확인
+kubectl apply -f mutation-generated.yaml
+kubectl get assign.mutations.gatekeeper.sh
+
+<span class="prompt">$</span> # 6. 흔한 오류별 확인 지점
+error: the server doesn't have a resource type "assign"
+<span class="warn">Gatekeeper mutation CRD가 설치되지 않았거나 버전이 맞지 않습니다.</span>
+
+Error from server (Forbidden): assignments is forbidden
+<span class="warn">현재 kubeconfig 계정에 Gatekeeper mutation 리소스 생성 권한이 없습니다.</span>
+
+error: no context exists with the name "3345_test"
+<span class="warn">KubeOwl의 클러스터 이름과 로컬 kubeconfig context 이름은 다를 수 있습니다.</span></code></pre>
+                </div>
+              </article>
+              <article class="topic-detail" data-docs-panel="feature-sidekick">
+                <span class="kicker">FALCO SIDEKICK 설치 명령</span>
+                <h3>클러스터 토큰이 포함된 명령은 재발급과 폐기 흐름까지 같이 봐야 합니다.</h3>
+                <ul>
+                  <li>설치 명령은 등록된 클러스터 토큰을 포함하므로 외부 문서에 그대로 공유하지 않습니다.</li>
+                  <li><strong>401/403</strong>: 토큰 만료 또는 휴지통 이동으로 폐기된 상태입니다. 토큰 재발급 후 새 명령을 적용합니다.</li>
+                  <li><strong>이벤트 없음</strong>: Falco/Sidekick Pod, ingest URL, NetworkPolicy, DNS 순서로 확인합니다.</li>
+                  <li><strong>Grafana No data</strong>: ingest 성공 후 Prometheus scrape 또는 metrics export 지연을 확인합니다.</li>
+                </ul>
+                <div class="terminal-window" aria-label="Falco Sidekick install terminal example">
+                  <div class="terminal-bar"><span></span><span></span><span></span><strong class="terminal-title">FALCO SIDEKICK 설치 명령</strong></div>
+                  <pre class="terminal-body"><code><span class="prompt">$</span> copy FALCO SIDEKICK 설치 명령
+helm repo add falcosecurity https://falcosecurity.github.io/charts
+
+<span class="prompt">$</span> helm upgrade --install falco-sidekick falcosecurity/falco-sidekick \
+  --namespace falco --create-namespace \
+  --set webui.enabled=false \
+  --set config.webhook.address=https://kubeowl.example/ingest/falco-events
+
+<span class="prompt">$</span> kubectl get pods -n falco
+falco-sidekick-7f6c9d9b6c-jh2qx   <span class="ok">Running</span>
+
+<span class="prompt">$</span> open KubeOwl > Violation Detail
+<span class="ok">runtime event received</span></code></pre>
+                </div>
+              </article>
+              <article class="topic-detail" data-docs-panel="feature-analysis">
+                <span class="kicker">Violation Detail / AI Report</span>
+                <h3>런타임 이벤트를 운영자가 읽을 수 있는 조치 문장으로 바꿉니다.</h3>
+                <ul>
+                  <li>Violation Detail은 처음에 Event JSON과 Resource Manifest를 비워 두고, 사용자가 최근 이벤트를 클릭하면 저장된 이벤트 데이터로 자동 채웁니다.</li>
+                  <li>최근 이벤트 목록은 <code>/runtime-events</code>에서 가져오고, 이벤트 클릭 시 <code>/runtime-events/{event_id}</code> 상세를 조회합니다.</li>
+                  <li>Analyze 버튼은 선택된 이벤트가 있을 때 <code>/analyze-runtime-event/{event_id}</code>를 호출해 저장된 이벤트와 manifest 기준으로 분석합니다.</li>
+                  <li>분석 결과는 rule, cluster, namespace, pod, container 맥락을 한 화면에 묶습니다.</li>
+                  <li>분석 결과는 심각도 설명, 원인 요약, 권장 수정, 구체적 조치로 분리합니다.</li>
+                  <li>AI Report는 최근 이벤트를 집계해 리포트 복사와 PDF 다운로드 흐름으로 넘깁니다.</li>
+                  <li>생성된 정책 산출물, Falco Sidekick 설치 명령, Event JSON, 리포트 코드 블록은 터미널 스타일 패널로 보여 복사와 검토를 빠르게 합니다.</li>
+                </ul>
+                <div class="topic-chips"><span>severity explain</span><span>root cause</span><span>recommended fix</span><span>PDF</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="feature-byok">
+                <span class="kicker">Use my own API key</span>
+                <h3>팀 기본 키 대신 사용자의 LLM API key로 생성과 분석을 실행할 수 있습니다.</h3>
+                <ul>
+                  <li>OpenAI, Anthropic, Google, xAI provider를 선택하고 같은 화면에서 개인 API key를 입력합니다.</li>
+                  <li>키는 입력만 해서는 적용되지 않고, 적용 버튼을 눌러야 현재 세션 요청에 반영됩니다.</li>
+                  <li>개인 키는 정책 생성, LLM 검토, 위반 분석, AI Report처럼 LLM 호출이 필요한 요청에만 사용합니다.</li>
+                  <li>서버 공용 rate limit에 막히거나 데모 환경에서 provider별 응답 차이를 비교해야 할 때 유용합니다.</li>
+                  <li>키는 세션 요청에만 붙여 보내며, DB나 관리자 화면에 저장하지 않는 것을 기본 원칙으로 둡니다.</li>
+                </ul>
+                <div class="topic-chips"><span>OpenAI</span><span>Anthropic</span><span>Gemini</span><span>xAI</span><span>session only</span></div>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="docs-card" id="security">
+          <div class="section-heading">
+            <h2>보안</h2>
+            <span class="section-pill">Security</span>
+          </div>
+          <div class="docs-split" data-docs-group>
+            <div class="topic-list" aria-label="보안 목록">
+              <button class="topic-button is-active" type="button" data-docs-topic="sec-auth">
+                <span class="topic-number">1</span>
+                <span class="topic-main"><strong>Auth & Isolation</strong><span>session scope</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="sec-admin">
+                <span class="topic-number">2</span>
+                <span class="topic-main"><strong>Admin Token</strong><span>x-admin-token</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="sec-grafana">
+                <span class="topic-number">3</span>
+                <span class="topic-main"><strong>Grafana Boundary</strong><span>proxy / datasource</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="sec-byok">
+                <span class="topic-number">4</span>
+                <span class="topic-main"><strong>User API Key</strong><span>session-only byok</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="sec-auth-abuse">
+                <span class="topic-number">5</span>
+                <span class="topic-main"><strong>Auth Abuse Guard</strong><span>account suspension</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+            </div>
+            <div class="topic-detail-wrap">
+              <article class="topic-detail is-active" data-docs-panel="sec-auth">
+                <span class="kicker">Session Scope</span>
+                <h3>사용자 화면은 로그인 세션과 클러스터 소유권을 기준으로 분리합니다.</h3>
+                <ul>
+                  <li>일반 UI는 로그인 세션 쿠키를 기준으로 사용자와 클러스터를 식별합니다.</li>
+                  <li>초기 화면은 상단 Sign in 버튼과 랜딩 중앙의 Continue with Google CTA를 함께 제공합니다.</li>
+                  <li>Continue with Google은 <code>select_account=true</code>로 Google 계정 선택 화면을 요청합니다. 상단 Sign in은 마지막 로그인 이메일 힌트가 있으면 빠른 로그인 흐름을 사용합니다.</li>
+                  <li>클러스터 목록, 런타임 이벤트, 이벤트 상세, AI Report는 로그인한 사용자의 클러스터 범위로만 조회됩니다.</li>
+                  <li>개발 로그인은 로컬/데모 모드에서만 켜고, 운영 환경에서는 Google OAuth 또는 별도 SSO로 제한합니다.</li>
+                </ul>
+              </article>
+              <article class="topic-detail" data-docs-panel="sec-admin">
+                <span class="kicker">X-Admin-Token</span>
+                <h3>관리자 경로는 공개 전 토큰 회전이 먼저입니다.</h3>
+                <ul>
+                  <li><code>/admin</code> API는 <code>X-Admin-Token</code>으로 보호됩니다.</li>
+                  <li><code>ADMIN_TOKEN</code>은 기본값이 아닌 강한 랜덤 값으로 교체해야 합니다.</li>
+                  <li>토큰 회전은 Grafana/SQLite 데이터를 삭제하지 않지만, 기존 관리자 Grafana 프록시 세션은 무효화될 수 있습니다.</li>
+                  <li>토큰은 장기 공유 문서에 저장하지 않고, 가능하면 세션 단위로 관리합니다.</li>
+                </ul>
+              </article>
+              <article class="topic-detail" data-docs-panel="sec-grafana">
+                <span class="kicker">Grafana Boundary</span>
+                <h3>Grafana 직접 공개 대신 KubeOwl 프록시와 datasource scope를 사용합니다.</h3>
+                <ul>
+                  <li>Grafana는 <code>/grafana-ui/</code> 인증 프록시 뒤에 둡니다.</li>
+                  <li>사용자별 Grafana org와 datasource를 분리해 대시보드 접근 경계를 만듭니다.</li>
+                  <li>Prometheus datasource 요청은 사용자 클러스터 기준으로 제한합니다.</li>
+                  <li>Grafana Live, annotations, datasource query는 프록시 경로에서 정상 동작해야 합니다.</li>
+                </ul>
+              </article>
+              <article class="topic-detail" data-docs-panel="sec-byok">
+                <span class="kicker">Use my own API key</span>
+                <h3>사용자 API key는 저장하지 않고 현재 요청의 LLM 호출에만 사용합니다.</h3>
+                <ul>
+                  <li>키는 브라우저 세션에서 요청 헤더로만 전달하고 서버 DB에 저장하지 않습니다.</li>
+                  <li>입력 후 적용 버튼을 눌러야 세션 키가 활성화되고, 새로고침하면 다시 비어 있는 상태로 돌아갑니다.</li>
+                  <li>입력된 키는 해당 사용자의 정책 생성, 위반 분석, 리포트 생성 요청에만 적용됩니다.</li>
+                  <li>다른 사용자, 관리자 페이지, Grafana 대시보드로 키 값이 노출되지 않아야 합니다.</li>
+                  <li>공개 URL이나 HTTP 환경에서 개인 키를 전송하지 않도록 HTTPS 프록시 뒤에서 사용하는 것을 권장합니다.</li>
+                </ul>
+                <div class="terminal-window" aria-label="Security check terminal example">
+                  <div class="terminal-bar"><span></span><span></span><span></span><strong class="terminal-title">security-check</strong></div>
+                  <pre class="terminal-body"><code><span class="prompt">$</span> enable "Use my own API key"
+provider=openai
+scope=current browser session
+
+<span class="prompt">$</span> generate policy with user key
+<span class="ok">request sent with session header only</span>
+
+<span class="prompt">$</span> refresh page
+<span class="warn">key input is empty again</span></code></pre>
+                </div>
+              </article>
+              <article class="topic-detail" data-docs-panel="sec-auth-abuse">
+                <span class="kicker">Login Abuse / Account Governance</span>
+                <h3>다중 계정 악용은 IP hash 기반 감지와 관리자 계정 정지로 제어합니다.</h3>
+                <ul>
+                  <li>같은 네트워크에서 24시간 내 서로 다른 계정 5개를 초과해 로그인하려 하면 추가 로그인을 차단합니다.</li>
+                  <li>IP 원문은 저장하지 않고 salt 기반 hash로 기록해 abuse 감지와 개인정보 노출 위험을 분리합니다.</li>
+                  <li>관리자는 사용자 상세에서 계정을 정지하거나 정지 해제할 수 있으며, 정지 시 기존 세션이 무효화되고 신규 로그인과 클러스터 생성이 막힙니다.</li>
+                  <li>회원 탈퇴는 soft delete로 처리됩니다. 삭제된 계정은 같은 Google 계정으로 바로 재가입되지 않으며, 필요하면 관리자가 restore API로 복구합니다.</li>
+                  <li>상용 환경에서는 이 단계에 CAPTCHA, 휴대폰 인증, IdP risk signal을 붙여 추가 검증으로 확장할 수 있습니다.</li>
+                </ul>
+                <div class="topic-chips"><span>IP hash</span><span>5 accounts / 24h</span><span>account suspension</span><span>soft delete restore</span></div>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="docs-card" id="operations">
+          <div class="section-heading">
+            <h2>Q&A</h2>
+            <span class="section-pill">Architecture Review</span>
+          </div>
+          <div class="docs-split" data-docs-group>
+            <div class="topic-list" aria-label="Q&A 목록">
+              <button class="topic-button is-active" type="button" data-docs-topic="ops-validation">
+                <span class="topic-number">1</span>
+                <span class="topic-main"><strong>AI Validation</strong><span>hallucination guard</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="ops-events">
+                <span class="topic-number">2</span>
+                <span class="topic-main"><strong>Event Handling</strong><span>burst / cost control</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="ops-state">
+                <span class="topic-number">3</span>
+                <span class="topic-main"><strong>State Sync</strong><span>eventual consistency</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="ops-privacy">
+                <span class="topic-number">4</span>
+                <span class="topic-main"><strong>Data Privacy</strong><span>public llm / air-gap</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="ops-shift-left">
+                <span class="topic-number">5</span>
+                <span class="topic-main"><strong>Shift-Left</strong><span>ci/cd policy checks</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="ops-remediation">
+                <span class="topic-number">6</span>
+                <span class="topic-main"><strong>Remediation</strong><span>patch / gitops plan</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="ops-conflict">
+                <span class="topic-number">7</span>
+                <span class="topic-main"><strong>Policy Conflict</strong><span>spaghetti policy guard</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="ops-exception">
+                <span class="topic-number">8</span>
+                <span class="topic-main"><strong>System Exceptions</strong><span>namespace exclusion</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="ops-compliance">
+                <span class="topic-number">9</span>
+                <span class="topic-main"><strong>Compliance Mapping</strong><span>CIS / ISMS-P plan</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="ops-audit">
+                <span class="topic-number">10</span>
+                <span class="topic-main"><strong>Audit Trail</strong><span>who changed what</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+              <button class="topic-button" type="button" data-docs-topic="ops-secret">
+                <span class="topic-number">11</span>
+                <span class="topic-main"><strong>Secret Management</strong><span>least privilege tokens</span></span>
+                <span class="topic-arrow">›</span>
+              </button>
+            </div>
+            <div class="topic-detail-wrap">
+              <article class="topic-detail is-active" data-docs-panel="ops-validation">
+                <span class="kicker">AI Hallucination Guard</span>
+                <h3>Q. AI가 잘못된 Gatekeeper 정책을 만들면 어떻게 막습니까?</h3>
+                <ul>
+                  <li><strong>A.</strong> LLM 출력은 최종 권한자가 아니라 검토 보조로 취급합니다.</li>
+                  <li><strong>Prompt Injection / Jailbreak</strong> 위험을 줄이기 위해 사용자 자유 입력 프롬프트 UI를 제거하고 정책 유형 선택식 UI로 제한했습니다.</li>
+                  <li>현재 프론트엔드는 선택된 정책 유형을 서버 API 호환용 내부 canned prompt로 변환해 보내지만, 사용자가 직접 자유 prompt를 입력하는 화면은 없습니다.</li>
+                  <li>Policy Generator는 선택된 정책 유형을 바로 클러스터에 적용하지 않고, ConstraintTemplate과 Constraint YAML을 먼저 노출합니다.</li>
+                  <li>생성 결과는 지원 정책 유형, 필수 필드, enforcementAction, namespace exclusion, Rego 구조를 서버에서 정규화합니다.</li>
+                  <li>적용 단계는 <code>dryrun</code> 또는 server-side validation을 먼저 거치도록 안내하며, 운영 반영 전 사람이 YAML을 확인합니다.</li>
+                  <li>LLM이 불가능하거나 애매한 정책을 만들면 deterministic fallback과 오류 메시지로 전환하고, 검증되지 않은 답변을 성공으로 표시하지 않습니다.</li>
+                </ul>
+                <div class="topic-chips"><span>human review</span><span>schema normalization</span><span>dryrun first</span><span>fallback</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="ops-events">
+                <span class="kicker">Event Burst / API Bottleneck</span>
+                <h3>Q. 초당 수백~수천 건의 Falco 이벤트를 모두 LLM으로 보냅니까?</h3>
+                <ul>
+                  <li><strong>A.</strong> 아닙니다. ingest와 LLM 분석은 분리되어 있습니다.</li>
+                  <li>Falco Sidekick ingest는 이벤트를 SQLite에 저장하고, LLM 호출은 사용자가 Violation Detail 또는 AI Report를 실행할 때만 발생합니다.</li>
+                  <li>대시보드와 Grafana는 저장된 이벤트 집계 메트릭을 사용하므로 초당 이벤트 폭증이 곧바로 LLM 비용 폭증으로 이어지지 않습니다.</li>
+                  <li>현재 리포트는 이벤트를 집계해 보여주는 단계이며, 수만 개 중복 로그를 그대로 LLM에 밀어 넣는 구조를 목표로 하지 않습니다.</li>
+                  <li>운영 확장 시에는 rule, cluster, namespace, pod, container, time window 기준 deduplication과 correlation key를 만들고, 대표 이벤트만 LLM 요약에 넣어 경고 피로를 줄여야 합니다.</li>
+                  <li>per-cluster rate limit, severity 기반 샘플링, background queue, burst suppression은 실제 대규모 운영을 위한 다음 단계입니다.</li>
+                  <li>High/Critical Slack 알림도 클러스터별 설정과 severity 조건을 통과한 이벤트만 발송합니다.</li>
+                </ul>
+                <div class="topic-chips"><span>store first</span><span>on-demand LLM</span><span>deduplication</span><span>alert fatigue</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="ops-state">
+                <span class="kicker">State Synchronization</span>
+                <h3>Q. 콘솔의 정책/이벤트 상태가 실제 클러스터와 100% 실시간으로 일치합니까?</h3>
+                <ul>
+                  <li><strong>A.</strong> 100% 실시간 일치를 주장하지 않습니다. 콘솔은 클러스터에서 수집된 최신 관측값을 보여줍니다.</li>
+                  <li>중앙 KubeOwl 서버가 모든 사용자 클러스터의 관리자 kubeconfig를 보관하거나, 언제든지 고객 클러스터에 직접 <code>kubectl</code> 할 수 있다고 가정하지 않습니다.</li>
+                  <li>정책 적용 기록, Falco ingest, Prometheus scrape, Grafana 쿼리 결과를 조합해 현재 상태를 보여주며, 일부 지표는 수집 주기만큼 지연될 수 있습니다.</li>
+                  <li>정책 현황은 클러스터에서 관측된 Gatekeeper/Prometheus 데이터와 사용자 apply history를 구분해서 표시해야 합니다.</li>
+                  <li>정확한 리소스 원문이 필요할 때는 UI가 kubectl 조회 명령을 제공하고, 사용자가 해당 클러스터 context에서 확인하는 흐름을 기본값으로 둡니다.</li>
+                </ul>
+                <div class="topic-chips"><span>eventual consistency</span><span>Prometheus scrape</span><span>apply history</span><span>kubectl verify</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="ops-privacy">
+                <span class="kicker">Data Privacy / Air-gap</span>
+                <h3>Q. YAML과 런타임 로그를 퍼블릭 LLM API로 보내면 내부 정보가 유출되지 않습니까?</h3>
+                <ul>
+                  <li><strong>A.</strong> 이 지적은 맞습니다. 그래서 KubeOwl은 LLM 호출을 항상 선택적 기능으로 두고, 기본 이벤트 저장/대시보드는 LLM 없이 동작합니다.</li>
+                  <li>사용자 API key는 브라우저 세션 요청 헤더로만 전달하고 서버 DB에는 저장하지 않습니다.</li>
+                  <li>민감한 환경에서는 LLM 분석을 끄고 deterministic fallback 분석만 사용하거나, 사내망에 배치한 private LLM endpoint로 provider를 교체하는 구성이 필요합니다.</li>
+                  <li>현재 운영 버전은 LLM 호출 전에 namespace, image, internal IP, env, secret-like 문자열을 마스킹하는 redaction pipeline을 적용합니다. AI Report와 Violation Detail 둘 다 이 정제를 거친 프롬프트만 보냅니다.</li>
+                  <li>air-gap 환경은 외부 LLM API 대신 내부 모델 또는 완전한 규칙 기반 분석 모드로 운영하는 것을 전제로 합니다.</li>
+                </ul>
+                <div class="topic-chips"><span>LLM optional</span><span>redaction</span><span>private endpoint</span><span>air-gap mode</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="ops-shift-left">
+                <span class="kicker">Shift-Left / CI-CD</span>
+                <h3>Q. 배포 후 차단만 하는 것이 아니라 CI/CD 단계에서 미리 막을 수 있습니까?</h3>
+                <ul>
+                  <li><strong>A.</strong> 현재 콘솔은 런타임 탐지와 Admission 단계 방어에 집중하지만, 정책 산출물은 CI/CD 검사로 확장할 수 있는 형태입니다.</li>
+                  <li>생성된 Gatekeeper ConstraintTemplate/Constraint는 Git repository에 저장하고, pull request에서 <code>conftest</code>, <code>opa test</code>, <code>gator test</code> 같은 도구로 사전 검증할 수 있습니다.</li>
+                  <li>다음 확장 방향은 KubeOwl CLI 또는 GitHub Actions action을 제공해 Kubernetes manifest, Helm render 결과, Kustomize output을 같은 정책으로 검사하는 것입니다.</li>
+                  <li>이렇게 하면 KubeOwl은 사후 모니터링 대시보드가 아니라 개발 단계부터 Admission, Runtime까지 이어지는 SDLC 보안 흐름으로 확장됩니다.</li>
+                </ul>
+                <div class="topic-chips"><span>conftest</span><span>opa test</span><span>gator</span><span>github actions</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="ops-remediation">
+                <span class="kicker">Auto Remediation / GitOps</span>
+                <h3>Q. AI가 제안한 YAML은 사람이 복사해서 적용해야 합니까?</h3>
+                <ul>
+                  <li><strong>A.</strong> 데모의 기본값은 의도적으로 human-in-the-loop입니다. 보안 정책과 리소스 패치를 AI가 즉시 적용하는 것은 오탐과 장애 리스크가 크기 때문입니다.</li>
+                  <li>현재 구조는 수정안과 kubectl 적용 가이드를 제공하고, 클러스터 토큰/소유권/status를 확인한 뒤 적용 흐름으로 넘어갑니다.</li>
+                  <li>정책 apply는 `deny` 계열 고위험 제약이 시스템 네임스페이스 예외를 누락하면 `confirm_system_scope` 확인을 요구합니다.</li>
+                  <li>원클릭 patch는 별도 권한 모델, dry-run diff, 승인 기록, rollback 계획, namespace allowlist가 갖춰진 뒤 제한적으로 제공하는 것이 안전합니다.</li>
+                  <li>더 안전한 방향은 Argo CD 또는 Flux와 연동해 AI가 직접 클러스터를 고치는 대신 Git PR을 만들고, 리뷰와 GitOps sync로 반영하는 구조입니다.</li>
+                </ul>
+                <div class="topic-chips"><span>human-in-the-loop</span><span>dry-run diff</span><span>approval log</span><span>gitops pr</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="ops-conflict">
+                <span class="kicker">Policy Conflict Detection</span>
+                <h3>Q. 기존 정책과 새 AI 정책이 정면으로 충돌하면 어떤 정책이 우선합니까?</h3>
+                <ul>
+                  <li><strong>A.</strong> Kubernetes/Gatekeeper는 일반적인 “우선순위” 하나로 충돌을 해결하지 않습니다. Admission 요청은 매칭되는 모든 제약을 평가하고, deny 제약 중 하나라도 위반하면 요청이 거부됩니다.</li>
+                  <li>예를 들어 한 정책이 포트 80을 허용하고 다른 정책이 1024 이하 포트를 막으면, 실제 결과는 더 엄격한 deny 정책에 의해 포트 80 사용이 거부될 수 있습니다.</li>
+                  <li>현재 데모는 정책 생성과 dry-run 안내를 제공하지만, 기존 정책 전체와 새 정책의 논리적 충돌을 완전 자동으로 증명하는 엔진은 아직 범위 밖입니다.</li>
+                  <li>확장 방향은 정책 registry, 같은 리소스/필드 대상 감지, allow/deny 조건 교차 분석, server-side dry-run, 테스트 fixture 기반 회귀 검사를 합쳐 배포 전 경고를 제공하는 것입니다.</li>
+                </ul>
+                <div class="topic-chips"><span>deny wins</span><span>constraint registry</span><span>overlap analysis</span><span>dry-run</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="ops-exception">
+                <span class="kicker">Exception / Blast Radius</span>
+                <h3>Q. root 금지 정책이 kube-system이나 CNI까지 막아 클러스터가 멈추면 어떻게 합니까?</h3>
+                <ul>
+                  <li><strong>A.</strong> 시스템 네임스페이스 예외 처리는 기본 안전장치로 봐야 합니다. KubeOwl은 <code>kube-system</code>, <code>gatekeeper-system</code>, <code>monitoring</code>을 blast radius 확인용 guardrail로 다룹니다.</li>
+                  <li>고위험 <code>deny</code> 정책은 시스템 네임스페이스 제외가 빠져 있으면 <code>confirm_system_scope</code> 확인을 요구합니다. 확인 없이 바로 적용되지 않습니다.</li>
+                  <li>운영 정책은 가능하면 <code>dryrun</code> 또는 <code>warn</code>으로 기존 워크로드 영향도를 먼저 확인해야 합니다.</li>
+                  <li>Falco처럼 privileged 권한이 필요한 보안 컴포넌트, CNI, storage driver, ingress controller는 namespace 또는 label 기반 예외가 필요할 수 있습니다.</li>
+                  <li>관리자 또는 운영자는 예외 사유를 남기고, 넓은 범위의 정책은 별도 승인 로그와 함께 다루는 것이 좋습니다.</li>
+                </ul>
+                <div class="topic-chips"><span>excluded namespaces</span><span>dryrun</span><span>warn first</span><span>blast radius</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="ops-compliance">
+                <span class="kicker">Compliance Mapping</span>
+                <h3>Q. 정책 생성기라면 왜 컴플라이언스 플랫폼이라고 부릅니까?</h3>
+                <ul>
+                  <li><strong>A.</strong> 현재 구현은 정책 생성기만이 아니라 사용자별 클러스터 등록, Gatekeeper 정책 적용 가이드, Falco 런타임 이벤트 수집, 위반 상세 분석, 리포트, Grafana 관측을 한 흐름으로 묶습니다.</li>
+                  <li>현재 사전 정의 정책 6종은 모두 Gatekeeper 정책이며 ISMS-P 2.9.1 시스템 및 서비스 운영관리에 매핑합니다.</li>
+                  <li><code>latest 태그 금지</code>, <code>non-root 강제</code>, <code>레지스트리 제한</code>, <code>host namespace 금지</code>, <code>securityContext 자동 주입</code>, <code>resource limits 자동 주입</code>이 화면에 노출되는 기본 정책 목록입니다.</li>
+                  <li>런타임 네트워크 탐지와 격리 증적은 Policy Generator의 6개 정책 표와 분리해 ISMS-P 2.6.7 인터넷 접속 통제 보조 증적으로 관리합니다.</li>
+                  <li>현 단계에서 “컴플라이언스”라는 이름의 근거는 정책-as-code와 런타임 증적을 모아 감사 가능한 운영 흐름을 만드는 데 있습니다.</li>
+                  <li>확장 방향은 control catalog를 만들고, 각 정책에 표준 control id, evidence source, severity, remediation guide를 연결해 위반 리포트에서 “어느 조항을 위반했는지”까지 보여주는 것입니다.</li>
+                </ul>
+                <div class="topic-chips"><span>ISMS-P 2.9.1</span><span>ISMS-P 2.6.7</span><span>policy evidence</span><span>control catalog</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="ops-audit">
+                <span class="kicker">Platform Audit Trail</span>
+                <h3>Q. 누가 언제 KubeOwl에서 어떤 정책을 만들고 적용했는지 추적할 수 있습니까?</h3>
+                <ul>
+                  <li><strong>A.</strong> 보안 솔루션은 자기 자신의 변경 이력도 남겨야 합니다. KubeOwl은 클러스터 이벤트뿐 아니라 플랫폼 write action 감사 로그가 필요합니다.</li>
+                  <li>현재 정책 적용 기록은 policy apply history로 남고, 관리자 페이지의 감사 로그와 <code>/admin/api/audit-events</code>에서 생성, 적용, 토큰 회전, 클러스터 삭제, 계정 삭제, Grafana 관리자 링크 발급을 함께 조회할 수 있습니다.</li>
+                  <li>사용자 상세의 이벤트 메트릭은 단일 total만 보여주지 않고 <code>events.source = 'gatekeeper'</code>인 Gatekeeper(Admission)과 <code>source IN ('sidekick', 'falco-agent')</code>인 Falco(Runtime)를 분리해 표시합니다.</li>
+                  <li>감사 로그에는 actor user id, actor email, action, target type, target id, before/after hash, request id, timestamp, result와 기본 redacted details를 저장합니다.</li>
+                  <li>관리자 페이지에서는 날짜 범위, 액션, 대상 유형, 대상 ID로 필터링하고, actor별 요약 카드로 최근 작업 분포를 빠르게 볼 수 있습니다.</li>
+                </ul>
+                <div class="topic-chips"><span>actor</span><span>action log</span><span>append-only</span><span>siem</span></div>
+              </article>
+              <article class="topic-detail" data-docs-panel="ops-secret">
+                <span class="kicker">Secret Management / Least Privilege</span>
+                <h3>Q. KubeOwl이 클러스터 마스터키나 kubeconfig를 저장하면 침해 사고 발생 시 위험하지 않습니까?</h3>
+                <ul>
+                  <li><strong>A.</strong> 맞습니다. KubeOwl 백엔드가 장기 관리자 kubeconfig를 평문 저장하는 구조는 피해야 합니다.</li>
+                  <li>현재 설계는 Falco ingest에 bearer cluster token을 쓰고, 삭제/휴지통 이동 시 token hash를 폐기합니다. 사용자-facing 목록에는 원본 토큰을 다시 노출하지 않습니다.</li>
+                  <li>정책 적용도 가능한 한 사용자가 자신의 cluster context에서 kubectl 명령을 실행하거나, 제한된 ServiceAccount와 단기 토큰을 쓰는 방식이 안전합니다.</li>
+                  <li>운영형 확장에서는 Kubernetes Secret, cloud KMS, Vault, short-lived credential, namespace-scoped RBAC, Gatekeeper resource 전용 권한으로 최소 권한 원칙을 지켜야 합니다.</li>
+                </ul>
+                <div class="topic-chips"><span>least privilege</span><span>token hash</span><span>vault/kms</span><span>short-lived</span></div>
+              </article>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+    <script>
+      document.querySelectorAll("[data-docs-group]").forEach((group) => {
+        const buttons = group.querySelectorAll("[data-docs-topic]");
+        const panels = group.querySelectorAll("[data-docs-panel]");
+        const activate = (id) => {
+          buttons.forEach((button) => button.classList.toggle("is-active", button.dataset.docsTopic === id));
+          panels.forEach((panel) => panel.classList.toggle("is-active", panel.dataset.docsPanel === id));
+        };
+        buttons.forEach((button) => {
+          button.addEventListener("mouseenter", () => activate(button.dataset.docsTopic));
+          button.addEventListener("focus", () => activate(button.dataset.docsTopic));
+          button.addEventListener("click", () => activate(button.dataset.docsTopic));
+        });
+      });
+    </script>
+  </body>
+</html>

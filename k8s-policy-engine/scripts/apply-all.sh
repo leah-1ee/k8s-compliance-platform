@@ -19,17 +19,23 @@ apply_dir() {
 
   echo "==> [${label}] 적용 시작: ${dir}"
 
+  if [ ! -d "$dir" ]; then
+    echo "[오류] 정책 디렉터리가 없습니다: ${dir}"
+    exit 1
+  fi
+
   local files
   files=$(find "$dir" -maxdepth 1 -type f \( -name "*.yaml" -o -name "*.yml" \) | sort)
 
   if [ -z "$files" ]; then
-    echo "    (적용할 yaml 파일 없음, 건너뜀)"
-  else
-    echo "$files" | while read -r f; do
-      echo "    kubectl apply -f ${f}"
-      kubectl apply -f "$f"
-    done
+    echo "[오류] 적용할 YAML 파일이 없습니다: ${dir}"
+    exit 1
   fi
+
+  echo "$files" | while read -r f; do
+    echo "    kubectl apply -f ${f}"
+    kubectl apply -f "$f"
+  done
 
   echo "==> [${label}] 완료"
   echo ""

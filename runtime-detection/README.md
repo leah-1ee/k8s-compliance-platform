@@ -117,12 +117,21 @@ Policy-as-code-Complience/
 |---|------|----------|-----------------|----------|----------|
 | 1 | Read Sensitive File | WARNING | ISMS-P 2.6.1, PCI-DSS 7.1 | /etc/shadow, SSH 키, kubeconfig | `evt.dir = <` |
 | 2 | Shell Spawned | WARNING | ISMS-P 2.6.1 | 컨테이너 내 interactive shell exec | `evt.dir = <`, `proc.tty != 0` |
-| 3 | Unexpected Outbound | NOTICE | ISMS-P 2.6.7, PCI-DSS 1.3 | 외부 IP 연결 (C2 통신) | `evt.dir = <`, CIDR 사설대역 제외, `falcoctl` 제외 |
+| 3 | Unexpected Outbound | NOTICE | ISMS-P 2.6.7, PCI-DSS 1.3 | 컨테이너 outbound 연결, 네트워크 접근 통제 보조 증적 | `evt.dir = <`, IPv4 socket, known system process 제외 |
 | 4 | Container Reconnaissance | NOTICE | ISMS-P 2.11.4 | whoami, nmap, /proc 스캔 | `evt.dir = <` |
 | 5 | Privilege Escalation | CRITICAL | ISMS-P 2.6.1, PCI-DSS 7.1 | setuid/setgid to root | `evt.dir = <`, `evt.arg.uid = 0 or evt.arg.euid = 0` |
 | 6 | Write Monitored Directory | ERROR | ISMS-P 2.11.1 | /bin, /usr/bin 등 변조 | `evt.dir = <`, `O_WRONLY or O_RDWR` 플래그 검사 |
 
-**Rule 3 사설 IP 필터**: K8s 클러스터 내부 통신(10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8)을 제외해 오탐 방지.
+**Rule 3 운영 기준**: 현재 룰은 사설 CIDR을 Falco 조건에서 직접 제외하지 않는다.
+운영/데모 클러스터의 내부 통신도 네트워크 접근 통제 증적으로 남기되, `coredns`,
+`kubelet`, `kube-proxy`, `falco`, `falcoctl`, `node-exporter` 같은 known system process를
+조건에서 제외한다. 사설 대역 노이즈가 커지면 Falco 룰을 즉시 좁히기보다
+Response Server의 false-positive filter 또는 namespace/process allowlist에서 먼저 조정한다.
+
+**ISMS-P 2.6.7 보조 증적**: Kubernetes `NetworkPolicy` 표준은 TCP, UDP, SCTP 중심이며
+ping 같은 네트워크 확인은 CNI 플러그인 구현에 따라 다를 수 있다. 따라서 NetworkPolicy 적용
+결과만으로 통제 증적을 확정하지 않고, 런타임 네트워크 이벤트, CNI별 정책 동작,
+ping 테스트 결과를 ISMS-P 2.6.7 보조 증적으로 함께 기록한다.
 
 **Rule 5 강화**: `user.uid != 0` 만으로는 부족 — `evt.arg.uid = 0 or evt.arg.euid = 0` 조건으로 실제 root 권한 획득 시도만 탐지.
 
@@ -367,7 +376,7 @@ X-Watchdog-Token: <HEARTBEAT_TOKEN>
 |------|--------|------|
 | `SERVER_PORT` | `5000` | HTTP 리슨 포트 |
 | `LOG_LEVEL` | `INFO` | 로그 레벨 (DEBUG/INFO/WARNING/ERROR/CRITICAL) |
-| `AI_ENDPOINT` | `` | AI 분류 모듈 URL (미설정 시 fallback) |
+| `AI_ENDPOINT` | `http://ai-classifier.compliance-system.svc.cluster.local:8000/classify` | AI 분류 모듈 URL (연결 실패 시 fallback) |
 | `AI_TIMEOUT` | `5` | AI 요청 타임아웃(초) |
 | `AI_CONFIDENCE_THRESHOLD` | `0.6` | 이 미만이면 fallback 재분류 |
 | `FALLBACK_CONFIDENCE_THRESHOLD` | `0.35` | Fallback 이 미만이면 severity 하향 |
@@ -417,6 +426,44 @@ curl localhost:5000/metrics
 curl localhost:5000/api/v1/events?severity=high
 curl localhost:5000/api/v1/falco/status   # Falco 생존 상태 확인
 ```
+
+## Falco Smoke Validation
+
+TASK-07 기준으로는 Falco 룰을 새로 확장하지 않는다. 배포 후 아래 smoke로
+현재 룰과 이벤트 파이프라인이 살아 있는지만 확인한다.
+
+Falco 룰 문법 검증:
+
+```bash
+sudo /usr/bin/falco -o engine.kind=modern_ebpf --dry-run
+```
+
+Canary/heartbeat 확인:
+
+```bash
+kubectl apply -f manifests/falco-watchdog.yaml
+kubectl port-forward -n compliance-system svc/response-server 5000:5000
+curl -s localhost:5000/api/v1/falco/status
+```
+
+컨테이너 이벤트 smoke:
+
+```bash
+kubectl create namespace runtime-demo --dry-run=client -o yaml | kubectl apply -f -
+kubectl run runtime-demo-target \
+  -n runtime-demo \
+  --image=docker.io/library/busybox:1.36 \
+  --restart=Never \
+  --command -- sh -c 'sleep 3600'
+kubectl wait -n runtime-demo --for=condition=Ready pod/runtime-demo-target --timeout=90s
+kubectl exec -n runtime-demo runtime-demo-target -- sh -lc 'whoami; id; cat /etc/passwd >/dev/null'
+kubectl port-forward -n compliance-system svc/response-server 5000:5000
+curl -s localhost:5000/api/v1/events/summary
+```
+
+정상이라면 `Shell Spawned`, `Container Reconnaissance`, `Read Sensitive File`
+계열 이벤트 중 하나 이상이 response-server 이벤트 API 또는 AI Console runtime
+화면에서 확인되어야 한다.
 
 ---
 

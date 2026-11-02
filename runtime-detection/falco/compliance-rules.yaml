@@ -51,12 +51,6 @@
     evt.dir = < and
     container.id != host and
     fd.typechar = 4 and
-    not fd.sip in (
-      "10.0.0.0/8",
-      "172.16.0.0/12",
-      "192.168.0.0/16",
-      "127.0.0.0/8"
-    ) and
     not proc.name in (coredns, kubelet, kube-proxy, falco, falcoctl, node-exporter)
   output: >
     Unexpected outbound connection from container

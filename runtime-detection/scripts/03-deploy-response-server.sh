@@ -4,9 +4,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-IMAGE_NAME="compliance-response-server"
-IMAGE_TAG="latest"
-CLUSTER_NAME="compliance-platform"
+IMAGE_NAME="${IMAGE_NAME:-docker.io/leeon3345/compliance-response-server}"
+IMAGE_TAG="${IMAGE_TAG:-0.1.0}"
+CLUSTER_NAME="${CLUSTER_NAME:-compliance-platform}"
 
 echo "============================================"
 echo " Step 3: Response Server Deployment"

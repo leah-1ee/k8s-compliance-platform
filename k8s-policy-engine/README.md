@@ -21,7 +21,40 @@ ConstraintTemplate(Rego 정책 정의), Constraint(정책 적용), Assign(자동
 | assign-security-context | Mutation | Pod containers / initContainers | - | 2.9.1 시스템 및 서비스 운영관리 |
 | assign-resource-limits | Mutation | Pod containers / initContainers | - | 2.9.1 시스템 및 서비스 운영관리 |
 
-> 모든 정책은 `kube-system`, `gatekeeper-system`, `kube-flannel` 네임스페이스에 적용되지 않습니다.
+> 모든 정책은 `kube-system`, `gatekeeper-system`, `kube-flannel`, `monitoring`, `local-path-storage`, `falco` 네임스페이스에 적용되지 않습니다.
+
+Policy Generator 화면의 사전 정의 정책은 위 Gatekeeper 정책 6종만 노출한다.
+Kubernetes `NetworkPolicy`는 Gatekeeper 정책 엔진 소스에 포함하지 않고, 필요한 경우
+별도 네트워크 격리 산출물 또는 런타임 자동 격리 증적으로 다룬다.
+네트워크 접근 통제 증적은 ISMS-P `2.6.7 인터넷 접속 통제`에 매핑한다.
+
+`NetworkPolicy`는 Kubernetes 표준 기준 TCP, UDP, SCTP 중심의 트래픽 제어 리소스다.
+ping 같은 네트워크 확인은 CNI 플러그인별 처리 차이가 있으므로 표준 `NetworkPolicy`만으로
+차단 또는 허용을 보장하지 않는다. 관련 증적은 Falco Rule 3 네트워크 탐지 로그와
+사용 중인 CNI의 별도 정책/검증 결과를 ISMS-P 2.6.7 보조 증적으로 함께 남긴다.
+
+## 운영 소스 오브 트루스
+
+`k8s-policy-engine/`은 Gatekeeper 정책의 개발/검증 기준 트리입니다. Rego 테스트,
+Mutation E2E, 적용 스크립트가 이 디렉터리를 기준으로 동작합니다.
+
+별도 배포 사본을 두지 않습니다. 로컬과 클라우드 환경 모두 이 디렉터리의 정책을
+직접 적용합니다.
+
+```bash
+helm upgrade --install gatekeeper gatekeeper/gatekeeper \
+  -n gatekeeper-system \
+  --create-namespace \
+  -f k8s-policy-engine/helm/gatekeeper-values.yaml
+
+bash k8s-policy-engine/scripts/apply-all.sh
+```
+
+현재 demo/ops 요구사항으로 유지하는 예외는 다음과 같습니다.
+
+- `local-path-storage`: SQLite PVC용 local-path provisioner가 정책에 막히지 않도록 제외
+- `falco`: Falco/Falco Sidekick의 privileged, host namespace, hostPath 요구사항을 보장하도록 제외
+- `docker.io/leeon3345/`: 직접 빌드/푸시한 demo 이미지를 allow-registries에 허용
 
 ---
 
@@ -36,6 +69,7 @@ prefix 끝에 `/`를 포함해야 prefix 우회를 방지할 수 있습니다.
 parameters:
   repos:
     - "docker.io/library/"   # Docker Hub 공식 이미지
+    - "docker.io/leeon3345/" # demo/ops 이미지
     - "gcr.io/"              # Google Container Registry
     - "ghcr.io/"             # GitHub Container Registry
     - "registry.k8s.io/"    # Kubernetes 공식 이미지
@@ -149,6 +183,37 @@ make apply
 # Mutation E2E 테스트 (클러스터 + Gatekeeper 설치 필요)
 bash tests/mutation-e2e-test.sh
 ```
+
+## 배포 전 검증
+
+클러스터와 Gatekeeper CRD가 있는 환경에서 실행합니다.
+
+```bash
+kubectl apply --dry-run=server -f templates/
+kubectl apply --dry-run=server -f constraints/
+kubectl apply --dry-run=server -f mutations/
+```
+
+허용 이미지 smoke:
+
+```bash
+kubectl run allowed-leeon-image \
+  --image=docker.io/leeon3345/compliance-ai-server:0.1.13 \
+  --restart=Never \
+  --dry-run=server
+```
+
+거부 이미지 smoke:
+
+```bash
+kubectl run denied-latest-image \
+  --image=nginx:latest \
+  --restart=Never \
+  --dry-run=server
+```
+
+`allowed-leeon-image`는 admission을 통과해야 하고, `denied-latest-image`는
+`block-latest-tag` 또는 `allow-registries` 정책에 의해 거부되어야 합니다.
 
 **디렉토리 구조**
 ```

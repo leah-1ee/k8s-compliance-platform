@@ -1,0 +1,275 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: compliance-system
+  labels:
+    app.kubernetes.io/part-of: compliance-platform
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: compliance-agent
+  namespace: compliance-system
+  labels:
+    app: compliance-agent
+    app.kubernetes.io/part-of: compliance-platform
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: compliance-agent-readonly
+  labels:
+    app: compliance-agent
+    app.kubernetes.io/part-of: compliance-platform
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "daemonsets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: compliance-agent-readonly
+  labels:
+    app: compliance-agent
+    app.kubernetes.io/part-of: compliance-platform
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: compliance-agent-readonly
+subjects:
+  - kind: ServiceAccount
+    name: compliance-agent
+    namespace: compliance-system
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: compliance-agent
+  namespace: compliance-system
+  labels:
+    app: compliance-agent
+    app.kubernetes.io/part-of: compliance-platform
+data:
+  agent.py: |
+    import json
+    import os
+    import ssl
+    import urllib.error
+    import urllib.request
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    CENTRAL_INGEST_URL = os.environ["CENTRAL_INGEST_URL"]
+    CENTRAL_API_KEY = os.getenv("CENTRAL_API_KEY", "")
+    CLUSTER_NAME = os.getenv("CLUSTER_NAME", "unknown-cluster")
+    PORT = int(os.getenv("PORT", "8080"))
+    SERVICEACCOUNT_DIR = "/var/run/secrets/kubernetes.io/serviceaccount"
+    KUBE_HOST = os.getenv("KUBERNETES_SERVICE_HOST", "")
+    KUBE_PORT = os.getenv("KUBERNETES_SERVICE_PORT", "443")
+
+    def read_file(path):
+      with open(path, encoding="utf-8") as handle:
+        return handle.read().strip()
+
+    def falco_field(event, name):
+      fields = event.get("output_fields", {})
+      if isinstance(fields, dict):
+        return fields.get(name, "")
+      return ""
+
+    def fetch_pod_manifest(namespace, pod_name):
+      if not KUBE_HOST or not namespace or not pod_name:
+        return ""
+      token = read_file(f"{SERVICEACCOUNT_DIR}/token")
+      ca_path = f"{SERVICEACCOUNT_DIR}/ca.crt"
+      url = f"https://{KUBE_HOST}:{KUBE_PORT}/api/v1/namespaces/{namespace}/pods/{pod_name}"
+      request = urllib.request.Request(
+        url,
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+      )
+      context = ssl.create_default_context(cafile=ca_path)
+      with urllib.request.urlopen(request, context=context, timeout=5) as response:
+        return response.read().decode("utf-8")
+
+    def forward_event(event):
+      namespace = falco_field(event, "k8s.ns.name")
+      pod_name = falco_field(event, "k8s.pod.name")
+      manifest = ""
+      manifest_error = ""
+      try:
+        manifest = fetch_pod_manifest(namespace, pod_name)
+      except Exception as exc:
+        manifest_error = str(exc)
+
+      body = {
+        "cluster": CLUSTER_NAME,
+        "event": event,
+        "namespace": namespace,
+        "pod_name": pod_name,
+        "resource_manifest": manifest,
+        "manifest_error": manifest_error,
+      }
+      data = json.dumps(body).encode("utf-8")
+      headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "compliance-agent/0.1",
+      }
+      if CENTRAL_API_KEY:
+        headers["Authorization"] = f"Bearer {CENTRAL_API_KEY}"
+      request = urllib.request.Request(
+        CENTRAL_INGEST_URL,
+        data=data,
+        headers=headers,
+        method="POST",
+      )
+      with urllib.request.urlopen(request, timeout=10) as response:
+        response.read()
+
+    class Handler(BaseHTTPRequestHandler):
+      def log_message(self, fmt, *args):
+        return
+
+      def do_GET(self):
+        if self.path == "/healthz":
+          self.send_response(200)
+          self.end_headers()
+          self.wfile.write(b"ok")
+          return
+        self.send_response(404)
+        self.end_headers()
+
+      def do_POST(self):
+        if self.path != "/webhook":
+          self.send_response(404)
+          self.end_headers()
+          return
+        try:
+          length = int(self.headers.get("Content-Length", "0"))
+          raw = self.rfile.read(length)
+          event = json.loads(raw.decode("utf-8"))
+          forward_event(event)
+          self.send_response(200)
+          self.send_header("Content-Type", "application/json")
+          self.end_headers()
+          self.wfile.write(b'{"status":"forwarded"}')
+        except json.JSONDecodeError:
+          self.send_response(400)
+          self.end_headers()
+          self.wfile.write(b'{"error":"invalid json"}')
+        except urllib.error.HTTPError as exc:
+          self.send_response(502)
+          self.end_headers()
+          self.wfile.write(f'{{"error":"central ingest failed: {exc.code}"}}'.encode("utf-8"))
+        except Exception as exc:
+          self.send_response(500)
+          self.end_headers()
+          self.wfile.write(f'{{"error":"{exc}"}}'.encode("utf-8"))
+
+    if __name__ == "__main__":
+      print(f"compliance-agent listening on :{PORT}, cluster={CLUSTER_NAME}", flush=True)
+      HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: compliance-agent
+  namespace: compliance-system
+  labels:
+    app: compliance-agent
+    app.kubernetes.io/part-of: compliance-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: compliance-agent
+  template:
+    metadata:
+      labels:
+        app: compliance-agent
+        app.kubernetes.io/part-of: compliance-platform
+    spec:
+      serviceAccountName: compliance-agent
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent
+          image: docker.io/library/python:3.12-alpine
+          imagePullPolicy: IfNotPresent
+          command: ["python", "/app/agent.py"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: CENTRAL_INGEST_URL
+              value: "__CENTRAL_INGEST_URL__"
+            - name: CLUSTER_NAME
+              value: "__CLUSTER_NAME__"
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: CENTRAL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: compliance-agent
+                  key: central-api-key
+                  optional: true
+          volumeMounts:
+            - name: agent-script
+              mountPath: /app
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+      volumes:
+        - name: agent-script
+          configMap:
+            name: compliance-agent
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: compliance-agent
+  namespace: compliance-system
+  labels:
+    app: compliance-agent
+    app.kubernetes.io/part-of: compliance-platform
+spec:
+  selector:
+    app: compliance-agent
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

@@ -1,0 +1,123 @@
+# kube-prometheus-stack values
+# 학교 클라우드의 제한된 worker CPU 환경에 맞춘 모니터링 설정
+
+alertmanager:
+  # 실험 환경 알림 컴포넌트 제외
+  enabled: false
+
+prometheusOperator:
+  # Operator 리소스 절감
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  prometheusConfigReloader:
+    # 설정 리로더 리소스 절감
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+
+prometheus:
+  prometheusSpec:
+    replicas: 1
+    retention: 6h
+    # Prometheus 리소스 절감
+    resources:
+      requests:
+        cpu: 150m
+        memory: 512Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+
+kube-state-metrics:
+  # 상태 메트릭 리소스 절감
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+grafana:
+  enabled: true
+  replicas: 1
+
+  # Grafana를 2코어 worker 노드에 배치
+  nodeSelector:
+    kubernetes.io/hostname: k8s-worker1
+
+  # Grafana 본 컨테이너 리소스
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # 임시 저장소 사용
+  persistence:
+    enabled: false
+
+  # ai-server /grafana-ui 프록시가 전달하는 client 사용자 헤더만 신뢰한다.
+  grafana.ini:
+    server:
+      domain: compliance-ai-console.shares.zrok.io
+      root_url: "https://compliance-ai-console.shares.zrok.io/grafana-ui/"
+      serve_from_sub_path: true
+    auth:
+      disable_login_form: true
+      login_cookie_name: kubeowl_client_grafana_session
+    auth.anonymous:
+      enabled: false
+    auth.proxy:
+      enabled: true
+      header_name: X-KUBEOWL-CLIENT-USER
+      header_property: email
+      auto_sign_up: true
+      sync_ttl: 1
+      enable_login_token: false
+      headers: "Email:X-KUBEOWL-CLIENT-EMAIL Name:X-KUBEOWL-CLIENT-NAME"
+    users:
+      auto_assign_org_role: Viewer
+      viewers_can_edit: false
+
+  sidecar:
+    # sidecar 공통 리소스
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+    dashboards:
+      folderAnnotation: grafana_folder
+      provider:
+        foldersFromFilesStructure: true
+      # dashboard sidecar 리소스
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
+    datasources:
+      # datasource sidecar 리소스
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi

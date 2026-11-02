@@ -1,0 +1,1558 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KubeOwl Admin</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f0f4f8;
+        --panel: rgba(255, 255, 255, 0.68);
+        --panel-strong: #ffffff;
+        --line: rgba(174, 190, 209, 0.58);
+        --line-strong: rgba(96, 165, 250, 0.34);
+        --text: #1f2937;
+        --muted: #5f6b7a;
+        --accent: #0ea5ff;
+        --accent-2: #38bdf8;
+        --danger: #cf222e;
+        --soft: rgba(240, 249, 255, 0.72);
+        --code: #08111f;
+        --shadow: 0 28px 70px rgba(31, 44, 64, 0.14);
+        --shadow-soft:
+          inset 0 1px 0 rgba(255, 255, 255, 0.78),
+          0 20px 48px rgba(31, 44, 64, 0.1);
+        --control-bg: linear-gradient(135deg, rgba(218, 238, 255, 0.74), rgba(174, 209, 246, 0.48) 52%, rgba(210, 233, 255, 0.62));
+        --control-bg-hover: linear-gradient(135deg, rgba(224, 242, 254, 0.9), rgba(186, 230, 253, 0.66));
+      }
+      body[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #07111f;
+        --panel: rgba(18, 23, 29, 0.72);
+        --panel-strong: rgba(17, 27, 45, 0.94);
+        --line: rgba(255, 255, 255, 0.1);
+        --line-strong: rgba(96, 165, 250, 0.34);
+        --text: #eef5ff;
+        --muted: #b9c8dd;
+        --accent: #60a5fa;
+        --accent-2: #38bdf8;
+        --danger: #f87171;
+        --soft: rgba(15, 23, 42, 0.62);
+        --code: #050b16;
+        --shadow: 0 22px 60px rgba(0, 0, 0, 0.24);
+        --shadow-soft:
+          inset 0 1px 0 rgba(255, 255, 255, 0.06),
+          0 20px 48px rgba(0, 0, 0, 0.24);
+        --control-bg: linear-gradient(135deg, rgba(48, 76, 132, 0.42), rgba(17, 28, 58, 0.46));
+        --control-bg-hover: linear-gradient(135deg, rgba(58, 93, 158, 0.5), rgba(22, 38, 76, 0.56));
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: SUIT, Pretendard, "Noto Sans KR", ui-sans-serif, system-ui, sans-serif;
+        background:
+          radial-gradient(ellipse at 78% 4%, rgba(56, 189, 248, 0.42), transparent 34%),
+          radial-gradient(ellipse at 14% 34%, rgba(191, 219, 254, 0.68), transparent 42%),
+          radial-gradient(ellipse at 84% 88%, rgba(37, 99, 235, 0.16), transparent 42%),
+          linear-gradient(145deg, #f8fcff 0%, #edf6ff 42%, #e7eef8 100%);
+        color: var(--text);
+        min-height: 100vh;
+      }
+      body[data-theme="dark"] {
+        background:
+          radial-gradient(ellipse at 18% 0%, rgba(37, 99, 235, 0.16), transparent 36%),
+          radial-gradient(ellipse at 86% 12%, rgba(14, 165, 233, 0.12), transparent 38%),
+          linear-gradient(150deg, #07111f 0%, #0b1830 48%, #081225 100%);
+      }
+      header {
+        position: relative;
+        overflow: hidden;
+        margin: 24px 32px 0;
+        padding: 28px 32px;
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        border-radius: 24px;
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(224, 240, 255, 0.44)),
+          radial-gradient(circle at 82% 8%, rgba(56, 189, 248, 0.38), transparent 34%);
+        color: var(--text);
+        box-shadow: var(--shadow);
+        -webkit-backdrop-filter: blur(24px) saturate(150%);
+        backdrop-filter: blur(24px) saturate(150%);
+      }
+      body[data-theme="dark"] header {
+        border-color: rgba(255, 255, 255, 0.12);
+        background:
+          radial-gradient(circle at 80% 10%, rgba(37, 99, 235, 0.24), transparent 34%),
+          linear-gradient(135deg, rgba(15, 23, 42, 0.88), rgba(8, 18, 37, 0.78));
+      }
+      header::after {
+        content: "";
+        position: absolute;
+        inset: auto -60px -100px auto;
+        width: 260px;
+        height: 260px;
+        border-radius: 999px;
+        background: rgba(14, 165, 255, 0.16);
+      }
+      .admin-topline {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+      }
+      .admin-title-block {
+        min-width: 0;
+      }
+      .theme-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 122px;
+        border-color: var(--line-strong);
+        background: var(--control-bg);
+        color: var(--text);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.58),
+          0 12px 24px rgba(30, 64, 175, 0.1);
+        backdrop-filter: blur(16px);
+      }
+      .theme-switch {
+        position: relative;
+        width: 42px;
+        height: 24px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.16);
+      }
+      .theme-switch::after {
+        content: "";
+        position: absolute;
+        top: 4px;
+        left: 4px;
+        width: 16px;
+        height: 16px;
+        border-radius: 999px;
+        background: #ffffff;
+        transition: transform 0.18s ease;
+      }
+      body[data-theme="dark"] .theme-toggle {
+        color: #eef5ff;
+      }
+      body[data-theme="dark"] .theme-switch {
+        background: rgba(96, 165, 250, 0.36);
+      }
+      body[data-theme="dark"] .theme-switch::after {
+        transform: translateX(18px);
+      }
+      main {
+        display: grid;
+        gap: 20px;
+        padding: 24px 32px 48px;
+      }
+      .admin-overview-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.55fr);
+        gap: 20px;
+        align-items: stretch;
+      }
+      section {
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        background:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.66), rgba(228, 242, 255, 0.42)),
+          radial-gradient(circle at 94% 0%, rgba(125, 211, 252, 0.18), transparent 38%);
+        padding: 22px;
+        box-shadow: var(--shadow-soft);
+        -webkit-backdrop-filter: blur(22px) saturate(150%);
+        backdrop-filter: blur(22px) saturate(150%);
+      }
+      body[data-theme="dark"] section {
+        background: var(--panel);
+      }
+      h1, h2 {
+        margin: 0;
+      }
+      h1 {
+        position: relative;
+        z-index: 1;
+        font-size: clamp(30px, 4vw, 42px);
+        letter-spacing: -0.04em;
+      }
+      header p {
+        position: relative;
+        z-index: 1;
+        max-width: 620px;
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-weight: 720;
+      }
+      h2 {
+        margin-bottom: 16px;
+        font-size: 20px;
+        letter-spacing: -0.02em;
+      }
+      .admin-grafana-card {
+        position: relative;
+        overflow: hidden;
+        display: grid;
+        align-content: space-between;
+        gap: 18px;
+        min-height: 192px;
+      }
+      .admin-grafana-card::after {
+        content: "";
+        position: absolute;
+        inset: auto -48px -68px auto;
+        width: 180px;
+        height: 180px;
+        border-radius: 999px;
+        background: radial-gradient(circle, rgba(251, 146, 60, 0.2), transparent 62%);
+        pointer-events: none;
+      }
+      .admin-grafana-heading {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .admin-grafana-logo {
+        display: inline-block;
+        flex: 0 0 auto;
+        width: 38px;
+        height: 38px;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3ClinearGradient id='SVGDkkdxczn' x1='45.842' x2='45.842' y1='89.57' y2='8.802' gradientTransform='translate(-2.405 27.316)scale(1.4463)' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0' stop-color='%23fcee1f'/%3E%3Cstop offset='1' stop-color='%23f15b2a'/%3E%3C/linearGradient%3E%3Cpath fill='url(%23SVGDkkdxczn)' d='M69.162 0c-9.91 6.4-11.77 14.865-11.77 14.865s.002.206-.101.412c-.62.104-1.033.31-1.549.413c-.722.206-1.445.413-2.168.826l-2.168.93c-1.445.722-2.89 1.341-4.336 2.167c-1.342.826-2.683 1.548-4.025 2.477a1.3 1.3 0 0 1-.309-.205c-13.316-5.161-25.084 1.031-25.084 1.031c-1.032 14.245 5.367 23.02 6.606 24.672c-.31.929-.62 1.754-.93 2.58a53 53 0 0 0-2.166 9.91c-.103.413-.104 1.033-.207 1.445C8.671 67.613 5.06 80.103 5.06 80.103c10.219 11.768 22.193 12.49 22.193 12.49c1.445 2.685 3.302 5.369 5.264 7.743c.825 1.032 1.756 1.96 2.582 2.992c-3.716 10.632.619 19.613.619 19.613c11.458.413 18.992-4.955 20.54-6.297c1.136.31 2.272.724 3.407 1.034a47.3 47.3 0 0 0 10.633 1.549h4.644C80.31 126.969 89.807 128 89.807 128c6.71-7.123 7.123-14.038 7.123-15.69v-.62c1.342-1.033 2.683-2.064 4.129-3.2c2.684-2.374 4.955-5.264 7.02-8.154c.206-.207.309-.62.618-.826c7.639.413 12.903-4.748 12.903-4.748c-1.24-7.949-5.78-11.768-6.71-12.49l-.103-.104l-.103-.104l-.104-.103c0-.413.104-.93.104-1.445c.103-.93.103-1.755.103-2.58v-3.407c0-.206 0-.413-.103-.722l-.104-.723l-.103-.723c-.104-.929-.31-1.754-.413-2.58c-.825-3.406-2.166-6.71-3.818-9.498c-1.858-2.993-4.026-5.471-6.504-7.742c-2.477-2.168-5.264-4.025-8.154-5.264c-2.994-1.342-5.884-2.167-8.98-2.476c-1.446-.207-3.098-.207-4.544-.207H79.69c-.825.103-1.546.205-2.27.308c-3.096.62-5.883 1.756-8.36 3.201c-2.478 1.446-4.646 3.407-6.504 5.575c-1.858 2.167-3.2 4.438-4.13 6.916a23.3 23.3 0 0 0-1.548 7.431v2.684c0 .31 0 .62.104.93c.103 1.238.31 2.374.722 3.51c.723 2.27 1.756 4.334 3.098 6.09a20 20 0 0 0 4.54 4.335c1.756 1.136 3.408 1.96 5.266 2.477s3.509.826 5.16.722h2.376c.206 0 .412-.101.619-.101c.206 0 .31-.104.619-.104c.31-.103.825-.207 1.135-.31c.722-.207 1.342-.62 2.064-.826c.723-.31 1.24-.722 1.756-1.032c.103-.103.309-.207.412-.31c.62-.413.723-1.238.207-1.858c-.413-.413-1.136-.62-1.756-.31c-.103.103-.205.104-.412.207c-.413.206-1.032.413-1.445.619c-.62.103-1.135.31-1.754.414c-.31 0-.62.102-.93.102h-2.58c-.103 0-.31.001-.414-.102c-1.239-.206-2.58-.62-3.818-1.137c-1.239-.619-2.478-1.34-3.51-2.373a15.9 15.9 0 0 1-2.89-3.51c-.826-1.341-1.24-2.89-1.446-4.335c-.103-.826-.207-1.55-.103-2.375v-1.239c0-.413.103-.825.207-1.238c.619-3.406 2.27-6.71 4.851-9.187c.723-.723 1.342-1.238 2.168-1.754c.826-.62 1.547-1.032 2.373-1.342s1.756-.723 2.582-.93c.93-.206 1.858-.414 2.684-.414c.413 0 .929-.101 1.342-.101h1.238c1.032.103 2.065.205 2.994.412c1.961.413 3.82 1.135 5.678 2.168c3.613 2.064 6.708 5.16 8.566 8.877c.93 1.858 1.548 3.82 1.961 5.988c.103.62.104 1.03.207 1.547v2.787c0 .62-.103 1.136-.103 1.756c-.104.62-.102 1.134-.205 1.754c-.104.619-.208 1.136-.311 1.755c-.206 1.136-.722 2.168-1.031 3.303c-.826 2.168-1.963 4.232-3.305 5.986c-2.684 3.717-6.502 6.815-10.63 8.776c-2.169.929-4.337 1.755-6.608 2.064a19 19 0 0 1-3.407.309h-1.755c-.62 0-1.238.002-1.858-.102c-2.477-.206-4.85-.724-7.224-1.343c-2.375-.723-4.647-1.548-6.815-2.684c-4.335-2.27-8.153-5.573-11.25-9.289c-1.445-1.961-2.892-4.027-4.027-6.092s-1.961-4.438-2.58-6.709c-.723-2.27-1.032-4.645-1.135-7.02v-3.613c0-1.135.102-2.372.309-3.61c.103-1.24.309-2.376.619-3.614c.206-1.239.62-2.375.93-3.614c.722-2.374 1.444-4.644 2.476-6.812c2.064-4.335 4.645-8.155 7.742-11.252a25 25 0 0 1 2.479-2.168c.31-.31 1.135-1.033 2.064-1.549s1.858-1.136 2.89-1.549c.414-.206.93-.413 1.446-.722c.206-.103.411-.206.824-.309c.207-.103.414-.207.826-.31c1.033-.413 2.066-.825 3.098-1.135c.207-.103.62-.104.826-.207c.207-.103.618-.102.824-.205c.62-.103 1.033-.208 1.55-.414c.206-.104.619-.104.825-.207c.207 0 .62-.102.827-.102s.62-.103.826-.103l.412-.104l.412-.103c.206 0 .62-.104.826-.104c.31 0 .62-.104.93-.104c.206 0 .721-.101.928-.101c.206 0 .311 0 .62-.104h.723c.31 0 .618 0 .928-.103h4.647c2.064.103 4.128.31 5.986.723c3.82.722 7.638 1.961 10.941 3.613c3.304 1.548 6.4 3.611 8.877 5.78c.104.102.311.207.414.413c.104.103.31.206.412.412c.31.207.62.62.93.826c.31.207.62.62.93.827c.206.31.618.618.824.927c1.136 1.136 2.169 2.375 3.098 3.51a41.4 41.4 0 0 1 4.44 7.02c.102.103.1.207.204.414c.103.103.104.205.207.412c.103.206.206.62.412.826c.104.206.208.62.31.826c.104.207.208.62.311.826c.413 1.033.826 2.064 1.135 3.096c.62 1.548.929 2.993 1.239 4.13c.103.412.62.825 1.033.825c.619 0 .927-.414.927-1.033c-.31-1.755-.308-3.198-.412-4.953q-.31-3.253-1.238-7.434c-.62-2.787-1.86-5.677-3.305-8.877c-1.548-3.096-3.509-6.4-6.09-9.394c-1.032-1.239-2.167-2.373-3.302-3.612c1.858-7.122-2.168-13.42-2.168-13.42c-6.916-.412-11.253 2.168-12.801 3.303c-.206-.103-.618-.205-.824-.308c-1.136-.413-2.375-.93-3.613-1.342c-1.24-.31-2.478-.827-3.717-1.033c-1.239-.31-2.58-.62-4.026-.827c-.206 0-.413-.103-.722-.103C77.833 4.128 69.162 0 69.162 0'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-size: 100% 100%;
+      }
+      .admin-grafana-heading h2 {
+        margin-bottom: 4px;
+      }
+      .admin-grafana-card p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.55;
+        font-weight: 720;
+      }
+      .admin-grafana-links {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        gap: 10px;
+      }
+      .admin-grafana-link {
+        display: grid;
+        gap: 4px;
+        width: 100%;
+        padding: 12px 14px;
+        text-align: left;
+      }
+      .admin-grafana-link strong {
+        color: inherit;
+      }
+      .admin-grafana-link span {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 760;
+      }
+      .audit-log-card {
+        display: grid;
+        gap: 14px;
+      }
+      .audit-log-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .audit-log-heading h2 {
+        margin-bottom: 0;
+      }
+      .audit-refresh-button {
+        white-space: nowrap;
+      }
+      .audit-filter-panel {
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--soft);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64);
+      }
+      body[data-theme="dark"] .audit-filter-panel {
+        background: rgba(15, 23, 42, 0.62);
+      }
+      .audit-log-filters {
+        display: grid;
+        grid-template-columns: auto 2fr 1fr 1fr 1fr 1fr;
+        gap: 12px;
+        align-items: start;
+      }
+      .filter-label-row {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .help-tooltip {
+        position: relative;
+        display: inline-grid;
+        place-items: center;
+        width: 18px;
+        height: 18px;
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 900;
+        cursor: help;
+      }
+      .help-tooltip::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        left: 50%;
+        bottom: calc(100% + 8px);
+        z-index: 8;
+        width: max-content;
+        max-width: 280px;
+        padding: 9px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel-strong);
+        color: var(--text);
+        box-shadow: var(--shadow-soft);
+        font-size: 11px;
+        line-height: 1.45;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateX(-50%) translateY(4px);
+        transition: opacity 0.14s ease, transform 0.14s ease;
+      }
+      .help-tooltip:hover::after,
+      .help-tooltip:focus-visible::after {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+      .field-help {
+        display: block;
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 760;
+        line-height: 1.35;
+      }
+      .audit-summary-grid {
+        display: flex;
+        gap: 10px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scroll-snap-type: x proximity;
+      }
+      .audit-summary-grid::-webkit-scrollbar {
+        height: 8px;
+      }
+      .audit-summary-grid::-webkit-scrollbar-thumb {
+        border-radius: 999px;
+        background: var(--line-strong);
+      }
+      .audit-summary-card {
+        flex: 0 0 260px;
+        min-width: 220px;
+        max-width: 320px;
+        scroll-snap-align: start;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background:
+          radial-gradient(circle at 18% 0%, rgba(86, 204, 242, 0.18), transparent 34%),
+          rgba(255, 255, 255, 0.64);
+        padding: 13px 14px;
+        box-shadow: 0 12px 28px rgba(31, 44, 64, 0.07);
+      }
+      body[data-theme="dark"] .audit-summary-card {
+        background:
+          radial-gradient(circle at 18% 0%, rgba(56, 189, 248, 0.13), transparent 34%),
+          rgba(15, 23, 42, 0.76);
+      }
+      .audit-summary-card span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 820;
+        overflow-wrap: anywhere;
+      }
+      .audit-summary-card strong {
+        display: block;
+        margin-top: 5px;
+        color: var(--text);
+        font-size: 24px;
+      }
+      .audit-hash-note {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 760;
+        line-height: 1.5;
+      }
+      .audit-hash-list {
+        display: inline-flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .audit-hash-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .audit-hash-value {
+        color: var(--text);
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        font-size: 12px;
+        font-weight: 820;
+      }
+      .hash-copy-button {
+        min-height: 26px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+      }
+      .audit-log-list {
+        display: grid;
+        gap: 10px;
+      }
+      .audit-log-list.is-scrollable {
+        max-height: 540px;
+        overflow-y: auto;
+        padding-right: 8px;
+        overscroll-behavior: contain;
+      }
+      .audit-log-item {
+        display: grid;
+        gap: 8px;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background:
+          radial-gradient(circle at 0% 0%, rgba(86, 204, 242, 0.12), transparent 28%),
+          rgba(255, 255, 255, 0.64);
+      }
+      body[data-theme="dark"] .audit-log-item {
+        background:
+          radial-gradient(circle at 0% 0%, rgba(56, 189, 248, 0.1), transparent 28%),
+          rgba(15, 23, 42, 0.76);
+      }
+      .audit-log-item strong {
+        font-size: 15px;
+      }
+      .audit-log-meta {
+        color: var(--muted);
+        line-height: 1.5;
+        overflow-wrap: anywhere;
+        font-size: 13px;
+      }
+      .audit-log-json {
+        margin: 0;
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: rgba(8, 17, 31, 0.94);
+        color: #dbeafe;
+        font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.5;
+        overflow: auto;
+      }
+      .audit-log-empty {
+        color: var(--muted);
+        font-weight: 760;
+      }
+      label {
+        display: grid;
+        gap: 8px;
+        color: var(--muted);
+        font-weight: 820;
+      }
+      input, select, textarea {
+        width: 100%;
+        border: 1px solid var(--line-strong);
+        border-radius: 16px;
+        background: var(--control-bg);
+        color: var(--text);
+        padding: 11px 14px;
+        font: inherit;
+        font-weight: 760;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.74),
+          0 12px 26px rgba(31, 44, 64, 0.08);
+      }
+      body[data-theme="dark"] input,
+      body[data-theme="dark"] select {
+        background: var(--control-bg);
+        color: var(--text);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.08),
+          0 12px 24px rgba(0, 0, 0, 0.18);
+      }
+      input:focus, select:focus, textarea:focus {
+        outline: 3px solid rgba(8, 119, 242, 0.16);
+        border-color: var(--accent);
+      }
+      textarea {
+        min-height: 220px;
+        border-color: rgba(125, 211, 252, 0.24);
+        background: var(--code);
+        color: #dbeafe;
+        font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+        resize: vertical;
+      }
+      button {
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: var(--control-bg);
+        color: var(--text);
+        padding: 11px 15px;
+        font-weight: 880;
+        cursor: pointer;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.58),
+          0 10px 22px rgba(30, 64, 175, 0.1);
+        transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+      }
+      body[data-theme="dark"] button {
+        background: var(--control-bg);
+        color: var(--text);
+      }
+      button:hover {
+        transform: translateY(-1px);
+        border-color: rgba(8, 119, 242, 0.48);
+        box-shadow: 0 12px 24px rgba(8, 119, 242, 0.12);
+      }
+      button.primary {
+        border-color: rgba(186, 230, 253, 0.72);
+        background:
+          linear-gradient(135deg, rgba(59, 130, 246, 0.92), rgba(14, 165, 255, 0.82) 52%, rgba(37, 99, 235, 0.9));
+        color: #ffffff;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.42),
+          0 16px 34px rgba(14, 165, 255, 0.24);
+      }
+      button.danger {
+        border-color: rgba(207, 34, 46, 0.34);
+        background: rgba(207, 34, 46, 0.08);
+        color: var(--danger);
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: end;
+      }
+      .row label {
+        flex: 1 1 280px;
+      }
+      .cluster, .user {
+        display: grid;
+        gap: 12px;
+        margin-top: 12px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background:
+          radial-gradient(circle at 0% 0%, rgba(86, 204, 242, 0.12), transparent 28%),
+          rgba(255, 255, 255, 0.64);
+        padding: 16px;
+        box-shadow: 0 14px 32px rgba(31, 44, 64, 0.08);
+      }
+      body[data-theme="dark"] .cluster,
+      body[data-theme="dark"] .user {
+        background:
+          radial-gradient(circle at 0% 0%, rgba(56, 189, 248, 0.1), transparent 28%),
+          rgba(15, 23, 42, 0.76);
+      }
+      .cluster:first-child,
+      .user:first-child {
+        margin-top: 0;
+      }
+      .scroll-list {
+        display: grid;
+        gap: 12px;
+      }
+      .scroll-list.is-scrollable {
+        max-height: 520px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding-right: 8px;
+        scrollbar-color: rgba(8, 119, 242, 0.38) rgba(8, 119, 242, 0.08);
+        scrollbar-width: thin;
+      }
+      .scroll-list.is-scrollable .cluster,
+      .scroll-list.is-scrollable .user {
+        margin-top: 0;
+      }
+      .search-highlight {
+        border-radius: 5px;
+        background: rgba(250, 204, 21, 0.42);
+        color: #713f12;
+        padding: 0 3px;
+      }
+      body[data-theme="dark"] .search-highlight {
+        background: rgba(250, 204, 21, 0.28);
+        color: #fde68a;
+      }
+      .cluster strong,
+      .user strong {
+        font-size: 17px;
+        letter-spacing: -0.02em;
+      }
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .summary-card {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background:
+          radial-gradient(circle at 18% 0%, rgba(86, 204, 242, 0.22), transparent 34%),
+          linear-gradient(145deg, rgba(255, 255, 255, 0.72), rgba(224, 240, 255, 0.42));
+        padding: 16px;
+        box-shadow: var(--shadow-soft);
+      }
+      body[data-theme="dark"] .summary-card {
+        background:
+          radial-gradient(circle at 18% 0%, rgba(56, 189, 248, 0.16), transparent 34%),
+          linear-gradient(180deg, #111827, #0f172a);
+      }
+      body[data-theme="dark"] .summary-card strong {
+        color: #f8fafc;
+      }
+      .summary-card strong {
+        display: block;
+        margin-top: 6px;
+        color: #0f172a;
+        font-size: 30px;
+        letter-spacing: -0.04em;
+      }
+      .user-clusters {
+        display: grid;
+        gap: 10px;
+      }
+      .user-cluster {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--soft);
+        padding: 12px 14px;
+      }
+      body[data-theme="dark"] .user-cluster {
+        background: #08111f;
+      }
+      .meta {
+        color: var(--muted);
+        line-height: 1.55;
+        overflow-wrap: anywhere;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid rgba(8, 119, 242, 0.22);
+        border-radius: 999px;
+        background: rgba(8, 119, 242, 0.08);
+        padding: 4px 10px;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 860;
+      }
+      .status-active {
+        color: #128a3d;
+        font-weight: 860;
+      }
+      .status-disabled {
+        color: var(--danger);
+        font-weight: 860;
+      }
+      .status-deleted {
+        color: #b7791f;
+        font-weight: 860;
+      }
+      .filters {
+        display: grid;
+        grid-template-columns: minmax(240px, 2fr) minmax(150px, 0.65fr) auto;
+        gap: 12px;
+        align-items: end;
+        margin-bottom: 16px;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--soft);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64);
+      }
+      body[data-theme="dark"] .filters {
+        background: rgba(15, 23, 42, 0.62);
+      }
+      .user-search {
+        display: grid;
+        grid-template-columns: minmax(240px, 1fr) auto;
+        gap: 12px;
+        align-items: end;
+        margin-bottom: 16px;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--soft);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64);
+      }
+      body[data-theme="dark"] .user-search {
+        background: rgba(15, 23, 42, 0.62);
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .actions button {
+        padding: 9px 13px;
+        border-radius: 999px;
+      }
+      .danger-note {
+        color: #b45309;
+        font-weight: 820;
+      }
+      #message {
+        min-height: 24px;
+        margin-bottom: 0;
+        color: var(--muted);
+        font-weight: 760;
+      }
+      @media (max-width: 900px) {
+        header,
+        main {
+          margin-left: 16px;
+          margin-right: 16px;
+          padding-left: 18px;
+          padding-right: 18px;
+        }
+        main {
+          margin: 0;
+        }
+        .admin-overview-grid {
+          grid-template-columns: 1fr;
+        }
+        .summary-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      .audit-log-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      }
+      @media (max-width: 640px) {
+        header {
+          margin: 16px 12px 0;
+        }
+        main {
+          padding: 16px 12px 36px;
+        }
+        .summary-grid,
+        .filters,
+        .audit-log-filters {
+          grid-template-columns: 1fr;
+        }
+        .audit-log-heading {
+          grid-template-columns: 1fr;
+        }
+        .audit-log-heading {
+          align-items: stretch;
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="admin-topline">
+        <div class="admin-title-block">
+          <h1>KubeOwl Admin</h1>
+          <p>클러스터 토큰, 사용자 상태, 수집 이벤트를 한 곳에서 점검하는 운영자 콘솔입니다.</p>
+        </div>
+        <button class="theme-toggle" id="adminThemeToggle" type="button" aria-pressed="false">
+          <span id="adminThemeLabel">Dark</span>
+          <span class="theme-switch" aria-hidden="true"></span>
+        </button>
+      </div>
+    </header>
+    <main>
+      <div class="admin-overview-grid">
+        <section>
+          <h2>Admin Token</h2>
+          <div class="row">
+            <label>
+              X-Admin-Token
+              <input id="adminToken" type="password" autocomplete="off" />
+            </label>
+            <button class="primary" id="saveToken">저장</button>
+            <button id="refreshClusters">새로고침</button>
+          </div>
+          <p id="message"></p>
+        </section>
+
+        <section class="admin-grafana-card">
+          <div class="admin-grafana-heading">
+            <span class="devicon--grafana admin-grafana-logo" aria-hidden="true"></span>
+            <div>
+              <h2>Admin Grafana</h2>
+              <p>관리자 클러스터와 연결된 마스터 Grafana에서 전체 수집 상태와 운영 지표를 확인합니다.</p>
+            </div>
+          </div>
+          <div class="admin-grafana-links" id="adminGrafanaLinks">
+            <button class="admin-grafana-link" data-grafana-link="default">
+              <strong>전체 Grafana 열기</strong>
+              <span>관리자 org의 대시보드 목록으로 이동합니다.</span>
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <section class="audit-log-card">
+        <div class="audit-log-heading">
+          <h2>감사 로그</h2>
+          <button class="audit-refresh-button" id="refreshAuditLogs">감사 로그 새로고침</button>
+        </div>
+        <div class="audit-filter-panel">
+          <div class="audit-log-filters">
+            <label>
+              <span class="filter-label-row">
+                Actor 유형
+                <span class="help-tooltip" tabindex="0" data-tooltip="public=비로그인 정책 생성, login=로그인 사용자, admin=관리자 작업">?</span>
+              </span>
+              <select id="auditActorTypeFilter">
+                <option value="">전체</option>
+                <option value="public">public</option>
+                <option value="login">login user</option>
+                <option value="admin">admin</option>
+              </select>
+            </label>
+            <label>
+              액션 필터
+              <input id="auditActionFilter" placeholder="policy.generate, policy.apply, cluster.rotate_token" />
+            </label>
+            <label>
+              대상 유형
+              <input id="auditTargetTypeFilter" placeholder="policy, cluster, user, grafana" />
+            </label>
+            <label>
+              <span class="filter-label-row">
+                대상 ID
+                <span class="help-tooltip" tabindex="0" data-tooltip="이메일/학번이 아니라 로그의 target 값입니다. 예: cluster-..., user-..., latest-tag">?</span>
+              </span>
+              <input id="auditTargetIdFilter" placeholder="cluster-..., user-..., latest-tag" />
+            </label>
+            <label>
+              시작일
+              <input id="auditDateFromFilter" type="date" />
+            </label>
+            <label>
+              종료일
+              <input id="auditDateToFilter" type="date" />
+            </label>
+          </div>
+          <p class="audit-hash-note">
+            before_hash / after_hash는 변경 전후 객체를 원문 대신 SHA-256 해시로 남긴 값이며, 화면에는 앞 12자리만 표시합니다.
+          </p>
+        </div>
+        <div class="audit-summary-grid" id="auditSummary"></div>
+        <div id="auditLogs"></div>
+      </section>
+
+      <section>
+        <h2>운영 요약</h2>
+        <div class="summary-grid" id="adminSummary">
+          <div class="summary-card"><span class="meta">사용자</span><strong>-</strong></div>
+          <div class="summary-card"><span class="meta">클러스터</span><strong>-</strong></div>
+          <div class="summary-card"><span class="meta">활성 클러스터</span><strong>-</strong></div>
+          <div class="summary-card"><span class="meta">수집 이벤트</span><strong>-</strong></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>사용자 목록</h2>
+        <div class="user-search">
+          <label>
+            사용자 검색
+            <input id="userSearch" placeholder="email, name, provider, status" />
+          </label>
+          <button id="clearUserSearch">초기화</button>
+        </div>
+        <div id="users"></div>
+      </section>
+
+      <section>
+        <h2>사용자 상세</h2>
+        <div id="userDetail"><p class="meta">사용자를 선택하면 소유 클러스터, 이벤트 수, Slack 설정 상태를 확인할 수 있습니다.</p></div>
+      </section>
+
+      <section>
+        <h2>클러스터 목록</h2>
+        <div class="filters">
+          <label>
+            검색
+            <input id="clusterSearch" placeholder="email, cluster, status, last_seen" />
+          </label>
+          <label>
+            상태
+            <select id="statusFilter">
+              <option value="">전체</option>
+              <option value="active">active</option>
+              <option value="disabled">disabled</option>
+              <option value="deleted">deleted</option>
+            </select>
+          </label>
+          <button id="applyClusterFilters">필터 적용</button>
+        </div>
+        <div id="clusters"></div>
+      </section>
+    </main>
+    <script>
+      const tokenInput = document.querySelector("#adminToken");
+      const message = document.querySelector("#message");
+      const clustersEl = document.querySelector("#clusters");
+      const usersEl = document.querySelector("#users");
+      const userDetailEl = document.querySelector("#userDetail");
+      const adminSummary = document.querySelector("#adminSummary");
+      const auditLogsEl = document.querySelector("#auditLogs");
+      const auditActionFilter = document.querySelector("#auditActionFilter");
+      const auditTargetTypeFilter = document.querySelector("#auditTargetTypeFilter");
+      const auditTargetIdFilter = document.querySelector("#auditTargetIdFilter");
+      const auditActorTypeFilter = document.querySelector("#auditActorTypeFilter");
+      const auditDateFromFilter = document.querySelector("#auditDateFromFilter");
+      const auditDateToFilter = document.querySelector("#auditDateToFilter");
+      const auditSummaryEl = document.querySelector("#auditSummary");
+      const refreshAuditLogsButton = document.querySelector("#refreshAuditLogs");
+      const clusterSearch = document.querySelector("#clusterSearch");
+      const userSearch = document.querySelector("#userSearch");
+      const statusFilter = document.querySelector("#statusFilter");
+      const adminThemeToggle = document.querySelector("#adminThemeToggle");
+      const adminThemeLabel = document.querySelector("#adminThemeLabel");
+      let currentUserDetailId = "";
+      let adminUsers = [];
+
+      tokenInput.value = localStorage.getItem("adminToken") || "";
+      const savedTheme = localStorage.getItem("adminTheme") || "light";
+      document.body.dataset.theme = savedTheme;
+      adminThemeToggle.setAttribute("aria-pressed", savedTheme === "dark" ? "true" : "false");
+      adminThemeLabel.textContent = savedTheme === "dark" ? "Light" : "Dark";
+
+      function adminHeaders() {
+        return {
+          "Content-Type": "application/json",
+          "X-Admin-Token": tokenInput.value.trim(),
+        };
+      }
+
+      function setMessage(text) {
+        message.textContent = text;
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function highlightText(value, query) {
+        const escaped = escapeHtml(value);
+        const normalizedQuery = String(query || "").trim();
+        if (!normalizedQuery) {
+          return escaped;
+        }
+        const escapedQuery = escapeHtml(normalizedQuery);
+        return escaped.replaceAll(escapedQuery, `<mark class="search-highlight">${escapedQuery}</mark>`);
+      }
+
+      function shortHash(value) {
+        const hash = String(value || "").trim();
+        if (!hash) {
+          return "-";
+        }
+        return hash.length > 12 ? `${hash.slice(0, 12)}...` : hash;
+      }
+
+      function formatDateInput(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      }
+
+      function setAuditDateDefaults() {
+        const today = new Date();
+        if (!auditDateToFilter.value) {
+          auditDateToFilter.value = formatDateInput(today);
+        }
+        if (!auditDateFromFilter.value) {
+          const from = new Date(today);
+          from.setDate(from.getDate() - 7);
+          auditDateFromFilter.value = formatDateInput(from);
+        }
+      }
+
+      setAuditDateDefaults();
+
+      function renderHashChip(label, value) {
+        const hash = String(value || "").trim();
+        if (!hash) {
+          return `${label}=-`;
+        }
+        return `
+          <span class="audit-hash-chip">
+            ${label}=<span class="audit-hash-value" title="전체 해시는 복사 버튼으로 확인">${escapeHtml(shortHash(hash))}</span>
+            <button class="hash-copy-button" data-copy-hash="${escapeHtml(hash)}" type="button">복사</button>
+          </span>
+        `;
+      }
+
+      async function requestJson(url, options = {}) {
+        const response = await fetch(url, {
+          ...options,
+          headers: {
+            ...adminHeaders(),
+            ...(options.headers || {}),
+          },
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const error = new Error(body.error || `HTTP ${response.status}`);
+          error.status = response.status;
+          throw error;
+        }
+        return body;
+      }
+
+      function displayClusterStatus(status) {
+        const labels = {
+          active: "활성",
+          disabled: "비활성",
+          deleted: "휴지통",
+        };
+        return labels[status] || status;
+      }
+
+      function displayUserStatus(status) {
+        const labels = {
+          active: "활성",
+          disabled: "비활성",
+          deleted: "삭제됨",
+        };
+        return labels[status] || status;
+      }
+
+      function renderClusters(clusters) {
+        if (!clusters.length) {
+          clustersEl.innerHTML = '<p class="meta">조건에 맞는 클러스터가 없습니다.</p>';
+          return;
+        }
+        const query = clusterSearch.value.trim();
+        const items = clusters.map((cluster) => {
+          const status = cluster.status || "active";
+          const deletedMeta = status === "deleted"
+            ? ` · deleted_at=${escapeHtml(cluster.deleted_at || "-")} · <span class="danger-note">영구 삭제 가능</span>`
+            : "";
+          let actions = "";
+          if (status === "deleted") {
+            actions = `
+              <button data-restore="${escapeHtml(cluster.id)}">복원</button>
+              <button class="danger" data-purge="${escapeHtml(cluster.id)}">영구 삭제</button>
+            `;
+          } else if (status === "disabled") {
+            actions = `
+              <button data-enable="${escapeHtml(cluster.id)}">활성화</button>
+              <button data-rotate="${escapeHtml(cluster.id)}">토큰 재발급</button>
+              <button class="danger" data-trash="${escapeHtml(cluster.id)}">휴지통</button>
+            `;
+          } else {
+            actions = `
+              <button data-rotate="${escapeHtml(cluster.id)}">토큰 재발급</button>
+              <button data-disable="${escapeHtml(cluster.id)}">비활성화</button>
+              <button class="danger" data-trash="${escapeHtml(cluster.id)}">휴지통</button>
+            `;
+          }
+          return `
+            <div class="cluster">
+              <strong>${highlightText(cluster.name, query)}</strong>
+              <span class="meta">
+                id=${highlightText(cluster.id, query)} ·
+                owner=${highlightText(cluster.user_email || "admin/unassigned", query)} ·
+                status=<span class="status-${escapeHtml(status)}">${escapeHtml(displayClusterStatus(status))}</span> ·
+                slack=${cluster.slack_enabled === false ? "off" : "on"} ·
+                last_seen=${highlightText(cluster.last_seen_at || "-", query)} ·
+                events=${escapeHtml(cluster.event_count || 0)}
+                ${deletedMeta}
+              </span>
+              <div class="actions">${actions}</div>
+            </div>
+          `;
+        }).join("");
+        clustersEl.innerHTML = `<div class="scroll-list ${clusters.length > 5 ? "is-scrollable" : ""}">${items}</div>`;
+      }
+
+      function renderSummary(users, clusters) {
+        const totalEvents = clusters.reduce((sum, cluster) => sum + Number(cluster.event_count || 0), 0);
+        const activeClusters = clusters.filter((cluster) => cluster.status === "active").length;
+        adminSummary.innerHTML = `
+          <div class="summary-card"><span class="meta">사용자</span><strong>${users.length}</strong></div>
+          <div class="summary-card"><span class="meta">클러스터</span><strong>${clusters.length}</strong></div>
+          <div class="summary-card"><span class="meta">활성 클러스터</span><strong>${activeClusters}</strong></div>
+          <div class="summary-card"><span class="meta">수집 이벤트</span><strong>${totalEvents}</strong></div>
+        `;
+      }
+
+      function renderAuditLogs(events) {
+        if (!events.length) {
+          auditLogsEl.innerHTML = '<p class="audit-log-empty">조건에 맞는 감사 로그가 없습니다.</p>';
+          return;
+        }
+        const items = events.map((event) => {
+          const details = JSON.stringify(event.details || {}, null, 2);
+          return `
+            <article class="audit-log-item">
+              <strong>${escapeHtml(event.action || "-")} · ${escapeHtml(event.result || "success")}</strong>
+              <div class="audit-log-meta">
+                time=${escapeHtml(event.created_at || "-")} ·
+                actor=${escapeHtml(event.actor_email || event.actor_user_id || "public actor")} ·
+                actor_type=<span class="pill">${escapeHtml(event.actor_type || "public")}</span> ·
+                target=<span class="pill">${escapeHtml(event.target_type || "-")}</span> ${escapeHtml(event.target_id || "-")} ·
+                request_id=${escapeHtml(event.request_id || "-")}
+                <span class="audit-hash-list">
+                  ${renderHashChip("before_hash", event.before_hash)}
+                  ${renderHashChip("after_hash", event.after_hash)}
+                </span>
+              </div>
+              <pre class="audit-log-json">${escapeHtml(details)}</pre>
+            </article>
+          `;
+        }).join("");
+        auditLogsEl.innerHTML = `<div class="audit-log-list ${events.length > 8 ? "is-scrollable" : ""}">${items}</div>`;
+      }
+
+      function renderAuditSummary(summary) {
+        const actors = Array.isArray(summary?.actors) ? summary.actors : [];
+        if (!actors.length) {
+          auditSummaryEl.innerHTML = `
+            <div class="audit-summary-card">
+              <span>감사 이벤트</span>
+              <strong>${escapeHtml(summary?.total || 0)}</strong>
+            </div>
+          `;
+          return;
+        }
+        const actorCards = actors.map((actor) => `
+          <div class="audit-summary-card">
+            <span>${escapeHtml(actor.actor_email || actor.actor_user_id || "public actor")}</span>
+            <strong>${escapeHtml(actor.count || 0)}</strong>
+            <span>${escapeHtml(actor.actor_type || "public")} · latest=${escapeHtml(actor.latest_at || "-")}</span>
+          </div>
+        `).join("");
+        auditSummaryEl.innerHTML = `
+          <div class="audit-summary-card">
+            <span>감사 이벤트</span>
+            <strong>${escapeHtml(summary?.total || 0)}</strong>
+          </div>
+          ${actorCards}
+        `;
+      }
+
+      function renderUsers(users) {
+        const query = userSearch.value.trim();
+        const normalizedQuery = query.toLowerCase();
+        const filteredUsers = normalizedQuery
+          ? users.filter((user) => [
+              user.email,
+              user.name,
+              user.provider,
+              user.status,
+              user.id,
+            ].some((value) => String(value || "").toLowerCase().includes(normalizedQuery)))
+          : users;
+        if (!filteredUsers.length) {
+          usersEl.innerHTML = '<p class="meta">등록된 사용자가 없습니다.</p>';
+          return;
+        }
+        const items = filteredUsers.map((user) => {
+          const status = user.status || "active";
+          const deletedMeta = status === "deleted"
+            ? ` · deleted_at=${escapeHtml(user.deleted_at || "-")}`
+            : "";
+          return `
+            <div class="user">
+              <strong>${highlightText(user.email, query)}</strong>
+              <span class="meta">
+                id=${highlightText(user.id, query)} ·
+                provider=${highlightText(user.provider, query)} ·
+                name=${highlightText(user.name || "-", query)} ·
+                status=<span class="status-${escapeHtml(status)}">${escapeHtml(displayUserStatus(status))}</span> ·
+                clusters=${escapeHtml(user.cluster_count || 0)} ·
+                active=${escapeHtml(user.active_cluster_count || 0)} ·
+                disabled=${escapeHtml(user.disabled_cluster_count || 0)} ·
+                deleted=${escapeHtml(user.deleted_cluster_count || 0)} ·
+                events=${escapeHtml(user.event_count || 0)} ·
+                slack=${user.slack_configured ? "configured" : "off"} ·
+                last_seen=${escapeHtml(user.last_seen_at || "-")} ·
+                last_login=${escapeHtml(user.last_login_at || "-")}
+                ${deletedMeta}
+              </span>
+              <div class="actions"><button data-user-detail="${escapeHtml(user.id)}">상세 보기</button></div>
+            </div>
+          `;
+        }).join("");
+        usersEl.innerHTML = `<div class="scroll-list ${filteredUsers.length > 5 ? "is-scrollable" : ""}">${items}</div>`;
+      }
+
+      function renderUserDetail(body) {
+        const clusters = body.clusters || [];
+        currentUserDetailId = body.user?.id || "";
+        const status = body.user?.status || "active";
+        const deletedAt = body.user?.deleted_at || "";
+        const gatekeeperEvents = clusters.reduce((sum, cluster) => sum + Number(cluster.gatekeeper_events || 0), 0);
+        const falcoEvents = clusters.reduce((sum, cluster) => sum + Number(cluster.falco_events || 0), 0);
+        const clusterList = clusters.length
+          ? clusters.map((cluster) => `
+              <div class="user-cluster">
+                <strong>${escapeHtml(cluster.name)}</strong>
+                <span class="meta">
+                  <span class="pill">${escapeHtml(displayClusterStatus(cluster.status || "active"))}</span>
+                  slack=${cluster.slack_enabled === false ? "off" : "on"} ·
+                  last_seen=${escapeHtml(cluster.last_seen_at || "-")} ·
+                  Gatekeeper(Admission)=${escapeHtml(cluster.gatekeeper_events || 0)} ·
+                  Falco(Runtime)=${escapeHtml(cluster.falco_events || 0)}
+                  ${cluster.status === "deleted" ? ` · deleted_at=${escapeHtml(cluster.deleted_at || "-")}` : ""}
+                </span>
+              </div>
+            `).join("")
+          : '<p class="meta">사용자에게 귀속된 클러스터가 없습니다.</p>';
+        let accountAction = "";
+        if (status === "deleted") {
+          accountAction = `<button class="primary" data-user-restore="${escapeHtml(body.user?.id || "")}">계정 복구</button>`;
+        } else if (status === "disabled") {
+          accountAction = `<button class="primary" data-user-enable="${escapeHtml(body.user?.id || "")}">정지 해제</button>`;
+        } else {
+          accountAction = `<button class="danger" data-user-disable="${escapeHtml(body.user?.id || "")}">계정 정지</button>`;
+        }
+        userDetailEl.innerHTML = `
+          <div class="user">
+            <strong>${escapeHtml(body.user?.email || "unknown user")}</strong>
+            <span class="meta">
+              id=${escapeHtml(body.user?.id || "-")} ·
+              provider=${escapeHtml(body.user?.provider || "-")} ·
+              status=<span class="status-${escapeHtml(status)}">${escapeHtml(displayUserStatus(status))}</span> ·
+              slack=${body.slack?.configured ? "configured" : "off"} ·
+              clusters=${escapeHtml(clusters.length)} ·
+              Gatekeeper(Admission)=${escapeHtml(gatekeeperEvents)} ·
+              Falco(Runtime)=${escapeHtml(falcoEvents)}
+              ${deletedAt ? ` · deleted_at=${escapeHtml(deletedAt)}` : ""}
+            </span>
+            ${status === "deleted" ? '<p class="meta">삭제된 계정입니다. 세션과 클러스터 토큰은 무효화되며, 이벤트와 정책 기록은 감사 목적으로 보존됩니다.</p>' : ""}
+            ${status === "disabled" ? '<p class="meta">정지된 계정입니다. 기존 세션은 무효화되며, 사용자는 다시 로그인하거나 새 클러스터를 만들 수 없습니다.</p>' : ""}
+            <div class="user-clusters">${clusterList}</div>
+            <div class="actions user-detail-actions">${accountAction}</div>
+          </div>
+        `;
+      }
+
+      function clusterListUrl() {
+        const params = new URLSearchParams({ include_deleted: "true" });
+        if (clusterSearch.value.trim()) {
+          params.set("q", clusterSearch.value.trim());
+        }
+        if (statusFilter.value) {
+          params.set("status", statusFilter.value);
+        }
+        return `/admin/api/clusters?${params.toString()}`;
+      }
+
+      function auditLogsUrl() {
+        const params = new URLSearchParams({ limit: "50" });
+        if (auditActionFilter.value.trim()) {
+          params.set("action", auditActionFilter.value.trim());
+        }
+        if (auditTargetTypeFilter.value.trim()) {
+          params.set("target_type", auditTargetTypeFilter.value.trim());
+        }
+        if (auditTargetIdFilter.value.trim()) {
+          params.set("target_id", auditTargetIdFilter.value.trim());
+        }
+        if (auditActorTypeFilter.value) {
+          params.set("actor_type", auditActorTypeFilter.value);
+        }
+        if (auditDateFromFilter.value) {
+          params.set("date_from", auditDateFromFilter.value);
+        }
+        if (auditDateToFilter.value) {
+          params.set("date_to", auditDateToFilter.value);
+        }
+        return `/admin/api/audit-events?${params.toString()}`;
+      }
+
+      async function loadAuditLogs() {
+        const body = await requestJson(auditLogsUrl());
+        renderAuditSummary(body.audit_summary || {});
+        renderAuditLogs(body.audit_events || []);
+      }
+
+      async function loadAdminDashboard() {
+        const [clusterBody, summaryClusterBody, userBody] = await Promise.all([
+          requestJson(clusterListUrl()),
+          requestJson("/admin/api/clusters?include_deleted=true"),
+          requestJson("/admin/api/users"),
+        ]);
+        const clusters = clusterBody.clusters || [];
+        const summaryClusters = summaryClusterBody.clusters || [];
+        const users = userBody.users || [];
+        adminUsers = users;
+        renderSummary(users, summaryClusters);
+        renderUsers(adminUsers);
+        renderClusters(clusters);
+        await loadAuditLogs();
+        setMessage("관리자 대시보드를 불러왔습니다.");
+      }
+
+      document.querySelector("#saveToken").addEventListener("click", () => {
+        localStorage.setItem("adminToken", tokenInput.value.trim());
+        setMessage("관리자 토큰을 저장했습니다.");
+        loadAdminDashboard().catch((error) => setMessage(error.message));
+      });
+
+      document.querySelector("#refreshClusters").addEventListener("click", () => {
+        loadAdminDashboard().catch((error) => setMessage(error.message));
+      });
+
+      document.querySelector("#clearUserSearch").addEventListener("click", () => {
+        userSearch.value = "";
+        renderUsers(adminUsers);
+      });
+
+      document.querySelector("#applyClusterFilters").addEventListener("click", () => {
+        loadAdminDashboard().catch((error) => setMessage(error.message));
+      });
+
+      refreshAuditLogsButton.addEventListener("click", () => {
+        loadAuditLogs().catch((error) => setMessage(error.message));
+      });
+
+      auditLogsEl.addEventListener("click", async (event) => {
+        const button = event.target.closest("[data-copy-hash]");
+        if (!button) {
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(button.dataset.copyHash || "");
+          setMessage("전체 해시를 복사했습니다.");
+        } catch (error) {
+          setMessage("브라우저가 클립보드 복사를 허용하지 않았습니다.");
+        }
+      });
+
+      [auditActionFilter, auditTargetTypeFilter, auditTargetIdFilter, auditDateFromFilter, auditDateToFilter].forEach((input) => {
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            loadAuditLogs().catch((error) => setMessage(error.message));
+          }
+        });
+      });
+
+      [auditActorTypeFilter, auditDateFromFilter, auditDateToFilter].forEach((input) => {
+        input.addEventListener("change", () => {
+          loadAuditLogs().catch((error) => setMessage(error.message));
+        });
+      });
+
+      function renderAdminGrafanaLinks(links) {
+        const container = document.querySelector("#adminGrafanaLinks");
+        const safeLinks = Array.isArray(links) && links.length ? links : [];
+        container.innerHTML = safeLinks
+          .map((link, index) => `
+            <button class="admin-grafana-link" data-grafana-link="${index}">
+              <strong>${escapeHtml(link.label || "Grafana 열기")}</strong>
+              <span>${escapeHtml(link.description || link.url || "")}</span>
+            </button>
+          `)
+          .join("");
+      }
+
+      async function openAdminGrafana(linkIndex = 0) {
+        const grafanaWindow = window.open("about:blank", "_blank");
+        if (grafanaWindow) {
+          grafanaWindow.opener = null;
+        }
+        try {
+          const body = await requestJson("/admin/api/grafana/url");
+          renderAdminGrafanaLinks(body.grafana?.links);
+          const links = Array.isArray(body.grafana?.links) ? body.grafana.links : [];
+          const url = absoluteGrafanaUrl(
+            links[linkIndex]?.url || body.grafana?.url || "",
+            body.grafana?.public_origin || "",
+          );
+          if (!url) {
+            throw new Error("Grafana URL이 비어 있습니다.");
+          }
+          if (grafanaWindow) {
+            grafanaWindow.location.replace(url);
+          } else {
+            window.location.assign(url);
+          }
+          setMessage("Admin Grafana를 열었습니다.");
+        } catch (error) {
+          grafanaWindow?.close();
+          setMessage(error.message);
+        }
+      }
+
+      function absoluteGrafanaUrl(value, publicOrigin) {
+        const raw = String(value || "").trim();
+        if (!raw) {
+          return "";
+        }
+        try {
+          const parsed = new URL(raw);
+          return parsed.href;
+        } catch (error) {
+          const origin = String(publicOrigin || window.location.origin || "").replace(/\/$/, "");
+          return new URL(raw.startsWith("/") ? raw : `/${raw}`, origin).href;
+        }
+      }
+
+      document.querySelector("#adminGrafanaLinks").addEventListener("click", (event) => {
+        const button = event.target.closest("[data-grafana-link]");
+        if (!button) {
+          return;
+        }
+        const linkIndex = Number.parseInt(button.dataset.grafanaLink || "0", 10);
+        openAdminGrafana(Number.isNaN(linkIndex) ? 0 : linkIndex);
+      });
+
+      clusterSearch.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          loadAdminDashboard().catch((error) => setMessage(error.message));
+        }
+      });
+
+      userSearch.addEventListener("input", () => {
+        renderUsers(adminUsers);
+      });
+
+      clustersEl.addEventListener("click", async (event) => {
+        const rotateId = event.target.dataset.rotate;
+        const enableId = event.target.dataset.enable;
+        const disableId = event.target.dataset.disable;
+        const trashId = event.target.dataset.trash;
+        const restoreId = event.target.dataset.restore;
+        const purgeId = event.target.dataset.purge;
+        try {
+          if (enableId) {
+            await requestJson(`/admin/api/clusters/${enableId}/enable`, { method: "POST" });
+            await loadAdminDashboard();
+            setMessage("클러스터를 활성화했습니다.");
+          }
+          if (rotateId) {
+            await requestJson(`/admin/api/clusters/${rotateId}/rotate-token`, { method: "POST" });
+            await loadAdminDashboard();
+            setMessage("토큰을 재발급했습니다. 새 설치 명령은 사용자 Cluster Setup에서 확인하세요.");
+          }
+          if (disableId) {
+            if (!window.confirm("이 클러스터를 비활성화할까요? 새 이벤트 수집과 정책 적용 흐름이 중단될 수 있습니다.")) {
+              return;
+            }
+            await requestJson(`/admin/api/clusters/${disableId}/disable`, { method: "POST" });
+            await loadAdminDashboard();
+            setMessage("클러스터를 비활성화했습니다.");
+          }
+          if (trashId) {
+            if (!window.confirm("이 클러스터를 휴지통으로 이동할까요? 토큰은 즉시 폐기됩니다.")) {
+              return;
+            }
+            await requestJson(`/admin/api/clusters/${trashId}`, { method: "DELETE" });
+            await loadAdminDashboard();
+            setMessage("클러스터를 휴지통으로 이동했습니다.");
+          }
+          if (restoreId) {
+            await requestJson(`/admin/api/clusters/${restoreId}/restore`, { method: "POST" });
+            await loadAdminDashboard();
+            setMessage("클러스터를 복원했습니다. 사용 전 토큰을 재발급하세요.");
+          }
+          if (purgeId) {
+            if (!window.confirm("삭제된 클러스터를 영구 삭제할까요? 관련 런타임 이벤트와 정책 적용 기록도 삭제됩니다.")) {
+              return;
+            }
+            await requestJson(`/admin/api/clusters/${purgeId}/permanent`, { method: "DELETE" });
+            await loadAdminDashboard();
+            setMessage("클러스터를 영구 삭제했습니다.");
+          }
+        } catch (error) {
+          setMessage(error.message);
+        }
+      });
+
+      usersEl.addEventListener("click", async (event) => {
+        const userId = event.target.dataset.userDetail;
+        if (!userId) {
+          return;
+        }
+        try {
+          const body = await requestJson(`/admin/api/users/${userId}/clusters`);
+          renderUserDetail(body);
+          setMessage("사용자 상세를 불러왔습니다.");
+        } catch (error) {
+          setMessage(error.message);
+        }
+      });
+
+      userDetailEl.addEventListener("click", async (event) => {
+        const restoreId = event.target.dataset.userRestore;
+        const disableId = event.target.dataset.userDisable;
+        const enableId = event.target.dataset.userEnable;
+        if (!restoreId && !disableId && !enableId) {
+          return;
+        }
+        try {
+          if (restoreId) {
+            await requestJson(`/admin/api/users/${restoreId}/restore`, { method: "POST" });
+            setMessage("사용자 계정을 복구했습니다.");
+          }
+          if (disableId) {
+            if (!window.confirm("이 사용자 계정을 정지할까요? 기존 세션이 끊기고 새 로그인과 신규 작업이 차단됩니다.")) {
+              return;
+            }
+            await requestJson(`/admin/api/users/${disableId}/disable`, { method: "POST" });
+            setMessage("사용자 계정을 정지했습니다.");
+          }
+          if (enableId) {
+            await requestJson(`/admin/api/users/${enableId}/enable`, { method: "POST" });
+            setMessage("사용자 계정 정지를 해제했습니다.");
+          }
+          await loadAdminDashboard();
+          const targetId = restoreId || disableId || enableId;
+          if (currentUserDetailId === targetId) {
+            const body = await requestJson(`/admin/api/users/${targetId}/clusters`);
+            renderUserDetail(body);
+          }
+        } catch (error) {
+          setMessage(error.message);
+        }
+      });
+
+      adminThemeToggle.addEventListener("click", () => {
+        const nextTheme = document.body.dataset.theme === "dark" ? "light" : "dark";
+        document.body.dataset.theme = nextTheme;
+        localStorage.setItem("adminTheme", nextTheme);
+        adminThemeToggle.setAttribute("aria-pressed", nextTheme === "dark" ? "true" : "false");
+        adminThemeLabel.textContent = nextTheme === "dark" ? "Light" : "Dark";
+      });
+
+      if (tokenInput.value.trim()) {
+        loadAdminDashboard().catch((error) => setMessage(error.message));
+      }
+    </script>
+  </body>
+</html>
